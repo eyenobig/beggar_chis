@@ -1,0 +1,4 @@
+[submodule "chis-burner-cmd"]
+	path = chis-burner-cmd
+	url = https://github.com/eyenobig/chis-burner-cmd.git
+	branch = dev

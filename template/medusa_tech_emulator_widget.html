@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medusa Tech - Nano Emulator UI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: transparent;
+            color: #111827;
+            /* 极简网格背景 */
+            background-image: radial-gradient(#d4d4d8 1px, transparent 1px);
+            background-size: 20px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 桌宠级微缩容器主阴影与质感 */
+        .widget-container {
+            width: 320px;
+            height: 520px; 
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .platform-toggle { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .flash-progress { transition: width 0.1s linear; }
+        
+        /* 启动加载斜纹动画 */
+        .booting .progress-stripe {
+            background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent);
+            background-size: 1rem 1rem;
+            animation: progressStripes 1s linear infinite;
+        }
+        @keyframes progressStripes {
+            from { background-position: 1rem 0; }
+            to { background-position: 0 0; }
+        }
+
+        .micro-btn { transition: all 0.1s; }
+        .micro-btn:active { transform: scale(0.92); }
+
+        /* 书签侧边栏垂直文字 */
+        .writing-vertical {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+        }
+
+        /* 侧边终端抽屉动效 */
+        .drawer-transition {
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="relative w-[320px] h-[520px] flex-shrink-0">
+
+        <!-- ================= MAIN WIDGET ================= -->
+        <div class="widget-container absolute inset-0 z-20">
+            
+            <!-- 头部栏：包含硬件连接操作 -->
+            <header class="flex justify-between items-center px-5 py-4 border-b border-zinc-100 bg-white shrink-0 z-10 relative">
+                <div>
+                    <h1 class="text-xs font-black tracking-tighter uppercase text-zinc-900 leading-none mb-1">Nano-Emu</h1>
+                    <p class="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-400 leading-none">Core v2.5</p>
+                </div>
+                
+                <!-- 交互式连接按钮 (替换原静态灯) -->
+                <button id="btn-connect" onclick="toggleConnection()" class="flex items-center gap-2 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 px-2.5 py-1.5 rounded-full transition-all active:scale-95 cursor-pointer z-10">
+                    <div id="connect-dot" class="w-1.5 h-1.5 rounded-full bg-zinc-400 transition-colors"></div>
+                    <span id="connect-text" class="text-[8px] font-black uppercase tracking-widest text-zinc-500 mt-0.5 transition-colors">Offline</span>
+                </button>
+            </header>
+
+            <!-- 平台切换器 -->
+            <div class="px-5 pt-4 pb-1 shrink-0 z-10 relative bg-white">
+                <div class="flex bg-zinc-100 p-1 rounded-xl relative w-full">
+                    <div id="toggle-indicator" class="absolute top-1 left-1 w-[calc(50%-4px)] h-[calc(100%-8px)] bg-white rounded-lg shadow-sm platform-toggle z-0"></div>
+                    <button onclick="setPlatform('gbc')" id="btn-gbc" class="relative z-10 flex-1 py-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-900 transition-colors">GBC</button>
+                    <button onclick="setPlatform('gba')" id="btn-gba" class="relative z-10 flex-1 py-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400 transition-colors">GBA</button>
+                </div>
+            </div>
+
+            <!-- 核心内容区 -->
+            <div class="relative flex-1 flex flex-col overflow-hidden bg-white">
+                
+                <!-- 底层数据面板 -->
+                <main class="flex-1 px-5 py-3 space-y-4 overflow-y-auto no-scrollbar relative z-0">
+                    <!-- ROM 数据面板 -->
+                    <section>
+                        <div class="flex justify-between items-end mb-2 px-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-zinc-900">ROM Payload</span>
+                            <button class="text-zinc-400 hover:text-zinc-900 micro-btn">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                            </button>
+                        </div>
+                        
+                        <div class="bg-zinc-900 rounded-2xl p-4 text-white relative overflow-hidden group shadow-md">
+                            <div class="absolute top-0 right-0 w-16 h-16 bg-white/5 rounded-full blur-xl -translate-y-1/2 translate-x-1/2"></div>
+                            
+                            <p class="text-[8px] text-zinc-400 font-black uppercase tracking-widest mb-1" id="info-rom-type">Game Boy Color</p>
+                            <h3 class="text-xs font-black mono truncate mb-4 text-zinc-100" id="info-rom-filename">Pokemon_Crystal.gbc</h3>
+
+                            <!-- 硬件容量指示器 -->
+                            <div>
+                                <div class="flex justify-between items-end mb-1.5">
+                                    <p class="text-[8px] font-bold mono text-zinc-400"><span id="storage-used">2048</span> / <span id="storage-max">4096</span> KB</p>
+                                    <p class="text-[8px] font-black mono text-zinc-400" id="storage-percent">50%</p>
+                                </div>
+                                <div class="w-full h-1.5 bg-black rounded-full overflow-hidden border border-white/10">
+                                    <div id="storage-bar" class="h-full bg-white transition-all duration-700 ease-out" style="width: 50%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- 存档数据面板 -->
+                    <section>
+                        <div class="flex justify-between items-end mb-2 px-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-zinc-900">Save Data</span>
+                            <div class="flex gap-2">
+                                <button class="text-[8px] font-black uppercase tracking-widest text-zinc-400 hover:text-zinc-900 micro-btn flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                    Import
+                                </button>
+                                <button class="text-[8px] font-black uppercase tracking-widest text-zinc-400 hover:text-zinc-900 micro-btn flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                    Export
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 shadow-sm">
+                            <p class="text-[8px] text-zinc-500 font-black uppercase tracking-widest mb-1" id="info-sav-type">SRAM Backup</p>
+                            <h3 class="text-xs font-black mono truncate mb-3 text-zinc-900" id="info-sav-filename">Pokemon_Crystal.sav</h3>
+                            
+                            <div class="flex justify-between items-center pt-2 border-t border-zinc-200/60">
+                                <p class="text-[8px] text-zinc-400 font-bold uppercase tracking-widest">Type: <span class="font-black mono text-zinc-600" id="info-sav-chip">SRAM</span></p>
+                                <p class="text-[8px] text-zinc-400 font-bold uppercase tracking-widest">Size: <span class="font-black mono text-zinc-600" id="info-sav-size">32 KB</span></p>
+                            </div>
+                        </div>
+                    </section>
+                </main>
+            </div>
+
+            <!-- 底部模拟器操作区 -->
+            <div class="p-4 bg-white relative border-t border-zinc-100 shrink-0 z-10">
+                <!-- 全局进度条 (嵌在按钮上方) -->
+                <div class="absolute top-0 left-4 right-4 h-1 bg-zinc-100 rounded-b-lg overflow-hidden hidden" id="launch-progress-container">
+                    <div id="launch-bar" class="h-full bg-zinc-900 flash-progress progress-stripe w-0"></div>
+                </div>
+
+                <button id="btn-launch" onclick="toggleEmulator()" class="w-full mt-2 bg-zinc-900 text-white border border-transparent hover:bg-black active:scale-95 shadow-lg h-12 rounded-xl flex items-center justify-center gap-2 transition-all relative overflow-hidden group">
+                    <svg id="launch-icon" class="w-4 h-4 z-10 relative transition-transform group-hover:scale-110" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    <span class="text-[10px] font-black uppercase tracking-[0.2em] z-10 relative mt-0.5" id="btn-launch-text">Launch Emulator</span>
+                </button>
+            </div>
+        </div>
+        <!-- ================= END MAIN WIDGET ================= -->
+
+
+        <!-- 书签抽屉呼出按钮 (附着在右边缘) -->
+        <button id="bookmark-btn" onclick="toggleLogs()" class="absolute left-[320px] top-[72px] z-10 w-7 py-5 bg-zinc-900 hover:bg-black text-white rounded-r-xl border-y border-r border-white/10 shadow-lg flex flex-col items-center gap-2 drawer-transition group">
+            <svg class="w-3 h-3 text-zinc-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+            <span class="writing-vertical text-[9px] font-black tracking-widest rotate-180">LOGS</span>
+        </button>
+
+        <!-- 黑客终端侧边栏 (抽屉式展开) -->
+        <div id="console-drawer" class="absolute top-[24px] left-[300px] h-[472px] bg-zinc-950 rounded-r-[24px] border-y border-r border-white/10 shadow-[20px_0_40px_-10px_rgba(0,0,0,0.4)] overflow-hidden drawer-transition z-10" style="width: 0; opacity: 0; pointer-events: none; transform: translateX(-10px);">
+            <!-- 内部固定宽度防止动画挤压内容 -->
+            <div class="w-[320px] h-full pl-[20px] flex flex-col">
+                
+                <!-- 抽屉顶栏 -->
+                <div class="flex justify-between items-center px-5 py-4 border-b border-white/10 bg-zinc-900/50 shrink-0">
+                    <span class="text-[9px] font-black uppercase tracking-widest text-zinc-400">System Terminal</span>
+                    <div class="flex gap-3">
+                        <button onclick="clearLogs()" class="text-[8px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors">Clear</button>
+                        <button onclick="toggleLogs()" class="text-[8px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-colors">Close</button>
+                    </div>
+                </div>
+                
+                <!-- 日志滚动区 -->
+                <div id="log-output" class="flex-1 p-5 overflow-y-auto no-scrollbar flex flex-col gap-2 font-mono text-[9px]">
+                    <!-- 日志内容将由 JS 注入 -->
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const dataConfig = {
+            gbc: {
+                rom: { name: 'Pokemon_Crystal.gbc', type: 'GBC ROM', size: 2048, max: 4096 },
+                sav: { name: 'Pokemon_Crystal.sav', type: 'SRAM Backup', chip: 'SRAM', size: 32 }
+            },
+            gba: {
+                rom: { name: 'Pokemon_Emerald.gba', type: 'GBA ROM', size: 16384, max: 32768 },
+                sav: { name: 'Pokemon_Emerald.sav', type: 'Flash Memory', chip: 'Flash 1M', size: 128 }
+            }
+        };
+
+        let currentPlatform = 'gbc';
+        let logsOpen = false;
+        let emulatorState = 'stopped'; 
+        let isConnected = false;
+        let isConnecting = false;
+
+        // ---- 侧边栏日志系统 ----
+        function addLog(message, type = 'info') {
+            const output = document.getElementById('log-output');
+            const now = new Date();
+            const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+            let colorClass = 'text-zinc-500'; // info
+            if (type === 'success') colorClass = 'text-green-400';
+            if (type === 'error') colorClass = 'text-red-400';
+            if (type === 'warn') colorClass = 'text-yellow-400';
+
+            const logEntry = document.createElement('div');
+            logEntry.className = 'flex gap-3 leading-snug';
+            logEntry.innerHTML = `
+                <span class="text-zinc-700 shrink-0">[${timeStr}]</span>
+                <span class="${colorClass} break-all">${message}</span>
+            `;
+            
+            output.appendChild(logEntry);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('log-output').innerHTML = '';
+            addLog('Console cleared.', 'info');
+        }
+
+        function toggleLogs(forceState) {
+            const drawer = document.getElementById('console-drawer');
+            const bookmark = document.getElementById('bookmark-btn');
+            
+            if (forceState !== undefined) {
+                logsOpen = forceState;
+            } else {
+                logsOpen = !logsOpen;
+            }
+
+            if (logsOpen) {
+                drawer.style.width = '320px';
+                drawer.style.opacity = '1';
+                drawer.style.pointerEvents = 'auto';
+                drawer.style.transform = 'translateX(0)';
+                
+                bookmark.style.transform = 'translateX(-20px)';
+                bookmark.style.opacity = '0';
+                bookmark.style.pointerEvents = 'none';
+            } else {
+                drawer.style.width = '0';
+                drawer.style.opacity = '0';
+                drawer.style.pointerEvents = 'none';
+                drawer.style.transform = 'translateX(-10px)';
+
+                bookmark.style.transform = 'translateX(0)';
+                bookmark.style.opacity = '1';
+                bookmark.style.pointerEvents = 'auto';
+            }
+        }
+
+        // ---- 硬件连接交互逻辑 ----
+        function toggleConnection() {
+            if (isConnecting) return;
+            const dot = document.getElementById('connect-dot');
+            const text = document.getElementById('connect-text');
+
+            if (!isConnected) {
+                // 开启连接流程
+                if (!logsOpen) toggleLogs(true);
+                isConnecting = true;
+                
+                dot.className = 'w-1.5 h-1.5 rounded-full bg-yellow-400 shadow-[0_0_6px_rgba(250,204,21,0.6)] animate-pulse transition-colors';
+                text.innerText = 'Connecting';
+                text.classList.replace('text-zinc-500', 'text-yellow-600');
+                addLog('Attempting to bridge host hardware...', 'warn');
+
+                setTimeout(() => {
+                    isConnecting = false;
+                    isConnected = true;
+                    dot.className = 'w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)] animate-pulse transition-colors';
+                    text.innerText = 'Online';
+                    text.classList.replace('text-yellow-600', 'text-zinc-900');
+                    addLog('Hardware linked successfully. Port active.', 'success');
+                }, 1500);
+            } else {
+                // 断开连接
+                if (emulatorState !== 'stopped') toggleEmulator(); // 强制停止正在运行的模拟器
+                
+                isConnected = false;
+                dot.className = 'w-1.5 h-1.5 rounded-full bg-zinc-400 transition-colors';
+                text.innerText = 'Offline';
+                text.classList.replace('text-zinc-900', 'text-zinc-500');
+                addLog('Hardware bridge disconnected.', 'error');
+            }
+        }
+
+        function setPlatform(pid) {
+            if (emulatorState !== 'stopped' || currentPlatform === pid) return;
+            currentPlatform = pid;
+            const data = dataConfig[pid];
+
+            const indicator = document.getElementById('toggle-indicator');
+            const btnGbc = document.getElementById('btn-gbc');
+            const btnGba = document.getElementById('btn-gba');
+
+            if (pid === 'gbc') {
+                indicator.style.transform = 'translateX(0)';
+                btnGbc.classList.replace('text-zinc-400', 'text-zinc-900');
+                btnGbc.classList.replace('font-bold', 'font-black');
+                btnGba.classList.replace('text-zinc-900', 'text-zinc-400');
+                btnGba.classList.replace('font-black', 'font-bold');
+            } else {
+                indicator.style.transform = 'translateX(100%)';
+                btnGba.classList.replace('text-zinc-400', 'text-zinc-900');
+                btnGba.classList.replace('font-bold', 'font-black');
+                btnGbc.classList.replace('text-zinc-900', 'text-zinc-400');
+                btnGbc.classList.replace('font-black', 'font-bold');
+            }
+
+            document.getElementById('info-rom-type').innerText = data.rom.type;
+            document.getElementById('info-rom-filename').innerText = data.rom.name;
+            document.getElementById('storage-used').innerText = data.rom.size;
+            document.getElementById('storage-max').innerText = data.rom.max;
+
+            const percent = Math.round((data.rom.size / data.rom.max) * 100);
+            document.getElementById('storage-percent').innerText = `${percent}%`;
+            document.getElementById('storage-bar').style.width = `${percent}%`;
+
+            document.getElementById('info-sav-type').innerText = data.sav.type;
+            document.getElementById('info-sav-filename').innerText = data.sav.name;
+            document.getElementById('info-sav-chip').innerText = data.sav.chip;
+            document.getElementById('info-sav-size').innerText = `${data.sav.size} KB`;
+
+            addLog(`Core switched to ${pid.toUpperCase()} architecture.`, 'info');
+            addLog(`Loaded Payload: ${data.rom.name}`, 'info');
+        }
+
+        // ---- 模拟器启动流程 ----
+        function toggleEmulator() {
+            if (emulatorState === 'booting') return;
+
+            const btn = document.getElementById('btn-launch');
+            const btnText = document.getElementById('btn-launch-text');
+            const launchIcon = document.getElementById('launch-icon');
+            const progressContainer = document.getElementById('launch-progress-container');
+            const launchBar = document.getElementById('launch-bar');
+
+            if (emulatorState === 'stopped') {
+                // 如果未连接，则提示并自动触发连接
+                if (!isConnected) {
+                    addLog('Error: Hardware offline. Initializing auto-connect...', 'error');
+                    toggleConnection();
+                    return;
+                }
+
+                // 开始启动流程
+                emulatorState = 'booting';
+                
+                if (!logsOpen) toggleLogs(true); // 启动时强制侧边栏展开
+
+                // 按钮变为灰色 Booting 状态
+                btn.classList.replace('bg-zinc-900', 'bg-zinc-100');
+                btn.classList.replace('text-white', 'text-zinc-900');
+                btn.classList.replace('hover:bg-black', 'hover:bg-zinc-200');
+                btn.classList.replace('border-transparent', 'border-zinc-200');
+                btn.classList.remove('active:scale-95', 'shadow-lg', 'group');
+                btn.classList.add('cursor-wait');
+                
+                btnText.innerText = "Booting Core...";
+                
+                // 修复遮挡：去除实心填充，改用纯线框 SVG 实现旋转加载
+                launchIcon.setAttribute('fill', 'none'); 
+                launchIcon.innerHTML = `<path d="M12 4V2M12 22v-2M4 12H2m20 0h-2m-2.05-6.95l1.41-1.41M4.64 19.36l1.41-1.41m13.31 0l-1.41-1.41M4.64 4.64l1.41 1.41" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`;
+                launchIcon.classList.add('animate-spin');
+                
+                progressContainer.classList.remove('hidden');
+                launchBar.parentElement.classList.add('booting');
+                
+                addLog('--- BOOT SEQUENCE INITIATED ---', 'warn');
+                addLog(`Allocating memory for ${dataConfig[currentPlatform].rom.type}...`);
+
+                let progress = 0;
+                let step = 0;
+                
+                const bootSteps = [
+                    "Loading core modules...",
+                    "Mounting ROM payload into virtual memory...",
+                    `Injecting Save Data (${dataConfig[currentPlatform].sav.chip})...`,
+                    "Executing BIOS sequence...",
+                    "Bypassing logo verification..."
+                ];
+
+                const interval = setInterval(() => {
+                    progress += Math.random() * 8; 
+                    
+                    if (progress >= 100) {
+                        progress = 100;
+                        clearInterval(interval);
+                        finishBoot();
+                    } else {
+                        if(Math.random() > 0.5 && step < bootSteps.length) {
+                            addLog(bootSteps[step]);
+                            step++;
+                        }
+                    }
+                    launchBar.style.width = `${progress}%`;
+                }, 100);
+
+            } else if (emulatorState === 'running') {
+                // 停止模拟器
+                addLog('Saving SRAM state to disk...', 'warn');
+                addLog('Unmounting payload. Core stopped.', 'error');
+                
+                // 恢复为 Launch 状态
+                emulatorState = 'stopped';
+                btn.classList.replace('bg-red-500', 'bg-zinc-900');
+                btn.classList.replace('hover:bg-red-600', 'hover:bg-black');
+                btnText.innerText = "Launch Emulator";
+                
+                // 恢复播放图标的实心填充
+                launchIcon.setAttribute('fill', 'currentColor');
+                launchIcon.innerHTML = `<path d="M8 5v14l11-7z"/>`;
+                
+                setTimeout(() => { if(logsOpen) toggleLogs(false); }, 1000); // 停止后1秒自动收起侧边栏
+            }
+        }
+
+        function finishBoot() {
+            const btn = document.getElementById('btn-launch');
+            const btnText = document.getElementById('btn-launch-text');
+            const launchIcon = document.getElementById('launch-icon');
+            const progressContainer = document.getElementById('launch-progress-container');
+            const launchBar = document.getElementById('launch-bar');
+
+            addLog('Payload executed successfully.', 'success');
+            addLog('--- SYSTEM RUNNING ---', 'success');
+
+            // 切换为红色 Stop 状态
+            emulatorState = 'running';
+            btn.classList.remove('bg-zinc-100', 'text-zinc-900', 'cursor-wait', 'hover:bg-zinc-200');
+            btn.classList.replace('border-zinc-200', 'border-transparent');
+            btn.classList.add('bg-red-500', 'text-white', 'shadow-lg', 'hover:bg-red-600', 'active:scale-95', 'group');
+            
+            btnText.innerText = "Stop Emulator";
+            launchIcon.classList.remove('animate-spin');
+            
+            // Stop Icon (Square) - 恢复实心填充
+            launchIcon.setAttribute('fill', 'currentColor'); 
+            launchIcon.innerHTML = `<rect x="6" y="6" width="12" height="12" rx="2" />`; 
+            
+            launchBar.parentElement.classList.remove('booting');
+            progressContainer.classList.add('hidden');
+            launchBar.style.width = '0%';
+            
+            // 启动成功后自动收起日志
+            setTimeout(() => {
+                if (logsOpen) toggleLogs(false);
+            }, 2000);
+        }
+
+        window.onload = () => {
+            addLog('System initialized. Awaiting connection.', 'info');
+            setPlatform('gbc');
+        };
+    </script>
+</body>
+</html>

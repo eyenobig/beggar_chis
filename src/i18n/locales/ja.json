@@ -1,0 +1,31 @@
+{
+  "app": {
+    "title": "Chis フラッシャー"
+  },
+  "menu": {
+    "language": "言語",
+    "quit": "終了"
+  },
+  "window": {
+    "close": "閉じる",
+    "minimize": "最小化"
+  },
+  "conn": {
+    "online": "接続中",
+    "detecting": "検出中",
+    "offline": "未接続",
+    "title": "デバイス",
+    "refresh": "更新",
+    "none": "デバイスなし",
+    "burner": "ライター",
+    "connect": "接続",
+    "disconnect": "切断"
+  },
+  "bookmark": {
+    "logs": "ログ",
+    "progress": "進捗",
+    "help": "ヘルプ",
+    "settings": "設定",
+    "shop": "ショップ"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "app": {
+    "title": "Chis Flasher"
+  },
+  "menu": {
+    "language": "Language",
+    "quit": "Quit"
+  },
+  "window": {
+    "close": "Close",
+    "minimize": "Minimize"
+  },
+  "conn": {
+    "online": "Connected",
+    "detecting": "Detecting",
+    "offline": "Offline",
+    "title": "Devices",
+    "refresh": "Refresh",
+    "none": "No device detected",
+    "burner": "burner",
+    "connect": "Connect",
+    "disconnect": "Disconnect"
+  },
+  "bookmark": {
+    "logs": "Logs",
+    "progress": "Progress",
+    "help": "Help",
+    "settings": "Settings",
+    "shop": "Shop"
+  }
+}

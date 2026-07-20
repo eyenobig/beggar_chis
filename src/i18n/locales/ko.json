@@ -1,0 +1,31 @@
+{
+  "app": {
+    "title": "Chis 플래셔"
+  },
+  "menu": {
+    "language": "언어",
+    "quit": "종료"
+  },
+  "window": {
+    "close": "닫기",
+    "minimize": "최소화"
+  },
+  "conn": {
+    "online": "연결됨",
+    "detecting": "감지 중",
+    "offline": "오프라인",
+    "title": "장치",
+    "refresh": "새로고침",
+    "none": "장치 없음",
+    "burner": "버너",
+    "connect": "연결",
+    "disconnect": "연결 해제"
+  },
+  "bookmark": {
+    "logs": "로그",
+    "progress": "진행",
+    "help": "도움말",
+    "settings": "설정",
+    "shop": "상점"
+  }
+}

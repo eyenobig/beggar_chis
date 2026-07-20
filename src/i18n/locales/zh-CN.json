@@ -1,0 +1,31 @@
+{
+  "app": {
+    "title": "烧丐"
+  },
+  "menu": {
+    "language": "语言",
+    "quit": "退出"
+  },
+  "window": {
+    "close": "关闭",
+    "minimize": "最小化"
+  },
+  "conn": {
+    "online": "连接中",
+    "detecting": "检测中",
+    "offline": "未连接",
+    "title": "设备",
+    "refresh": "刷新",
+    "none": "未检测到设备",
+    "burner": "烧录器",
+    "connect": "连接",
+    "disconnect": "断开连接"
+  },
+  "bookmark": {
+    "logs": "日志",
+    "progress": "进度",
+    "help": "说明",
+    "settings": "设置",
+    "shop": "商店"
+  }
+}

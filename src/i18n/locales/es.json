@@ -1,0 +1,31 @@
+{
+  "app": {
+    "title": "Grabador Chis"
+  },
+  "menu": {
+    "language": "Idioma",
+    "quit": "Salir"
+  },
+  "window": {
+    "close": "Cerrar",
+    "minimize": "Minimizar"
+  },
+  "conn": {
+    "online": "Conectado",
+    "detecting": "Detectando",
+    "offline": "Sin conexión",
+    "title": "Dispositivos",
+    "refresh": "Actualizar",
+    "none": "Sin dispositivo",
+    "burner": "grabador",
+    "connect": "Conectar",
+    "disconnect": "Desconectar"
+  },
+  "bookmark": {
+    "logs": "Registros",
+    "progress": "Progreso",
+    "help": "Ayuda",
+    "settings": "Ajustes",
+    "shop": "Tienda"
+  }
+}

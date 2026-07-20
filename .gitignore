@@ -1,0 +1,34 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Rust / Tauri
+src-tauri/target
+
+# cfb sidecar：由子模块 chis-burner-cmd 构建生成，勿提交预编译二进制
+src-tauri/binaries/cfb-*
+!src-tauri/binaries/.gitkeep
+
+# 本地客户端烧录验证产物
+.chis-verify.json
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

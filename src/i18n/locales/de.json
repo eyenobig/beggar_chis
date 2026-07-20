@@ -1,0 +1,31 @@
+{
+  "app": {
+    "title": "Chis Programmiergerät"
+  },
+  "menu": {
+    "language": "Sprache",
+    "quit": "Beenden"
+  },
+  "window": {
+    "close": "Schließen",
+    "minimize": "Minimieren"
+  },
+  "conn": {
+    "online": "Verbunden",
+    "detecting": "Erkennung",
+    "offline": "Getrennt",
+    "title": "Geräte",
+    "refresh": "Aktualisieren",
+    "none": "Kein Gerät gefunden",
+    "burner": "Brenner",
+    "connect": "Verbinden",
+    "disconnect": "Trennen"
+  },
+  "bookmark": {
+    "logs": "Protokoll",
+    "progress": "Fortschritt",
+    "help": "Hilfe",
+    "settings": "Einstellungen",
+    "shop": "Shop"
+  }
+}

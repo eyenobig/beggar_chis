@@ -1,0 +1,31 @@
+{
+  "app": {
+    "title": "Programmateur Chis"
+  },
+  "menu": {
+    "language": "Langue",
+    "quit": "Quitter"
+  },
+  "window": {
+    "close": "Fermer",
+    "minimize": "Réduire"
+  },
+  "conn": {
+    "online": "Connecté",
+    "detecting": "Détection",
+    "offline": "Hors ligne",
+    "title": "Appareils",
+    "refresh": "Actualiser",
+    "none": "Aucun appareil",
+    "burner": "graveur",
+    "connect": "Connecter",
+    "disconnect": "Déconnecter"
+  },
+  "bookmark": {
+    "logs": "Journaux",
+    "progress": "Progression",
+    "help": "Aide",
+    "settings": "Paramètres",
+    "shop": "Boutique"
+  }
+}

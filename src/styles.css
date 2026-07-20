@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+/* 桌宠舞台：占满整个窗口 */
+#pet-stage {
+  width: 100%;
+  height: 100%;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+#pet-stage:active {
+  cursor: grabbing;
+}
+
+/* 字体工具类 */
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* 隐藏滚动条 */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* 桌宠级微缩容器主阴影与质感 */
+.widget-container {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* 平台切换动效 */
+.platform-toggle { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* GB&GBC 激活态：Prismatic Edge —— 白底 + 低饱和度彩虹描边（渐变角度缓慢旋转）
+   + 柔和投影；悬浮时描边加粗、投影加深。完全参照 premium 原型 case 2；白底配深色字。
+   彩虹在指示器(下层)，悬浮事件来自按钮(上层)，用 :has(.gbc-btn:hover) 捕获。 */
+@property --edge-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.gbc-prismatic {
+  /* 双背景：padding-box 铺白、border-box 铺旋转彩虹 → 透明 border 露出彩边 */
+  background:
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    linear-gradient(var(--edge-angle), #ff7a9e, #7a9eff, #9eff7a, #ffc27a) border-box;
+  border: 1.5px solid transparent;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  animation: edge-spin 12s linear infinite;
+}
+
+/* 悬浮：描边加粗 + 投影加深 */
+.platform-row:has(.gbc-btn:hover) .gbc-prismatic {
+  border-width: 2.5px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* GBA 激活态：同款描边按钮，靛蓝灰色板（indigo↔slate）替换彩虹。 */
+.gba-edge {
+  background:
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    linear-gradient(var(--edge-angle), #4F46E5, #818CF8, #94A3B8, #6366F1) border-box;
+  border: 1.5px solid transparent;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  animation: edge-spin 12s linear infinite;
+}
+.platform-row:has(.gba-btn:hover) .gba-edge {
+  border-width: 2.5px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+@keyframes edge-spin {
+  to { --edge-angle: 360deg; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gbc-prismatic,
+  .gba-edge { animation: none; }
+}
+
+/* 进度条宽度过渡 */
+.flash-progress { transition: width 0.1s linear; }
+
+/* 启动加载斜纹动画 */
+.progress-stripe {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.15) 25%, transparent 25%,
+    transparent 50%, rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent
+  );
+  background-size: 1rem 1rem;
+  animation: progressStripes 1s linear infinite;
+}
+
+@keyframes progressStripes {
+  from { background-position: 1rem 0; }
+  to   { background-position: 0 0; }
+}
+
+/* 微操按钮点按缩放 */
+.micro-btn { transition: all 0.1s; }
+.micro-btn:active { transform: scale(0.92); }
+
+/* 书签侧边栏垂直文字 */
+.writing-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+/* 侧边终端抽屉动效 */
+.drawer-transition {
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
