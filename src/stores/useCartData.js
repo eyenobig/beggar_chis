@@ -1,7 +1,4 @@
-// 卡带数据（Pinia store）：ROM Payload / Save Data + 真烧录/清空（cfb）。
-// Flash 芯片信息来自 cfb info 的 FlashInfo 字段（id/capacity/buffer/sector…）。
-// 拖文件进窗口 → 按扩展名识别；GB/GBC 走 --mbc。测试 ROM：Z:/Project/testrom。
-
+// 鍗″甫鏁版嵁锛圥inia store锛夛細ROM Payload / Save Data + 鐪熺儳褰?娓呯┖锛坈fb锛夈€?// Flash 鑺墖淇℃伅鏉ヨ嚜 cfb info 鐨?FlashInfo 瀛楁锛坕d/capacity/buffer/sector鈥︼級銆?// 鎷栨枃浠惰繘绐楀彛 鈫?鎸夋墿灞曞悕璇嗗埆锛汫B/GBC 璧?--mbc銆傛祴璇?ROM锛歓:/Project/testrom銆?
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { downloadDir, join } from '@tauri-apps/api/path'
@@ -10,12 +7,12 @@ import { spawnCfb, runCfb, inTauri } from '../composables/useCfb'
 import { useConnection } from './useConnection'
 import { useEmulator } from './useEmulator'
 import { useLogStore } from './useLogStore'
+import { useCfbSettings } from './useCfbSettings'
 
-/** 本地测试 ROM 目录（验证写入/识别替换）。 */
+/** 鏈湴娴嬭瘯 ROM 鐩綍锛堥獙璇佸啓鍏?璇嗗埆鏇挎崲锛夈€?*/
 export const TESTROM_DIR = 'Z:/Project/testrom'
 export const TESTROM_FILES = {
   gb_check: `${TESTROM_DIR}/gb_check.gb`,
-  pokemon_green: `${TESTROM_DIR}/pokemon_green.gb`,
 }
 
 function basename(p) {
@@ -24,7 +21,7 @@ function basename(p) {
 function ext(p) {
   return (basename(p).split('.').pop() || '').toLowerCase()
 }
-/** 扩展名 → 类型。 */
+/** 鎵╁睍鍚?鈫?绫诲瀷銆?*/
 function classify(p) {
   const e = ext(p)
   if (e === 'gba') return { kind: 'rom', mbc: false }
@@ -43,6 +40,7 @@ function fmtSize(bytes) {
 export const useCartData = defineStore('cart', () => {
   const logStore = useLogStore()
   const emu = useEmulator()
+  const cfbSettings = useCfbSettings()
 
   const romFile = ref(null) // { name, path, mbc }
   const saveFile = ref(null)
@@ -50,7 +48,7 @@ export const useCartData = defineStore('cart', () => {
   const drawerOpen = ref(false)
   const drawerKind = ref('rom') // 'rom' | 'save'
 
-  /** cfb info → FlashInfo + 游戏头 */
+  /** cfb info 鈫?FlashInfo + 娓告垙澶?*/
   const cartInfo = ref(null)
   const cartReading = ref(false)
   const cartError = ref('')
@@ -71,7 +69,7 @@ export const useCartData = defineStore('cart', () => {
     progress.value.total ? Math.round((progress.value.done / progress.value.total) * 100) : 0,
   )
 
-  /** 当前平台是否 MBC（UI 开关优先；否则看卡带/文件）。 */
+  /** 褰撳墠骞冲彴鏄惁 MBC锛圲I 寮€鍏充紭鍏堬紱鍚﹀垯鐪嬪崱甯?鏂囦欢锛夈€?*/
   const preferMbc = computed(() => {
     if (emu.currentPlatform === 'gbc') return true
     if (emu.currentPlatform === 'gba') return false
@@ -80,18 +78,18 @@ export const useCartData = defineStore('cart', () => {
     return false
   })
 
-  /** 从 cartInfo 抽出 Flash 芯片展示字段（有容量即视为在位）。 */
+  /** 浠?cartInfo 鎶藉嚭 Flash 鑺墖灞曠ず瀛楁锛堟湁瀹归噺鍗宠涓哄湪浣嶏級銆?*/
   const flashInfo = computed(() => {
     const c = cartInfo.value
     if (!c) return null
     const present = c.present === true || (c.capacity_bytes > 0)
     if (!present) return null
     return {
-      id: c.id || '—',
-      capacity: fmtSize(c.capacity_bytes) || '—',
+      id: c.id || '-',
+      capacity: fmtSize(c.capacity_bytes) || '-',
       capacityBytes: c.capacity_bytes || 0,
-      bufferWrite: c.buffer_write_bytes ? `${c.buffer_write_bytes}B` : '单字',
-      sectorSize: fmtSize(c.sector_size) || '—',
+      bufferWrite: c.buffer_write_bytes ? `${c.buffer_write_bytes}B` : '鍗曞瓧',
+      sectorSize: fmtSize(c.sector_size) || '-',
       sectorCount: c.sector_count || 0,
       kind: c.kind,
       title: c.rom_title || c.game_name || null,
@@ -140,7 +138,7 @@ export const useCartData = defineStore('cart', () => {
     return c.kind
   }
 
-  /** 载入 testrom 下指定 ROM，作为待写入文件。 */
+  /** 杞藉叆 testrom 涓嬫寚瀹?ROM锛屼綔涓哄緟鍐欏叆鏂囦欢銆?*/
   function loadTestRom(key = 'gb_check') {
     const path = TESTROM_FILES[key] || key
     return setDropped(path)
@@ -167,9 +165,7 @@ export const useCartData = defineStore('cart', () => {
   }
 
   /**
-   * 读卡带 FlashInfo + 游戏头。
-   * 单飞锁：并发调用合并为一次，避免多进程抢 COM 口卡死。
-   */
+   * 璇诲崱甯?FlashInfo + 娓告垙澶淬€?   * 鍗曢閿侊細骞跺彂璋冪敤鍚堝苟涓轰竴娆★紝閬垮厤澶氳繘绋嬫姠 COM 鍙ｅ崱姝汇€?   */
   async function readCart() {
     if (_readInFlight) return _readInFlight
     _readInFlight = _readCartImpl().finally(() => {
@@ -180,7 +176,7 @@ export const useCartData = defineStore('cart', () => {
 
   async function _readCartImpl() {
     if (!inTauri) {
-      cartError.value = '非 Tauri 运行时'
+      cartError.value = 'cfb is only available in Tauri runtime.'
       return
     }
     const seq = ++_readSeq
@@ -189,7 +185,7 @@ export const useCartData = defineStore('cart', () => {
     rtcInfo.value = null
 
     const tryOne = async (mbc) => {
-      const args = mbc ? ['info', '--mbc'] : ['info']
+      const args = cfbSettings.withPortArgs(mbc ? ['info', '--mbc'] : ['info'])
       let info = null
       let err = ''
       await runCfb(args, (ev) => {
@@ -212,18 +208,18 @@ export const useCartData = defineStore('cart', () => {
       if (good) {
         cartInfo.value = { ...hit.info, present: true }
         cartError.value = ''
-        // 静默对齐平台，不走 setPlatform（避免再触发读卡 watch）
+        // Platform is updated silently after card detection.
         const want = hit.info.kind === 'gb_mbc' ? 'gbc' : hit.info.kind === 'gba' ? 'gba' : null
         if (want && emu.currentPlatform !== want) {
           emu.$patch({ currentPlatform: want })
         }
         logStore.addLog(
-          `识别卡带 · ${hit.info.rom_title || hit.info.game_name || hit.info.kind} · ${fmtSize(hit.info.capacity_bytes) || '?'}`,
+          `璇嗗埆鍗″甫 路 ${hit.info.rom_title || hit.info.game_name || hit.info.kind} 路 ${fmtSize(hit.info.capacity_bytes) || '?'}`,
           'success',
         )
       } else {
         cartInfo.value = null
-        cartError.value = hit.err || '未检测到卡带（flash 无响应）'
+        cartError.value = hit.err || '鏈娴嬪埌鍗″甫锛坒lash 鏃犲搷搴旓級'
         logStore.addLog(cartError.value, 'warn')
       }
     } catch (e) {
@@ -240,7 +236,7 @@ export const useCartData = defineStore('cart', () => {
     if (!inTauri) return
     rtcInfo.value = null
     try {
-      const args = ['rtc']
+      const args = cfbSettings.withPortArgs(['rtc'])
       if (preferMbc.value || cartInfo.value?.kind === 'gb_mbc') args.push('--mbc')
       await runCfb(args, (ev) => {
         if (ev.type === 'rtc_data') rtcInfo.value = ev
@@ -254,7 +250,7 @@ export const useCartData = defineStore('cart', () => {
     return preferMbc.value || romFile.value?.mbc || cartInfo.value?.kind === 'gb_mbc'
   }
 
-  /** 烧录 ROM（cfb burn）。 */
+  /** 鐑у綍 ROM锛坈fb burn锛夈€?*/
   async function burn() {
     const f = romFile.value
     if (!f || opRunning.value) return
@@ -264,16 +260,16 @@ export const useCartData = defineStore('cart', () => {
     opResult.value = null
     progress.value = { done: 0, total: 0 }
     opLogs.value = []
-    logStore.addLog(`烧录开始 · ${f.name}`, 'warn')
+    logStore.addLog(`鐑у綍寮€濮?路 ${f.name}`, 'warn')
     try {
-      const args = ['burn', '--rom', f.path]
+      const args = cfbSettings.withBurnArgs(['burn', '--rom', f.path])
       if (f.mbc || preferMbc.value) args.push('--mbc')
       let progressLogId = null
       const fmtProgress = (done, total) => {
         const dMb = (done / 1024 / 1024).toFixed(2)
         const tMb = (total / 1024 / 1024).toFixed(2)
         const pct = total ? Math.round((done / total) * 100) : 0
-        return `写入 ${dMb} / ${tMb} MB  (${pct}%)`
+        return `鍐欏叆 ${dMb} / ${tMb} MB  (${pct}%)`
       }
       const { error } = await spawnCfb(args, (ev) => {
         if (ev.type === 'progress') {
@@ -301,30 +297,29 @@ export const useCartData = defineStore('cart', () => {
       if (opResult.value?.ok) {
         const r = opResult.value
         logStore.addLog(
-          `烧录完成 · ${r.bytes ? (r.bytes / 1024 / 1024).toFixed(1) + 'MB' : ''} · ${r.seconds ? Math.round(r.seconds) + 's' : ''}`
+          `鐑у綍瀹屾垚 路 ${r.bytes ? (r.bytes / 1024 / 1024).toFixed(1) + 'MB' : ''} 路 ${r.seconds ? Math.round(r.seconds) + 's' : ''}`
             .trimEnd()
-            .replace(/ · $/, ''),
+            .replace(/ 路 $/, ''),
           'success',
         )
       } else if (opResult.value && !opResult.value.ok) {
-        logStore.addLog(`烧录失败：${opResult.value.error || '未知错误'}`, 'error')
+        logStore.addLog(`Operation failed: ${opResult.value.error || 'unknown error'}`, 'error')
       }
       await readCart()
     }
   }
 
   /**
-   * 识别替换：载入 testrom → 烧录 → 再读卡确认标题已替换。
-   * @returns {{ ok:boolean, before?:string, after?:string, error?:string }}
+   * 璇嗗埆鏇挎崲锛氳浇鍏?testrom 鈫?鐑у綍 鈫?鍐嶈鍗＄‘璁ゆ爣棰樺凡鏇挎崲銆?   * @returns {{ ok:boolean, before?:string, after?:string, error?:string }}
    */
   async function burnAndIdentify(key = 'gb_check') {
     const before = cartInfo.value?.rom_title || cartInfo.value?.game_name || null
-    if (!loadTestRom(key)) return { ok: false, error: '无法载入 testrom' }
+    if (!loadTestRom(key)) return { ok: false, error: 'Unable to load testrom' }
     await burn()
     const after = cartInfo.value?.rom_title || cartInfo.value?.game_name || null
     const ok = !!opResult.value?.ok && !!after
-    if (ok) logStore.addLog(`识别替换 · ${before || '—'} → ${after}`, 'success')
-    return { ok, before, after, error: opResult.value?.ok ? undefined : (opResult.value?.error || '烧录失败') }
+    if (ok) logStore.addLog(`Identify changed ${before || '-'} -> ${after}`, 'success')
+    return { ok, before, after, error: opResult.value?.ok ? undefined : (opResult.value?.error || 'Burn failed') }
   }
 
   async function erase() {
@@ -335,9 +330,9 @@ export const useCartData = defineStore('cart', () => {
     opResult.value = null
     progress.value = { done: 0, total: 0 }
     opLogs.value = []
-    logStore.addLog('擦除开始…', 'warn')
+    logStore.addLog('Operation started', 'warn')
     try {
-      const args = ['erase']
+      const args = cfbSettings.withPortArgs(['erase'])
       if (mbcArgs()) args.push('--mbc')
       const { error } = await spawnCfb(args, (ev) => {
         if (ev.type === 'log') {
@@ -356,9 +351,9 @@ export const useCartData = defineStore('cart', () => {
       logStore.addLog(msg, 'error')
     } finally {
       opRunning.value = false
-      if (opResult.value?.ok) logStore.addLog('擦除完成', 'success')
+      if (opResult.value?.ok) logStore.addLog('Operation complete', 'success')
       else if (opResult.value && !opResult.value.ok) {
-        logStore.addLog(`擦除失败：${opResult.value.error || '未知错误'}`, 'error')
+        logStore.addLog(`Operation failed: ${opResult.value.error || 'unknown error'}`, 'error')
       }
       await readCart()
     }
@@ -372,20 +367,20 @@ export const useCartData = defineStore('cart', () => {
     opResult.value = null
     progress.value = { done: 0, total: 0 }
     opLogs.value = []
-    logStore.addLog('导出开始…', 'warn')
+    logStore.addLog('Operation started', 'warn')
     try {
       const title = (cartInfo.value?.rom_title || cartInfo.value?.game_name || 'dump')
         .replace(/[^a-zA-Z0-9_\-]/g, '_')
       const extName = mbcArgs() ? 'gb' : 'gba'
       const outPath = await join(await downloadDir(), `${title}_${Date.now()}.${extName}`)
-      const args = ['dump', '--out', outPath]
+      const args = cfbSettings.withPortArgs(['dump', '--out', outPath])
       if (mbcArgs()) args.push('--mbc')
       let dumpProgressId = null
       const fmtDump = (done, total) => {
         const dMb = (done / 1024 / 1024).toFixed(2)
         const tMb = (total / 1024 / 1024).toFixed(2)
         const pct = total ? Math.round((done / total) * 100) : 0
-        return `读取 ${dMb} / ${tMb} MB  (${pct}%)`
+        return `璇诲彇 ${dMb} / ${tMb} MB  (${pct}%)`
       }
       await spawnCfb(args, (ev) => {
         if (ev.type === 'progress') {
@@ -409,9 +404,9 @@ export const useCartData = defineStore('cart', () => {
       logStore.addLog(msg, 'error')
     } finally {
       opRunning.value = false
-      if (opResult.value?.ok) logStore.addLog(`导出完成 · ${opResult.value.outPath || ''}`, 'success')
+      if (opResult.value?.ok) logStore.addLog('Operation complete', 'success')
       else if (opResult.value && !opResult.value.ok) {
-        logStore.addLog(`导出失败：${opResult.value.error || '未知错误'}`, 'error')
+        logStore.addLog(`Operation failed: ${opResult.value.error || 'unknown error'}`, 'error')
       }
     }
   }
@@ -440,7 +435,7 @@ export const useCartData = defineStore('cart', () => {
       }
     },
   )
-  // 用户手动切平台时再读；识别成功里的 $patch 也会触发——单飞锁保证不并发抢口
+  // 鐢ㄦ埛鎵嬪姩鍒囧钩鍙版椂鍐嶈锛涜瘑鍒垚鍔熼噷鐨?$patch 涔熶細瑙﹀彂鈥斺€斿崟椋為攣淇濊瘉涓嶅苟鍙戞姠鍙?
   watch(
     () => emu.currentPlatform,
     () => {

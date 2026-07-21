@@ -1,34 +1,35 @@
-// 烧录器连接状态（Pinia store）：插入烧录器自动连接，拔出自动断开。
-// 「连接」= cfb detect + select；「断开」= cfb disconnect。
-
+// 鐑у綍鍣ㄨ繛鎺ョ姸鎬侊紙Pinia store锛夛細鎻掑叆鐑у綍鍣ㄨ嚜鍔ㄨ繛鎺ワ紝鎷斿嚭鑷姩鏂紑銆?// 銆岃繛鎺ャ€? cfb detect + select锛涖€屾柇寮€銆? cfb disconnect銆?
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { listen } from '@tauri-apps/api/event'
 import { inTauri, runCfb } from '../composables/useCfb'
+import { useCfbSettings } from './useCfbSettings'
 
 let _unlisten = null
 
 export const useConnection = defineStore('connection', () => {
+  const settings = useCfbSettings()
   const devices = ref([]) // [{port,vid,pid,burner,open,name}]
   const detecting = ref(false)
   const connected = ref(false)
   const dialogOpen = ref(false)
   const lastError = ref('')
   const selectedPort = ref(null)
-  // 用户主动断开后不自动重连，直到设备拔插
+  // 鐢ㄦ埛涓诲姩鏂紑鍚庝笉鑷姩閲嶈繛锛岀洿鍒拌澶囨嫈鎻?
   const autoConnect = ref(true)
 
   const burners = computed(() => devices.value.filter((d) => d.burner))
   const isConnected = computed(() => connected.value)
   const isConnecting = computed(() => detecting.value && !connected.value)
 
-  /** 记住端口，后续 info/burn 走同一烧录器。 */
+  /** 璁颁綇绔彛锛屽悗缁?info/burn 璧板悓涓€鐑у綍鍣ㄣ€?*/
   async function selectPort(port) {
     if (!inTauri || !port) return false
     let ok = false
     await runCfb(['select', '--port', port], (ev) => {
       if (ev.type === 'selected' && ev.port) {
         selectedPort.value = ev.port
+        settings.setPreferredPort(ev.port)
         ok = true
       } else if (ev.type === 'error') {
         lastError.value = ev.message
@@ -37,10 +38,10 @@ export const useConnection = defineStore('connection', () => {
     return ok
   }
 
-  /** cfb detect --json，刷新 devices；有烧录器则 select 第一台。 */
+  /** cfb detect --json锛屽埛鏂?devices锛涙湁鐑у綍鍣ㄥ垯 select 绗竴鍙般€?*/
   async function detect() {
     if (!inTauri) {
-      lastError.value = '非 Tauri 运行时（请用 npm run tauri dev）'
+      lastError.value = 'cfb is only available in Tauri runtime. Use npm run dev.'
       return false
     }
     if (detecting.value) return burners.value.length > 0
@@ -64,7 +65,8 @@ export const useConnection = defineStore('connection', () => {
       })
       devices.value = found
       if (found.length > 0) {
-        await selectPort(found[0].port)
+        const preferred = settings.preferredPort && found.find((d) => d.port === settings.preferredPort)
+        await selectPort((preferred || found[0]).port)
       } else {
         selectedPort.value = null
       }

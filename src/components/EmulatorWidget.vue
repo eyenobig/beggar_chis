@@ -13,7 +13,7 @@ import LaunchButton from './LaunchButton.vue'
 import RightDrawers from './drawer/RightDrawers.vue'
 
 const emu = useEmulator()
-const { logsOpen, shopOpen, helpOpen, settingsOpen } = storeToRefs(emu)
+const { logsOpen, shopOpen, settingsOpen } = storeToRefs(emu)
 const { addLog } = emu
 const cart = useCartData()
 const { handleDrop } = cart
@@ -23,7 +23,7 @@ useWindowSync(root)
 
 // 任意右侧抽屉展开 → 主栏 320 + 抽屉 440（重叠约 20）≈ 740
 const frameWidth = computed(() =>
-  logsOpen.value || shopOpen.value || helpOpen.value || settingsOpen.value
+  logsOpen.value || shopOpen.value || settingsOpen.value
     ? 740
     : 348,
 )

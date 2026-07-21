@@ -3,7 +3,6 @@
 import Bookmarks from './Bookmarks.vue'
 import LogsDrawer from './logs/LogsDrawer.vue'
 import ShopDrawer from './shop/ShopDrawer.vue'
-import HelpDrawer from './help/HelpDrawer.vue'
 import SettingsDrawer from './settings/SettingsDrawer.vue'
 </script>
 
@@ -12,7 +11,6 @@ import SettingsDrawer from './settings/SettingsDrawer.vue'
     <Bookmarks />
     <LogsDrawer />
     <ShopDrawer />
-    <HelpDrawer />
     <SettingsDrawer />
   </div>
 </template>

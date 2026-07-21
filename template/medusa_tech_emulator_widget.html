@@ -118,7 +118,7 @@
                             <div class="absolute top-0 right-0 w-16 h-16 bg-white/5 rounded-full blur-xl -translate-y-1/2 translate-x-1/2"></div>
                             
                             <p class="text-[8px] text-zinc-400 font-black uppercase tracking-widest mb-1" id="info-rom-type">Game Boy Color</p>
-                            <h3 class="text-xs font-black mono truncate mb-4 text-zinc-100" id="info-rom-filename">Pokemon_Crystal.gbc</h3>
+                            <h3 class="text-xs font-black mono truncate mb-4 text-zinc-100" id="info-rom-filename">example.gbc</h3>
 
                             <!-- 硬件容量指示器 -->
                             <div>
@@ -151,7 +151,7 @@
                         
                         <div class="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 shadow-sm">
                             <p class="text-[8px] text-zinc-500 font-black uppercase tracking-widest mb-1" id="info-sav-type">SRAM Backup</p>
-                            <h3 class="text-xs font-black mono truncate mb-3 text-zinc-900" id="info-sav-filename">Pokemon_Crystal.sav</h3>
+                            <h3 class="text-xs font-black mono truncate mb-3 text-zinc-900" id="info-sav-filename">example.sav</h3>
                             
                             <div class="flex justify-between items-center pt-2 border-t border-zinc-200/60">
                                 <p class="text-[8px] text-zinc-400 font-bold uppercase tracking-widest">Type: <span class="font-black mono text-zinc-600" id="info-sav-chip">SRAM</span></p>
@@ -213,12 +213,12 @@
     <script>
         const dataConfig = {
             gbc: {
-                rom: { name: 'Pokemon_Crystal.gbc', type: 'GBC ROM', size: 2048, max: 4096 },
-                sav: { name: 'Pokemon_Crystal.sav', type: 'SRAM Backup', chip: 'SRAM', size: 32 }
+                rom: { name: 'example.gbc', type: 'GBC ROM', size: 2048, max: 4096 },
+                sav: { name: 'example.sav', type: 'SRAM Backup', chip: 'SRAM', size: 32 }
             },
             gba: {
-                rom: { name: 'Pokemon_Emerald.gba', type: 'GBA ROM', size: 16384, max: 32768 },
-                sav: { name: 'Pokemon_Emerald.sav', type: 'Flash Memory', chip: 'Flash 1M', size: 128 }
+                rom: { name: 'example.gba', type: 'GBA ROM', size: 16384, max: 32768 },
+                sav: { name: 'example.sav', type: 'Flash Memory', chip: 'Flash 1M', size: 128 }
             }
         };
 

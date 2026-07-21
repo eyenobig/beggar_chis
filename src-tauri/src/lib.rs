@@ -1,4 +1,5 @@
 mod device_watcher;
+mod emulator;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -6,6 +7,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init()) // 用于以 sidecar 方式驱动 cfb（chis-burner-cmd）
+        .invoke_handler(tauri::generate_handler![
+            emulator::install_skyemu,
+            emulator::launch_emulator,
+            emulator::stop_emulator,
+        ])
         .setup(|app| {
             // dev 模式自动打开 devtools，便于查看 JS console.log
             #[cfg(debug_assertions)]

@@ -15,14 +15,14 @@ dist-ssr
 # Rust / Tauri
 src-tauri/target
 
-# cfb sidecar：由子模块 chis-burner-cmd 构建生成，勿提交预编译二进制
+# cfb sidecars are generated locally or downloaded from GitHub Releases
 src-tauri/binaries/cfb-*
 !src-tauri/binaries/.gitkeep
 
 # 本地客户端烧录验证产物
 .chis-verify.json
 
-# Editor directories and files
+.claude/settings.local.json
 .vscode/*
 !.vscode/extensions.json
 .idea

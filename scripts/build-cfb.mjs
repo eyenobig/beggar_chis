@@ -1,21 +1,19 @@
 #!/usr/bin/env node
-/**
- * 从 Git 子模块 chis-burner-cmd 构建 cfb，并复制为 Tauri sidecar 命名：
- *   src-tauri/binaries/cfb-<rust-triple>[.exe]
- */
+/** Build cfb from the sibling local repository and copy it into Tauri sidecars. */
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, copyFileSync, existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const manifest = join(root, 'chis-burner-cmd', 'Cargo.toml')
+const sourceDir = resolve(process.env.CFB_LOCAL_DIR || join(root, '..', 'chis-burner-cmd'))
+const manifest = join(sourceDir, 'Cargo.toml')
 const outDir = join(root, 'src-tauri', 'binaries')
 const isWin = process.platform === 'win32'
 
 if (!existsSync(manifest)) {
-  console.error('找不到 chis-burner-cmd/Cargo.toml。请先初始化子模块：')
-  console.error('  git submodule update --init --recursive')
+  console.error(`Local chis-burner-cmd was not found: ${manifest}`)
+  console.error('Set CFB_LOCAL_DIR when the repository is stored elsewhere.')
   process.exit(1)
 }
 
@@ -23,7 +21,7 @@ const triple = detectTriple()
 const binName = isWin ? 'cfb.exe' : 'cfb'
 const sidecarName = isWin ? `cfb-${triple}.exe` : `cfb-${triple}`
 
-console.log(`Building cfb for ${triple}...`)
+console.log(`Building local cfb from ${sourceDir}`)
 const build = spawnSync(
   'cargo',
   ['build', '--release', '--locked', '--manifest-path', manifest, '--target', triple],
@@ -36,17 +34,17 @@ const candidates = [
   join(targetDir, triple, 'release', binName),
   join(targetDir, 'release', binName),
 ]
-const src = candidates.find((p) => existsSync(p))
-if (!src) {
-  console.error('构建产物不存在，已尝试：')
-  for (const p of candidates) console.error(`  - ${p}`)
+const source = candidates.find((path) => existsSync(path))
+if (!source) {
+  console.error('Local cfb build completed without the expected executable:')
+  for (const path of candidates) console.error(`  - ${path}`)
   process.exit(1)
 }
 
 mkdirSync(outDir, { recursive: true })
-const dest = join(outDir, sidecarName)
-copyFileSync(src, dest)
-console.log(`Wrote ${dest}`)
+const destination = join(outDir, sidecarName)
+copyFileSync(source, destination)
+console.log(`Local sidecar ready: ${destination}`)
 
 function detectTriple() {
   if (process.env.CFB_TARGET) return process.env.CFB_TARGET
@@ -54,19 +52,18 @@ function detectTriple() {
   if (process.platform === 'win32') return `${arch}-pc-windows-msvc`
   if (process.platform === 'darwin') return `${arch}-apple-darwin`
   if (process.platform === 'linux') return `${arch}-unknown-linux-gnu`
-  throw new Error(`不支持的平台: ${process.platform}/${process.arch}`)
+  throw new Error(`Unsupported platform: ${process.platform}/${process.arch}`)
 }
 
-/** 尊重 CARGO_TARGET_DIR / cargo metadata，避免硬编码路径。 */
 function cargoTargetDir(manifestPath) {
-  const meta = spawnSync(
+  const metadata = spawnSync(
     'cargo',
     ['metadata', '--format-version', '1', '--no-deps', '--manifest-path', manifestPath],
     { encoding: 'utf8', shell: isWin },
   )
-  if (meta.status !== 0) {
-    console.error(meta.stderr || meta.stdout)
-    process.exit(meta.status ?? 1)
+  if (metadata.status !== 0) {
+    console.error(metadata.stderr || metadata.stdout)
+    process.exit(metadata.status ?? 1)
   }
-  return JSON.parse(meta.stdout).target_directory
+  return JSON.parse(metadata.stdout).target_directory
 }

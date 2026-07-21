@@ -1,46 +1,44 @@
 name: CI
 
-# 每次推送到 main 或提交 PR 时，验证项目能否正常编译（不发布、不打包）
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
+env:
+  CFB_GITHUB_REPO: eyenobig/chis-burner-cmd
+  CFB_RELEASE_TAG: ${{ vars.CFB_RELEASE_TAG || 'latest' }}
+
 jobs:
   build-check:
-    runs-on: windows-latest # 单平台快速校验；如需跨平台可改成 matrix
+    runs-on: windows-latest
     steps:
-      - name: Checkout 代码（含 chis-burner-cmd 子模块）
+      - name: Checkout application
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: 安装 Node.js
+      - name: Install Node.js
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
+          cache: npm
 
-      - name: 安装 Rust 工具链
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Rust 依赖缓存
+      - name: Cache Rust dependencies
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: |
-            ./src-tauri -> target
-            ./chis-burner-cmd -> target
+          workspaces: ./src-tauri -> target
 
-      - name: 从子模块构建 cfb sidecar
-        shell: pwsh
-        run: |
-          cargo build --release --locked --manifest-path chis-burner-cmd/Cargo.toml
-          New-Item -ItemType Directory -Force -Path src-tauri/binaries | Out-Null
-          Copy-Item chis-burner-cmd/target/release/cfb.exe `
-            src-tauri/binaries/cfb-x86_64-pc-windows-msvc.exe -Force
-
-      - name: 安装前端依赖
+      - name: Install frontend dependencies
         run: npm ci
 
-      - name: 编译检查
+      - name: Download released cfb sidecar
+        run: npm run build:cfb:github
+        env:
+          CFB_TARGET: x86_64-pc-windows-msvc
+          CFB_GITHUB_TOKEN: ${{ secrets.CFB_RELEASE_TOKEN || github.token }}
+
+      - name: Compile check
         run: npm run tauri build -- --no-bundle

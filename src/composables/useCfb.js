@@ -1,10 +1,8 @@
-// cfb（chis-burner-cmd）sidecar：Tauri 运行时起进程并解析 NDJSON。
-// 短命令用 execute() 拿完整 stdout（避免 spawn 关进程时丢尾行）；
-// 长命令（burn/dump）用 spawn 流式进度。
-
+// cfb锛坈his-burner-cmd锛塻idecar锛歍auri 杩愯鏃惰捣杩涚▼骞惰В鏋?NDJSON銆?// 鐭懡浠ょ敤 execute() 鎷垮畬鏁?stdout锛堥伩鍏?spawn 鍏宠繘绋嬫椂涓㈠熬琛岋級锛?// 闀垮懡浠わ紙burn/dump锛夌敤 spawn 娴佸紡杩涘害銆?
 import { Command } from '@tauri-apps/plugin-shell'
+import { useCfbSettings } from '../stores/useCfbSettings'
 
-/** 是否在 Tauri 运行时（纯 vite 浏览器下为 false）。 */
+/** 鏄惁鍦?Tauri 杩愯鏃讹紙绾?vite 娴忚鍣ㄤ笅涓?false锛夈€?*/
 export const inTauri =
   typeof window !== 'undefined' &&
   ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
@@ -26,20 +24,20 @@ function parseNdjson(text, onEvent) {
 }
 
 /**
- * 短命令：一次跑完，可靠拿到全部 NDJSON（info / detect / select / rom-info / rtc…）。
- * @param {string[]} args
+ * 鐭懡浠わ細涓€娆¤窇瀹岋紝鍙潬鎷垮埌鍏ㄩ儴 NDJSON锛坕nfo / detect / select / rom-info / rtc鈥︼級銆? * @param {string[]} args
  * @param {(ev:any)=>void} [onEvent]
  * @returns {Promise<{logs:string[], error?:string, code:number}>}
  */
 export async function runCfb(args, onEvent) {
-  if (!inTauri) throw new Error('cfb 仅在 Tauri 运行时可用（请用 npm run tauri dev）')
-  const cmd = Command.sidecar('binaries/cfb', [...args, '--json'])
+  if (!inTauri) throw new Error('cfb is only available in Tauri runtime. Use npm run dev.')
+  const settings = useCfbSettings()
+  const cmd = Command.sidecar('binaries/cfb', [...settings.withGlobalArgs(args), '--json'])
   try {
-    // info/detect 等短命令不应超过 30s；超时则中止，避免 UI 永久卡住
+    // info/detect 绛夌煭鍛戒护涓嶅簲瓒呰繃 30s锛涜秴鏃跺垯涓锛岄伩鍏?UI 姘镐箙鍗′綇
     const out = await Promise.race([
       cmd.execute(),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`cfb 超时: ${args.join(' ')}`)), 30000),
+        setTimeout(() => reject(new Error(`cfb 瓒呮椂: ${args.join(' ')}`)), 30000),
       ),
     ])
     parseNdjson(out.stdout, onEvent)
@@ -52,14 +50,14 @@ export async function runCfb(args, onEvent) {
 }
 
 /**
- * 长命令：流式进度（burn / dump / erase）。
- * @param {string[]} args
+ * 闀垮懡浠わ細娴佸紡杩涘害锛坆urn / dump / erase锛夈€? * @param {string[]} args
  * @param {(ev:any)=>void} [onEvent]
  * @returns {Promise<{logs:string[], error?:string}>}
  */
 export async function spawnCfb(args, onEvent) {
-  if (!inTauri) throw new Error('cfb 仅在 Tauri 运行时可用（请用 npm run tauri dev）')
-  const cmd = Command.sidecar('binaries/cfb', [...args, '--json'])
+  if (!inTauri) throw new Error('cfb is only available in Tauri runtime. Use npm run dev.')
+  const settings = useCfbSettings()
+  const cmd = Command.sidecar('binaries/cfb', [...settings.withGlobalArgs(args), '--json'])
   const logs = []
   let buf = ''
   const feed = (chunk) => {

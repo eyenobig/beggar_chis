@@ -12,7 +12,9 @@ edition = "2021"
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "tauri_app_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# This project targets desktop only. The binary links the library as an rlib;
+# staticlib/cdylib are mobile artifacts and make every dev build much slower.
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -37,3 +39,8 @@ windows-sys = { version = "0.52", features = [
 # Linux 用 inotify，macOS 用 kqueue 监听 /dev 设备文件变化
 notify = { version = "6", default-features = false, features = ["macos_kqueue"] }
 
+[profile.dev]
+incremental = false
+
+[profile.dev.package.tauri-app]
+debug = 0

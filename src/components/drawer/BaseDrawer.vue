@@ -24,12 +24,12 @@ const outerStyle = computed(() => {
 <template>
   <div
     data-no-drag
-    class="absolute top-[24px] bottom-[88px] overflow-hidden left-[300px] z-10"
+    class="absolute top-[20px] bottom-[112px] overflow-hidden rounded-r-[18px] left-[300px] z-10"
     :class="animate ? 'drawer-transition' : ''"
     :style="outerStyle"
   >
     <div
-      class="absolute top-0 left-0 h-full bg-zinc-950 border-y border-r border-white/10 rounded-r-[24px] pl-[20px] flex flex-col"
+      class="absolute top-0 left-0 h-full overflow-hidden bg-zinc-950 border-y border-r border-white/10 rounded-r-[18px] pl-[20px] flex flex-col"
       :style="{ width: width + 'px' }"
     >
       <slot />
