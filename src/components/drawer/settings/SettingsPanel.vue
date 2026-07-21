@@ -1,94 +1,74 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Download, FolderOpen, RefreshCw } from '@lucide/vue'
-import { invoke } from '@tauri-apps/api/core'
-import { open } from '@tauri-apps/plugin-dialog'
-import { inTauri, runCfb } from '../../../composables/useCfb'
+import { Trash2 } from '@lucide/vue'
+import { cfbClient, inTauri } from '../../../services/cfb'
 import { useCfbSettings } from '../../../stores/useCfbSettings'
 import { useEmulator } from '../../../stores/useEmulator'
 import { useLogStore } from '../../../stores/useLogStore'
+import { useCartridgeCache } from '../../../stores/useCartridgeCache'
 import SettingHint from '../../settings/SettingHint.vue'
 
 const settings = useCfbSettings()
 const emulator = useEmulator()
 const logStore = useLogStore()
+const cartridgeCache = useCartridgeCache()
+const { records: cachedCartridges } = storeToRefs(cartridgeCache)
 const { currentPlatform } = storeToRefs(emulator)
 const {
   language,
-  voltage,
+  voltageAuto,
+  manualVoltage,
   chipErase,
   unlockPpb,
   verifyAfter,
-  emulatorPath,
-  emulatorInstallDir,
 } = storeToRefs(settings)
 
 const saving = ref(false)
-const installingEmulator = ref(false)
 const status = ref('')
 const statusError = computed(() => /失败|请在/.test(status.value))
 const isGbFamily = computed(() => currentPlatform.value === 'gbc')
 
-async function setVoltage(target) {
+const voltageLabel = computed(() => voltageAuto.value ? '\u81ea\u52a8\u8bc6\u522b' : manualVoltage.value)
+
+async function applyVoltage(next, updateState) {
   if (saving.value || !isGbFamily.value) return
-  const next = voltage.value === target ? 'auto' : target
   if (!inTauri) {
-    status.value = '请在桌面客户端中切换电压'
+    status.value = '\u8bf7\u5728\u684c\u9762\u5ba2\u6237\u7aef\u4e2d\u5207\u6362\u7535\u538b'
     return
   }
   saving.value = true
   status.value = ''
   try {
-    const result = await runCfb(next === 'auto' ? ['voltage', '--clear'] : ['voltage', next])
+    const result = await cfbClient.setVoltage(next)
     if (result.error) throw new Error(result.error)
-    voltage.value = next
-    const label = next === 'auto' ? '自动' : next
-    status.value = `GB/GBC 电压已设为 ${label}`
+    updateState()
+    status.value = `GB/GBC \u7535\u538b\u5df2\u8bbe\u4e3a ${voltageLabel.value}`
     logStore.addLog(status.value, 'success')
   } catch (error) {
-    status.value = `电压切换失败：${String(error)}`
+    status.value = `\u7535\u538b\u5207\u6362\u5931\u8d25: ${String(error)}`
     logStore.addLog(status.value, 'error')
   } finally {
     saving.value = false
   }
 }
 
-async function pickEmulator() {
-  if (!inTauri) {
-    status.value = '请在桌面客户端中选择 SkyEmu 路径'
-    return
-  }
-  try {
-    const selected = await open({
-      multiple: false,
-      directory: false,
-      filters: [{ name: 'SkyEmu', extensions: ['exe'] }],
-    })
-    if (typeof selected === 'string') emulatorPath.value = selected
-  } catch (error) {
-    status.value = `路径选择失败：${String(error)}`
-  }
+function toggleVoltageAuto() {
+  const nextAuto = !voltageAuto.value
+  const next = nextAuto ? 'auto' : manualVoltage.value
+  return applyVoltage(next, () => { voltageAuto.value = nextAuto })
 }
 
-async function installEmulator() {
-  if (!inTauri) {
-    status.value = '请在桌面客户端中安装 SkyEmu'
-    return
-  }
-  const selected = await open({ multiple: false, directory: true })
-  if (typeof selected !== 'string') return
-  emulatorInstallDir.value = selected
-  installingEmulator.value = true
-  status.value = '正在下载并解压 SkyEmu...'
-  try {
-    emulatorPath.value = await invoke('install_skyemu', { destination: selected })
-    status.value = 'SkyEmu 已安装并设置启动路径'
-  } catch (error) {
-    status.value = `安装失败：${String(error)}`
-  } finally {
-    installingEmulator.value = false
-  }
+function toggleManualVoltage() {
+  if (voltageAuto.value) return
+  const next = manualVoltage.value === '5V' ? '3.3V' : '5V'
+  return applyVoltage(next, () => { manualVoltage.value = next })
+}
+
+function clearCartridgeCache() {
+  cartridgeCache.clearAll()
+  status.value = '\u5361\u5e26\u7f13\u5b58\u5df2\u6e05\u9664'
+  logStore.addLog(status.value, 'success')
 }
 
 </script>
@@ -96,26 +76,16 @@ async function installEmulator() {
 <template>
   <div class="flex-1 min-h-0 overflow-auto no-scrollbar px-5 py-4 space-y-5 text-zinc-200">
     <section class="space-y-3">
-      <div class="flex items-center justify-between gap-3">
-        <h3 class="text-[11px] font-black uppercase tracking-widest text-zinc-400">Emulator</h3>
-        <span class="text-[10px] text-zinc-600">DirectPlayV0.6</span>
-      </div>
-
-      <label class="block space-y-1.5">
-        <span class="flex items-center gap-1 text-[11px] font-bold text-zinc-400">SkyEmu 启动路径 <SettingHint text="手动选择 SkyEmu.exe，或使用右侧下载按钮安装。" /></span>
-        <div class="flex gap-2">
-          <input v-model="emulatorPath" data-no-drag class="min-w-0 flex-1 h-8 rounded-md bg-zinc-950/60 border border-white/10 px-2.5 text-xs text-white outline-none focus:border-white/25" placeholder="SkyEmu.exe" />
-          <button data-no-drag type="button" :disabled="!inTauri" class="inline-flex items-center justify-center w-8 h-8 rounded-md bg-zinc-800 border border-white/10 text-zinc-300 hover:text-white disabled:opacity-40" aria-label="Choose SkyEmu executable" @click="pickEmulator">
-            <FolderOpen class="w-3.5 h-3.5" />
-          </button>
-          <button data-no-drag type="button" :disabled="installingEmulator || !inTauri" class="inline-flex items-center justify-center w-8 h-8 rounded-md bg-emerald-500 text-zinc-950 hover:bg-emerald-400 disabled:opacity-50" aria-label="Install SkyEmu" title="选择目录并安装 SkyEmu" @click="installEmulator">
-            <RefreshCw v-if="installingEmulator" class="w-3.5 h-3.5 animate-spin" />
-            <Download v-else class="w-3.5 h-3.5" />
-          </button>
+      <h3 class="text-[11px] font-black uppercase tracking-widest text-zinc-400">Cache</h3>
+      <div class="h-10 flex items-center justify-between gap-3 border-y border-white/10">
+        <div class="min-w-0">
+          <div class="text-[11px] font-bold text-zinc-300">&#x5361;&#x5e26;&#x7f13;&#x5b58;</div>
+          <div class="text-[9px] text-zinc-600">{{ cachedCartridges.length }} &#x6761;&#x672c;&#x5730;&#x8bb0;&#x5f55;</div>
         </div>
-      </label>
-
-      <div v-if="emulatorInstallDir" class="text-[10px] text-zinc-600 truncate" :title="emulatorInstallDir">安装目录：{{ emulatorInstallDir }}</div>
+        <button data-no-drag type="button" class="w-8 h-8 inline-flex items-center justify-center rounded-md border border-white/10 bg-zinc-900 text-zinc-500 hover:text-red-400 disabled:opacity-30" :disabled="cachedCartridges.length === 0" aria-label="Clear cartridge cache" title="Clear cartridge cache" @click="clearCartridgeCache">
+          <Trash2 class="w-3.5 h-3.5" />
+        </button>
+      </div>
     </section>
 
     <section class="space-y-3">
@@ -131,18 +101,35 @@ async function installEmulator() {
 
       <div v-if="isGbFamily" class="space-y-2">
         <div class="flex items-center justify-between gap-3">
-          <span class="flex items-center gap-1 text-[11px] font-bold text-zinc-400">GB/GBC 电压 <SettingHint text="两个开关均关闭时自动选择电压；GBA 始终使用 3.3V。" /></span>
-          <span class="text-[10px] font-bold text-emerald-400">{{ voltage === 'auto' ? '自动' : voltage }}</span>
+          <span class="flex items-center gap-1 text-[11px] font-bold text-zinc-400">GB/GBC &#x7535;&#x538b; <SettingHint text="GBA &#x56fa;&#x5b9a;&#x4f7f;&#x7528; 3.3V&#xff1b;GB/GBC &#x53ef;&#x81ea;&#x52a8;&#x8bc6;&#x522b;&#xff0c;&#x4e5f;&#x53ef;&#x624b;&#x52a8;&#x9009;&#x62e9; 3.3V &#x6216; 5V&#x3002;" /></span>
+          <span class="text-[10px] font-bold text-emerald-400">{{ voltageLabel }}</span>
         </div>
-        <div class="grid grid-cols-2 gap-2">
-          <button v-for="option in ['3.3V', '5V']" :key="option" data-no-drag type="button" role="switch" :aria-checked="voltage === option" :disabled="saving || !inTauri" class="h-9 flex items-center justify-between gap-2 rounded-md border px-2.5 text-[11px] font-bold transition-colors disabled:opacity-50" :class="voltage === option ? 'border-emerald-400/60 bg-emerald-400/10 text-white' : 'border-white/10 bg-zinc-950/60 text-zinc-400 hover:text-white'" @click="setVoltage(option)">
-            <span>{{ option }}</span>
-            <span class="relative h-4 w-7 shrink-0 rounded-full transition-colors" :class="voltage === option ? 'bg-emerald-400' : 'bg-zinc-700'">
-              <span class="absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform" :class="voltage === option ? 'translate-x-3.5' : 'translate-x-0.5'" />
-            </span>
-          </button>
+
+        <div class="border-y border-white/10 divide-y divide-white/10">
+          <div class="h-11 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-[11px] font-bold text-zinc-300">&#x81ea;&#x52a8;&#x8bc6;&#x522b;</div>
+              <div class="text-[9px] text-zinc-600">&#x6839;&#x636e;&#x5361;&#x5e26;&#x81ea;&#x52a8;&#x9009;&#x62e9;&#x7535;&#x538b;</div>
+            </div>
+            <button data-no-drag type="button" role="switch" :aria-checked="voltageAuto" :disabled="saving || !inTauri" class="relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-40" :class="voltageAuto ? 'bg-emerald-400' : 'bg-zinc-700'" aria-label="Automatic voltage detection" @click="toggleVoltageAuto">
+              <span class="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform" :class="voltageAuto ? 'translate-x-[18px]' : 'translate-x-0.5'" />
+            </button>
+          </div>
+
+          <div class="h-11 flex items-center justify-between gap-3" :class="voltageAuto ? 'opacity-40' : ''">
+            <div class="min-w-0">
+              <div class="text-[11px] font-bold text-zinc-300">&#x624b;&#x52a8;&#x7535;&#x538b;</div>
+              <div class="text-[9px] text-zinc-600">&#x5173;&#x95ed;&#x81ea;&#x52a8;&#x8bc6;&#x522b;&#x540e;&#x751f;&#x6548;</div>
+            </div>
+            <div class="flex items-center gap-1.5 text-[9px] font-black text-zinc-500">
+              <span :class="manualVoltage === '3.3V' && !voltageAuto ? 'text-white' : ''">3.3V</span>
+              <button data-no-drag type="button" role="switch" :aria-checked="manualVoltage === '5V'" :disabled="saving || voltageAuto || !inTauri" class="relative h-5 w-9 shrink-0 rounded-full bg-zinc-700 transition-colors disabled:cursor-default" :class="manualVoltage === '5V' ? '!bg-emerald-400' : ''" aria-label="Toggle 3.3V or 5V" @click="toggleManualVoltage">
+                <span class="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform" :class="manualVoltage === '5V' ? 'translate-x-[18px]' : 'translate-x-0.5'" />
+              </button>
+              <span :class="manualVoltage === '5V' && !voltageAuto ? 'text-white' : ''">5V</span>
+            </div>
+          </div>
         </div>
-        <p class="text-[10px] text-zinc-600">两个开关关闭时使用自动电压</p>
       </div>
     </section>
 

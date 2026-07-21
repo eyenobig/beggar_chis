@@ -1,27 +1,19 @@
-mod device_watcher;
-mod emulator;
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_dialog::init()) // 用于以 sidecar 方式驱动 cfb（chis-burner-cmd）
-        .invoke_handler(tauri::generate_handler![
-            emulator::install_skyemu,
-            emulator::launch_emulator,
-            emulator::stop_emulator,
-        ])
-        .setup(|app| {
+        .plugin(tauri_plugin_shell::init()) // 允许前端以 sidecar 方式驱动 cfb
+        .plugin(tauri_plugin_dialog::init()) // ROM、安装目录选择
+        .setup(|_app| {
             // dev 模式自动打开 devtools，便于查看 JS console.log
             #[cfg(debug_assertions)]
             {
                 use tauri::Manager;
-                if let Some(w) = app.get_webview_window("main") {
+                if let Some(w) = _app.get_webview_window("main") {
                     w.open_devtools();
                 }
             }
-            device_watcher::start(app.handle().clone());
+            // 设备热插拔监听与 SkyEmu 启动逻辑已移除：全部统一走 cfb sidecar。
             Ok(())
         })
         .run(tauri::generate_context!())

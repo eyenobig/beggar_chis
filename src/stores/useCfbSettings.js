@@ -1,4 +1,4 @@
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 const STORAGE_KEY = 'chis.cfb.settings.v1'
@@ -27,23 +27,27 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
 
   const preferredPort = ref(cleanPort(saved.preferredPort))
   const language = ref(saved.language || 'auto')
-  const voltage = ref(['3.3V', '5V'].includes(saved.voltage) ? saved.voltage : 'auto')
+  const voltageAuto = ref(saved.voltageAuto ?? (saved.voltage ? saved.voltage === 'auto' : true))
+  const manualVoltage = ref(
+    ['3.3V', '5V'].includes(saved.manualVoltage)
+      ? saved.manualVoltage
+      : ['3.3V', '5V'].includes(saved.voltage) ? saved.voltage : '3.3V',
+  )
+  const voltage = computed(() => voltageAuto.value ? 'auto' : manualVoltage.value)
   const chipErase = ref(saved.chipErase === true)
   const unlockPpb = ref(saved.unlockPpb !== false)
   const verifyAfter = ref(saved.verifyAfter !== false)
-  const emulatorPath = ref(saved.emulatorPath || '')
-  const emulatorInstallDir = ref(saved.emulatorInstallDir || '')
 
   watch(
     () => ({
       preferredPort: preferredPort.value,
       language: language.value,
       voltage: voltage.value,
+      voltageAuto: voltageAuto.value,
+      manualVoltage: manualVoltage.value,
       chipErase: chipErase.value,
       unlockPpb: unlockPpb.value,
       verifyAfter: verifyAfter.value,
-      emulatorPath: emulatorPath.value,
-      emulatorInstallDir: emulatorInstallDir.value,
     }),
     saveSettings,
     { deep: true },
@@ -83,11 +87,11 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
     preferredPort,
     language,
     voltage,
+    voltageAuto,
+    manualVoltage,
     chipErase,
     unlockPpb,
     verifyAfter,
-    emulatorPath,
-    emulatorInstallDir,
     setPreferredPort,
     clearPreferredPort,
     withGlobalArgs,

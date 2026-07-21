@@ -1,11 +1,8 @@
 // 鐑у綍鍣ㄨ繛鎺ョ姸鎬侊紙Pinia store锛夛細鎻掑叆鐑у綍鍣ㄨ嚜鍔ㄨ繛鎺ワ紝鎷斿嚭鑷姩鏂紑銆?// 銆岃繛鎺ャ€? cfb detect + select锛涖€屾柇寮€銆? cfb disconnect銆?
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { listen } from '@tauri-apps/api/event'
-import { inTauri, runCfb } from '../composables/useCfb'
+import { cfbClient, inTauri } from '../services/cfb'
 import { useCfbSettings } from './useCfbSettings'
-
-let _unlisten = null
 
 export const useConnection = defineStore('connection', () => {
   const settings = useCfbSettings()
@@ -26,7 +23,7 @@ export const useConnection = defineStore('connection', () => {
   async function selectPort(port) {
     if (!inTauri || !port) return false
     let ok = false
-    await runCfb(['select', '--port', port], (ev) => {
+    await cfbClient.selectPort(port, (ev) => {
       if (ev.type === 'selected' && ev.port) {
         selectedPort.value = ev.port
         settings.setPreferredPort(ev.port)
@@ -49,7 +46,7 @@ export const useConnection = defineStore('connection', () => {
     lastError.value = ''
     const found = []
     try {
-      await runCfb(['detect'], (ev) => {
+      await cfbClient.detect((ev) => {
         if (ev.type === 'port') {
           found.push({
             port: ev.port,
@@ -99,7 +96,7 @@ export const useConnection = defineStore('connection', () => {
     closeDialog()
     if (inTauri) {
       try {
-        await runCfb(['disconnect'])
+        await cfbClient.disconnect()
       } catch (e) {
         lastError.value = String(e?.message || e)
       }
@@ -116,15 +113,15 @@ export const useConnection = defineStore('connection', () => {
     }
   }
 
+  // 设备热插拔监听（device_watcher.rs）已移除：此处只做一次初始 detect。
+  // 重新检测由用户在连接弹窗里手动触发（openDialog → detect）。
   async function startWatching() {
-    if (_unlisten || !inTauri) return
-    _unlisten = await listen('device-changed', () => handleDeviceChange())
+    if (!inTauri) return
     await handleDeviceChange()
   }
 
   function stopWatching() {
-    _unlisten?.()
-    _unlisten = null
+    // 保留为空壳，兼容旧调用方（App.vue 等不再主动停用监听）。
   }
 
   return {
