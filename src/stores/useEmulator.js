@@ -14,6 +14,7 @@ export const useEmulator = defineStore('emulator', () => {
   const activeTab = ref('logs')
   const shopOpen = ref(false)
   const settingsOpen = ref(false)
+  const helpOpen = ref(false)
   const bootProgress = ref(0)
 
   const logStore = useLogStore()
@@ -44,6 +45,38 @@ export const useEmulator = defineStore('emulator', () => {
     }
   }
 
+  let processTimer = null
+  let processCheckRunning = false
+
+  function stopProcessWatching() {
+    if (processTimer) clearInterval(processTimer)
+    processTimer = null
+    processCheckRunning = false
+  }
+
+  async function checkEmulatorProcess() {
+    if (processCheckRunning || !emulatorPid.value || emulatorState.value !== 'running') return
+    processCheckRunning = true
+    try {
+      const running = await invoke('is_emulator_running', { pid: emulatorPid.value })
+      if (!running) {
+        stopProcessWatching()
+        emulatorPid.value = null
+        emulatorState.value = 'stopped'
+        addLog('SkyEmu process exited.', 'warn')
+      }
+    } catch (error) {
+      addLog(`Unable to check SkyEmu process: ${String(error)}`, 'error')
+    } finally {
+      processCheckRunning = false
+    }
+  }
+
+  function startProcessWatching() {
+    stopProcessWatching()
+    processTimer = setInterval(checkEmulatorProcess, 1000)
+  }
+
   function setPlatform(pid) {
     if (emulatorState.value !== 'stopped' || currentPlatform.value === pid) return
     currentPlatform.value = pid
@@ -67,6 +100,7 @@ export const useEmulator = defineStore('emulator', () => {
         emulatorPid.value = await invoke('launch_emulator', { path: settings.emulatorPath })
         bootProgress.value = 100
         emulatorState.value = 'running'
+        startProcessWatching()
         addLog('SkyEmu started.', 'success')
       } catch (error) {
         emulatorState.value = 'stopped'
@@ -77,6 +111,7 @@ export const useEmulator = defineStore('emulator', () => {
       return
     }
 
+    stopProcessWatching()
     if (emulatorPid.value) {
       try {
         await invoke('stop_emulator', { pid: emulatorPid.value })
@@ -99,6 +134,7 @@ export const useEmulator = defineStore('emulator', () => {
     activeTab,
     shopOpen,
     settingsOpen,
+    helpOpen,
     bootProgress,
     logs,
     addLog,

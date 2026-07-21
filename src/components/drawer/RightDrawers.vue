@@ -4,6 +4,8 @@ import Bookmarks from './Bookmarks.vue'
 import LogsDrawer from './logs/LogsDrawer.vue'
 import ShopDrawer from './shop/ShopDrawer.vue'
 import SettingsDrawer from './settings/SettingsDrawer.vue'
+import TaskDrawer from './tasks/TaskDrawer.vue'
+import HelpDrawer from './help/HelpDrawer.vue'
 </script>
 
 <template>
@@ -12,5 +14,7 @@ import SettingsDrawer from './settings/SettingsDrawer.vue'
     <LogsDrawer />
     <ShopDrawer />
     <SettingsDrawer />
+    <TaskDrawer />
+    <HelpDrawer />
   </div>
 </template>
