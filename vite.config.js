@@ -57,5 +57,12 @@ export default defineConfig({
     watch: {
       ignored: ["**/src-tauri/**"],
     },
+    proxy: {
+      "/payload-api": {
+        target: "http://localhost:1145",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/payload-api/, ""),
+      },
+    },
   },
 });

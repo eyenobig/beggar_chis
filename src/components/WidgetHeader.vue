@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
+import { Triangle } from '@lucide/vue'
 import { useConnection } from '../stores/useConnection'
 import WindowControls from './window/WindowControls.vue'
 import ConnectionDialog from './dialog/ConnectionDialog.vue'
@@ -44,7 +45,15 @@ const statusTextClass = computed(() => {
       <span :class="statusTextClass">{{ statusText }}</span>
     </button>
 
+
     <!-- 窗口控制 (widget 内部右上角，始终跟随 widget 不受 drawer 影响) -->
+    <span
+      aria-hidden="true"
+      class="pointer-events-none absolute left-1/2 top-1/2 inline-flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center text-zinc-400"
+    >
+      <Triangle class="h-2.5 w-3 rotate-180 scale-x-[1.55] fill-current" :stroke-width="1.5" />
+    </span>
+
     <WindowControls />
 
     <!-- 连接设备弹窗 -->

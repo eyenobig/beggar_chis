@@ -5,15 +5,18 @@ import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { useEmulator } from '../stores/useEmulator'
 import { useWindowSync } from '../composables/useWindowSync'
 import { useCartData } from '../stores/useCartData'
-import { inTauri } from '../composables/useCfb'
+import { useTaskProgress } from '../stores/useTaskProgress'
+import { inTauri } from '../services/cfb'
 import WidgetHeader from './WidgetHeader.vue'
 import PlatformToggle from './PlatformToggle.vue'
 import HomePage from './page/home/HomePage.vue'
 import LaunchButton from './LaunchButton.vue'
 import RightDrawers from './drawer/RightDrawers.vue'
+import CartridgeManager from './cartridge/CartridgeManager.vue'
 
 const emu = useEmulator()
 const { logsOpen, shopOpen, settingsOpen } = storeToRefs(emu)
+const { drawerOpen: tasksOpen } = storeToRefs(useTaskProgress())
 const { addLog } = emu
 const cart = useCartData()
 const { handleDrop } = cart
@@ -22,16 +25,34 @@ const root = ref(null)
 useWindowSync(root)
 
 // 任意右侧抽屉展开 → 主栏 320 + 抽屉 440（重叠约 20）≈ 740
-const frameWidth = computed(() =>
-  logsOpen.value || shopOpen.value || settingsOpen.value
-    ? 740
-    : 348,
-)
+const secondPageOpen = computed(() => logsOpen.value || shopOpen.value || settingsOpen.value)
+const thirdPageOpen = computed(() => tasksOpen.value && secondPageOpen.value)
+
+const frameWidth = computed(() => {
+  if (thirdPageOpen.value) return 1080
+  if (secondPageOpen.value) return 740
+  return 348
+})
 
 // 整窗口拖放识别 ROM / 存档
+function handleKeydown(event) {
+  if (event.key !== 'Escape') return
+  if (tasksOpen.value) {
+    tasksOpen.value = false
+  } else if (logsOpen.value || shopOpen.value || settingsOpen.value) {
+    logsOpen.value = false
+    shopOpen.value = false
+    settingsOpen.value = false
+  } else {
+    return
+  }
+  event.preventDefault()
+}
+
 const dragging = ref(false)
 let unlistenDrop = null
 onMounted(async () => {
+  window.addEventListener('keydown', handleKeydown)
   addLog('System initialized. Awaiting connection.')
   if (inTauri) {
     try {
@@ -47,12 +68,21 @@ onMounted(async () => {
     } catch { /* 非 Tauri 或不支持 */ }
   }
 })
-onUnmounted(() => unlistenDrop?.())
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+  unlistenDrop?.()
+})
 </script>
 
 <template>
-  <div ref="root" class="relative h-[520px] flex-shrink-0" :style="{ width: frameWidth + 'px' }">
-    <div class="absolute inset-0">
+  <div ref="root" class="relative h-[740px] flex-shrink-0" :style="{ width: frameWidth + 'px' }">
+    <div data-no-drag class="absolute inset-y-0 right-0 left-[320px] z-0 cursor-default" />
+
+    <div class="absolute left-0 top-0 z-10 w-[320px]">
+      <CartridgeManager />
+    </div>
+
+    <div class="absolute inset-x-0 bottom-0 h-[520px]">
       <div class="widget-container absolute inset-0 z-20" style="width: 320px">
         <WidgetHeader />
         <PlatformToggle />

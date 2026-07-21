@@ -3,11 +3,11 @@ import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { downloadDir, join } from '@tauri-apps/api/path'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
-import { spawnCfb, runCfb, inTauri } from '../composables/useCfb'
+import { cfbClient, inTauri } from '../services/cfb'
 import { useConnection } from './useConnection'
 import { useEmulator } from './useEmulator'
 import { useLogStore } from './useLogStore'
-import { useCfbSettings } from './useCfbSettings'
+import { useTaskProgress } from './useTaskProgress'
 
 /** 鏈湴娴嬭瘯 ROM 鐩綍锛堥獙璇佸啓鍏?璇嗗埆鏇挎崲锛夈€?*/
 export const TESTROM_DIR = 'Z:/Project/testrom'
@@ -39,8 +39,8 @@ function fmtSize(bytes) {
 
 export const useCartData = defineStore('cart', () => {
   const logStore = useLogStore()
+  const taskProgress = useTaskProgress()
   const emu = useEmulator()
-  const cfbSettings = useCfbSettings()
 
   const romFile = ref(null) // { name, path, mbc }
   const saveFile = ref(null)
@@ -116,7 +116,7 @@ export const useCartData = defineStore('cart', () => {
     if (!inTauri) return
     romFileInfo.value = null
     try {
-      await runCfb(['rom-info', '--file', path], (ev) => {
+      await cfbClient.readRomFile(path, (ev) => {
         if (ev.type === 'info') romFileInfo.value = ev
       })
     } catch {
@@ -185,13 +185,13 @@ export const useCartData = defineStore('cart', () => {
     rtcInfo.value = null
 
     const tryOne = async (mbc) => {
-      const args = cfbSettings.withPortArgs(mbc ? ['info', '--mbc'] : ['info'])
       let info = null
       let err = ''
-      await runCfb(args, (ev) => {
+      const { error } = await cfbClient.readCartridge({ mbc }, (ev) => {
         if (ev.type === 'info') info = ev
         else if (ev.type === 'error') err = ev.message || err
       })
+      if (error && !err) err = error
       return { info, err, mbc }
     }
 
@@ -214,18 +214,19 @@ export const useCartData = defineStore('cart', () => {
           emu.$patch({ currentPlatform: want })
         }
         logStore.addLog(
-          `璇嗗埆鍗″甫 路 ${hit.info.rom_title || hit.info.game_name || hit.info.kind} 路 ${fmtSize(hit.info.capacity_bytes) || '?'}`,
+          `识别卡带 · ${hit.info.rom_title || hit.info.game_name || hit.info.kind} · ${fmtSize(hit.info.capacity_bytes) || '?'}`,
           'success',
         )
       } else {
         cartInfo.value = null
-        cartError.value = hit.err || '鏈娴嬪埌鍗″甫锛坒lash 鏃犲搷搴旓級'
+        cartError.value = hit.err || '未检测到卡带（Flash 无响应）'
         logStore.addLog(cartError.value, 'warn')
       }
     } catch (e) {
       if (seq !== _readSeq) return
       cartInfo.value = null
       cartError.value = String(e?.message || e)
+      logStore.addLog(cartError.value, 'error')
     } finally {
       if (seq === _readSeq) cartReading.value = false
     }
@@ -236,9 +237,8 @@ export const useCartData = defineStore('cart', () => {
     if (!inTauri) return
     rtcInfo.value = null
     try {
-      const args = cfbSettings.withPortArgs(['rtc'])
-      if (preferMbc.value || cartInfo.value?.kind === 'gb_mbc') args.push('--mbc')
-      await runCfb(args, (ev) => {
+      const mbc = preferMbc.value || cartInfo.value?.kind === 'gb_mbc'
+      await cfbClient.readRtc({ mbc }, (ev) => {
         if (ev.type === 'rtc_data') rtcInfo.value = ev
       })
     } catch {
@@ -260,20 +260,20 @@ export const useCartData = defineStore('cart', () => {
     opResult.value = null
     progress.value = { done: 0, total: 0 }
     opLogs.value = []
-    logStore.addLog(`鐑у綍寮€濮?路 ${f.name}`, 'warn')
+    const taskId = taskProgress.startTask({ kind: 'burn', title: '\u70e7\u5f55\u5361\u5e26', detail: f.name })
+    logStore.addLog(`开始烧录 · ${f.name}`, 'warn')
     try {
-      const args = cfbSettings.withBurnArgs(['burn', '--rom', f.path])
-      if (f.mbc || preferMbc.value) args.push('--mbc')
       let progressLogId = null
       const fmtProgress = (done, total) => {
         const dMb = (done / 1024 / 1024).toFixed(2)
         const tMb = (total / 1024 / 1024).toFixed(2)
         const pct = total ? Math.round((done / total) * 100) : 0
-        return `鍐欏叆 ${dMb} / ${tMb} MB  (${pct}%)`
+        return `写入 ${dMb} / ${tMb} MB (${pct}%)`
       }
-      const { error } = await spawnCfb(args, (ev) => {
+      const { error } = await cfbClient.burnRom({ romPath: f.path, mbc: f.mbc || preferMbc.value }, (ev) => {
         if (ev.type === 'progress') {
           progress.value = { done: ev.done, total: ev.total }
+          taskProgress.updateProgress(taskId, ev.done, ev.total)
           if (ev.total > 0) {
             if (progressLogId === null) progressLogId = logStore.addLog(fmtProgress(ev.done, ev.total))
             else logStore.updateLog(progressLogId, fmtProgress(ev.done, ev.total))
@@ -287,23 +287,31 @@ export const useCartData = defineStore('cart', () => {
           logStore.addLog(ev.message, 'error')
         }
       })
-      if (error) logStore.addLog(error, 'error')
+      if (error && !opResult.value) {
+        opResult.value = { ok: false, error }
+        logStore.addLog(error, 'error')
+      }
     } catch (e) {
       const msg = String(e?.message || e)
       opResult.value = { ok: false, error: msg }
       logStore.addLog(msg, 'error')
     } finally {
       opRunning.value = false
+      if (!opResult.value) {
+        opResult.value = { ok: false, error: '操作未返回结果' }
+        logStore.addLog(opResult.value.error, 'error')
+      }
       if (opResult.value?.ok) {
+        taskProgress.completeTask(taskId, f.name)
         const r = opResult.value
         logStore.addLog(
-          `鐑у綍瀹屾垚 路 ${r.bytes ? (r.bytes / 1024 / 1024).toFixed(1) + 'MB' : ''} 路 ${r.seconds ? Math.round(r.seconds) + 's' : ''}`
+          `烧录完成 · ${r.bytes ? (r.bytes / 1024 / 1024).toFixed(1) + 'MB' : ''} · ${r.seconds ? Math.round(r.seconds) + 's' : ''}`
             .trimEnd()
-            .replace(/ 路 $/, ''),
+            .replace(/ · $/, ''),
           'success',
         )
       } else if (opResult.value && !opResult.value.ok) {
-        logStore.addLog(`Operation failed: ${opResult.value.error || 'unknown error'}`, 'error')
+        taskProgress.failTask(taskId, opResult.value.error)
       }
       await readCart()
     }
@@ -330,11 +338,10 @@ export const useCartData = defineStore('cart', () => {
     opResult.value = null
     progress.value = { done: 0, total: 0 }
     opLogs.value = []
-    logStore.addLog('Operation started', 'warn')
+    const taskId = taskProgress.startTask({ kind: 'erase', title: '\u64e6\u9664\u5361\u5e26' })
+    logStore.addLog('开始擦除卡带', 'warn')
     try {
-      const args = cfbSettings.withPortArgs(['erase'])
-      if (mbcArgs()) args.push('--mbc')
-      const { error } = await spawnCfb(args, (ev) => {
+      const { error } = await cfbClient.erase({ mbc: mbcArgs() }, (ev) => {
         if (ev.type === 'log') {
           opLogs.value.push(ev.message)
           logStore.addLog(ev.message)
@@ -344,16 +351,24 @@ export const useCartData = defineStore('cart', () => {
           logStore.addLog(ev.message, 'error')
         }
       })
-      if (error) logStore.addLog(error, 'error')
+      if (error && !opResult.value) {
+        opResult.value = { ok: false, error }
+        logStore.addLog(error, 'error')
+      }
     } catch (e) {
       const msg = String(e?.message || e)
       opResult.value = { ok: false, error: msg }
       logStore.addLog(msg, 'error')
     } finally {
       opRunning.value = false
-      if (opResult.value?.ok) logStore.addLog('Operation complete', 'success')
+      if (!opResult.value) {
+        opResult.value = { ok: false, error: '操作未返回结果' }
+        logStore.addLog(opResult.value.error, 'error')
+      }
+      if (opResult.value?.ok) taskProgress.completeTask(taskId)
+      if (opResult.value?.ok) logStore.addLog('擦除完成', 'success')
       else if (opResult.value && !opResult.value.ok) {
-        logStore.addLog(`Operation failed: ${opResult.value.error || 'unknown error'}`, 'error')
+        taskProgress.failTask(taskId, opResult.value.error)
       }
       await readCart()
     }
@@ -367,24 +382,24 @@ export const useCartData = defineStore('cart', () => {
     opResult.value = null
     progress.value = { done: 0, total: 0 }
     opLogs.value = []
-    logStore.addLog('Operation started', 'warn')
+    const taskId = taskProgress.startTask({ kind: 'dump', title: '\u8bfb\u53d6\u5361\u5e26', detail: cartInfo.value?.rom_title || cartInfo.value?.game_name || '' })
+    logStore.addLog('开始读取卡带', 'warn')
     try {
       const title = (cartInfo.value?.rom_title || cartInfo.value?.game_name || 'dump')
         .replace(/[^a-zA-Z0-9_\-]/g, '_')
       const extName = mbcArgs() ? 'gb' : 'gba'
       const outPath = await join(await downloadDir(), `${title}_${Date.now()}.${extName}`)
-      const args = cfbSettings.withPortArgs(['dump', '--out', outPath])
-      if (mbcArgs()) args.push('--mbc')
       let dumpProgressId = null
       const fmtDump = (done, total) => {
         const dMb = (done / 1024 / 1024).toFixed(2)
         const tMb = (total / 1024 / 1024).toFixed(2)
         const pct = total ? Math.round((done / total) * 100) : 0
-        return `璇诲彇 ${dMb} / ${tMb} MB  (${pct}%)`
+        return `读取 ${dMb} / ${tMb} MB (${pct}%)`
       }
-      await spawnCfb(args, (ev) => {
+      const { error } = await cfbClient.dumpRom({ outputPath: outPath, mbc: mbcArgs() }, (ev) => {
         if (ev.type === 'progress') {
           progress.value = { done: ev.done, total: ev.total }
+          taskProgress.updateProgress(taskId, ev.done, ev.total)
           if (ev.total > 0) {
             if (dumpProgressId === null) dumpProgressId = logStore.addLog(fmtDump(ev.done, ev.total))
             else logStore.updateLog(dumpProgressId, fmtDump(ev.done, ev.total))
@@ -398,15 +413,24 @@ export const useCartData = defineStore('cart', () => {
           logStore.addLog(ev.message, 'error')
         }
       })
+      if (error && !opResult.value) {
+        opResult.value = { ok: false, error }
+        logStore.addLog(error, 'error')
+      }
     } catch (e) {
       const msg = String(e?.message || e)
       opResult.value = { ok: false, error: msg }
       logStore.addLog(msg, 'error')
     } finally {
       opRunning.value = false
-      if (opResult.value?.ok) logStore.addLog('Operation complete', 'success')
+      if (!opResult.value) {
+        opResult.value = { ok: false, error: '操作未返回结果' }
+        logStore.addLog(opResult.value.error, 'error')
+      }
+      if (opResult.value?.ok) taskProgress.completeTask(taskId)
+      if (opResult.value?.ok) logStore.addLog('读取完成', 'success')
       else if (opResult.value && !opResult.value.ok) {
-        logStore.addLog(`Operation failed: ${opResult.value.error || 'unknown error'}`, 'error')
+        taskProgress.failTask(taskId, opResult.value.error)
       }
     }
   }

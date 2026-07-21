@@ -9,6 +9,7 @@ on:
 env:
   CFB_GITHUB_REPO: eyenobig/chis-burner-cmd
   CFB_RELEASE_TAG: ${{ vars.CFB_RELEASE_TAG || 'latest' }}
+  VITE_API_BASE_URL: ${{ secrets.API_BASE_URL }}
 
 jobs:
   build-check:

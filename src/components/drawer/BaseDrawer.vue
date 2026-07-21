@@ -5,18 +5,26 @@ import { computed } from 'vue'
 const props = defineProps({
   open: Boolean,
   width: { type: Number, default: 440 },
+  left: { type: Number, default: 300 },
+  top: { type: Number, default: 20 },
+  bottom: { type: Number, default: 112 },
   animate: { type: Boolean, default: true },
+  zIndex: { type: Number, default: 10 },
 })
 
 const outerStyle = computed(() => {
   if (props.open) {
-    return { width: props.width + 'px', opacity: 1, pointerEvents: 'auto', transform: 'translateX(0)' }
+    return { left: props.left + 'px', top: props.top + 'px', bottom: props.bottom + 'px', width: props.width + 'px', opacity: 1, pointerEvents: 'auto', transform: 'translateX(0)', zIndex: props.zIndex }
   }
   return {
+    left: props.left + 'px',
+    top: props.top + 'px',
+    bottom: props.bottom + 'px',
     width: '0px',
     opacity: props.animate ? 0 : 1,
     pointerEvents: 'none',
     transform: props.animate ? 'translateX(-10px)' : 'none',
+    zIndex: props.zIndex,
   }
 })
 </script>
@@ -24,7 +32,7 @@ const outerStyle = computed(() => {
 <template>
   <div
     data-no-drag
-    class="absolute top-[20px] bottom-[112px] overflow-hidden rounded-r-[18px] left-[300px] z-10"
+    class="absolute overflow-hidden rounded-r-[18px]"
     :class="animate ? 'drawer-transition' : ''"
     :style="outerStyle"
   >

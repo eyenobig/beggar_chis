@@ -6,7 +6,7 @@ import EmulatorWidget from './components/EmulatorWidget.vue'
 import { useConnection } from './stores/useConnection'
 import { useCartData } from './stores/useCartData'
 import { useEmulator } from './stores/useEmulator'
-import { inTauri } from './composables/useCfb'
+import { inTauri } from './services/cfb'
 
 const { t } = useI18n()
 watchEffect(() => { document.title = t('app.title') })
