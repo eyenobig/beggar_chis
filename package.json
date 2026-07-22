@@ -12,6 +12,7 @@
     "build:cfb": "npm run build:cfb:local",
     "build:cfb:local": "node scripts/build-cfb.mjs",
     "build:cfb:github": "node scripts/download-cfb-release.mjs",
+    "ensure:cfb": "node scripts/ensure-cfb.mjs",
     "dev:refresh-cfb": "npm run build:cfb:local && tauri dev"
   },
   "dependencies": {

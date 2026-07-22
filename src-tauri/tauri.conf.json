@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.z.chis-flasher",
   "build": {
-    "beforeDevCommand": "npm run vite",
+    "beforeDevCommand": "npm run ensure:cfb && npm run vite",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"

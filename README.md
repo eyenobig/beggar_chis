@@ -16,26 +16,26 @@ Z:\Project\
   chis-burner-cmd\
 ```
 
-Build and copy the local sidecar only when `chis-burner-cmd` changes:
-
-```bash
-npm run build:cfb:local
-```
-
-Then start Tauri without rebuilding `cfb`:
+`npm run dev` is self-sufficient: before starting Vite it runs `npm run ensure:cfb`, which checks the sidecar version and only builds when needed.
 
 ```bash
 npm install
 npm run dev
 ```
 
-To explicitly refresh the local sidecar and then start Tauri in one command:
+How `ensure:cfb` resolves the sidecar:
+
+- If a sibling `chis-burner-cmd` source checkout is present (or `CFB_LOCAL_DIR` is set), the expected version is read from its `Cargo.toml`. A missing or version-mismatched sidecar is rebuilt locally (`build:cfb:local`).
+- Otherwise the expected version comes from the chis-burner-cmd GitHub Release and the sidecar is downloaded (`build:cfb:github`).
+- If the existing sidecar already reports the expected version, the build/download is skipped (a few hundred ms).
+
+To force a rebuild regardless of version (e.g. you edited cfb source without bumping the version), use:
 
 ```bash
 npm run dev:refresh-cfb
 ```
 
-When the local repository lives elsewhere, set `CFB_LOCAL_DIR` before running `build:cfb:local`.
+When the local repository lives elsewhere, set `CFB_LOCAL_DIR` so both `build:cfb:local` and `ensure:cfb` find it.
 
 ## Production sidecar
 
