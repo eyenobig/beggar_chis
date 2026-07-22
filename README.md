@@ -2,7 +2,7 @@
 
 Tauri 2 + Vue 3 desktop client. Cartridge operations are delegated to the `cfb` sidecar from [chis-burner-cmd](https://github.com/eyenobig/chis-burner-cmd).
 
-The client/sidecar boundary is documented in [docs/client-cmd-integration.md](docs/client-cmd-integration.md). All cfb process and command integration lives under src/services/cfb/.
+`chis-burner-cmd` is a **separate repository** consumed only as a prebuilt sidecar binary — it is intentionally not a git submodule and not nested in this repo. See [docs/client-cmd-integration.md](docs/client-cmd-integration.md) for the rationale (a submodule was tried before and broke CI). All cfb process and command integration lives under src/services/cfb/.
 
 ## Local development
 

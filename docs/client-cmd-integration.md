@@ -2,6 +2,24 @@
 
 `beggar_chis` does not link the Rust command project as a library. The desktop app starts the released `cfb` executable as a Tauri sidecar and exchanges newline-delimited JSON (NDJSON) over stdio.
 
+## Repository layout (architectural decision)
+
+`chis-burner-cmd` is a **separate, standalone repository** consumed only as a prebuilt binary — it is **intentionally NOT** a git submodule and is **NOT** nested inside `beggar_chis/`. This is a deliberate decision, not a leftover:
+
+- **Decoupled release cadence.** cfb ships its own `v*` tags, CI, and GitHub Releases; `beggar_chis` pins a release via `CFB_RELEASE_TAG` and downloads the matching `cfb-<target>` asset. Neither repo blocks the other.
+- **Reusable by other clients** (Electron, etc.) — cfb is not hard-wired to Tauri.
+- **Submodule was tried and rejected.** An earlier submodule reference pointed at a commit that no longer existed, which broke CI checkout (`exit 128`) and had to be purged. Re-introducing a submodule would re-create that fragility.
+
+Layout during local development (the only place the sibling path matters):
+
+```text
+Z:\Project\
+  beggar_chis\        ← this repo
+  chis-burner-cmd\    ← separate repo; only dev builds read it
+```
+
+`npm run build:cfb:local` builds cfb from `../chis-burner-cmd` by default; override with `CFB_LOCAL_DIR` when it lives elsewhere. Production never reads this path — it downloads the sidecar.
+
 ```text
 Vue components
     |
@@ -50,8 +68,8 @@ Buffered commands use `executeCfb`; long operations use `streamCfb` so `progress
 - Vue calls the sidecar directly through the Tauri Shell plugin; there is no custom Rust `invoke` proxy for cfb commands.
 
 - `src-tauri/tauri.conf.json` declares `binaries/cfb` as an external binary.
-- src-tauri/capabilities/default.json allows only that sidecar to execute/spawn.
-- `src-tauri/src/device_watcher.rs` only emits `device-changed`; `useConnection` responds by calling `cfbClient.detect()`.
+- `src-tauri/capabilities/default.json` allows only that sidecar to execute/spawn.
+- The Tauri Rust backend is a thin shell (opener/shell/dialog plugins only). Device hotplug detection is manual: `useConnection.startWatching()` runs one initial `cfbClient.detect()` on startup, and re-detection happens via the connection dialog. (A native `device_watcher` was removed in favor of going through cfb exclusively.)
 - Development reuses a sidecar in `src-tauri/binaries`; `npm run build:cfb:local` refreshes it from the sibling repository.
 - Production workflows download a prebuilt sidecar from a `chis-burner-cmd` GitHub Release.
 
