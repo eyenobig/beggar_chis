@@ -12,8 +12,8 @@ const wellRef = ref(null)
 
 /** 可见吐纸区上限（与 EmulatorWidget.SPIT_H 一致） */
 const SPIT_AREA_H = 320
-/** 有纸时井高下限，避免只剩一两行时纸条过短 */
-const MIN_PAPER_H = 168
+/** 井高下限：仅避免 0 塌陷，高度跟文案走 */
+const MIN_PAPER_H = 40
 const SPIT_PX_PER_SEC = 56
 
 const wellH = ref(0)
@@ -56,6 +56,7 @@ function reportArea(occupied) {
     toast.setPaperHeight(0)
     return
   }
+  // 跟收据内容等高，不再强行垫高
   const h = Math.min(Math.max(wellH.value, MIN_PAPER_H), SPIT_AREA_H)
   toast.setPaperHeight(h)
 }
@@ -153,6 +154,8 @@ async function spitGrow() {
     return
   }
   animating = true
+  // 动画开始前先撑开窗口底部，避免纸在 overflow 外吐
+  reportArea(true)
 
   await nextTick()
   await rAF()
@@ -350,7 +353,10 @@ watch(
       return
     }
     const grew = !prevIds || ids.split(',').length > prevIds.split(',').length
-    if (grew) void spitGrow()
+    if (grew) {
+      reportArea(true)
+      void spitGrow()
+    }
     else {
       nextTick(() => {
         if (tearing.value) return
@@ -480,9 +486,8 @@ onBeforeUnmount(() => {
   border-top: none;
   box-shadow: none;
   color: #27272a;
-  min-height: 168px;
   padding-top: 14px;
-  padding-bottom: 18px;
+  padding-bottom: 12px;
   will-change: transform;
   transform-origin: top center;
 }

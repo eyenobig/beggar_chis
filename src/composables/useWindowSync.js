@@ -1,12 +1,16 @@
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { currentMonitor, getCurrentWindow, LogicalSize, PhysicalPosition } from '@tauri-apps/api/window'
 
-// 根容器尺寸 → Tauri 窗口大小（ResizeObserver）。
-// 必须用 border-box（含 padding），否则卡带舞台的 paddingTop 不会进窗口高度，白卡片会被 overflow:hidden 裁切。
-// size 始终独立执行；仅在窗口顶部越界时拉回可视区。
-export function useWindowSync(elRef) {
+/**
+ * 根容器尺寸 → Tauri 窗口大小。
+ * 卡带/吐纸靠 padding 预留，测量必须含 padding；只应用最新一次 setSize。
+ */
+export function useWindowSync(elRef, deps = []) {
   let ro = null
   const paused = ref(false)
+  let seq = 0
+  let debounceTimer = 0
+  let pending = null
 
   async function ensureVisible(appWindow) {
     try {
@@ -19,9 +23,10 @@ export function useWindowSync(elRef) {
       const area = monitor.workArea || { position: monitor.position, size: monitor.size }
       const minY = area.position.y
       const maxY = area.position.y + area.size.height
+      // 窗口高于工作区时无法完整显示，优先保证顶部（卡带）可见
       const targetY = Math.min(
         Math.max(position.y, minY),
-        Math.max(minY, maxY - size.height),
+        Math.max(minY, maxY - Math.min(size.height, area.size.height)),
       )
       if (targetY !== position.y) {
         await appWindow.setPosition(new PhysicalPosition(position.x, targetY))
@@ -31,55 +36,92 @@ export function useWindowSync(elRef) {
     }
   }
 
-  async function syncSize(width, height) {
+  async function syncSize(width, height, token) {
+    if (token !== seq) return
     const appWindow = getCurrentWindow()
     try {
       await appWindow.setSize(new LogicalSize(Math.ceil(width), Math.ceil(height)))
     } catch (e) {
       if (window.__TAURI_INTERNALS__) console.error('[useWindowSync]', e)
     }
+    if (token !== seq) return
     await new Promise((resolve) => requestAnimationFrame(resolve))
+    if (token !== seq) return
     await ensureVisible(appWindow)
   }
 
-  /** contentRect 不含 padding；卡带 inset 在 paddingTop 上，必须读 border-box。 */
-  function measureBorderBox(entry) {
-    const box = Array.isArray(entry.borderBoxSize)
-      ? entry.borderBoxSize[0]
-      : entry.borderBoxSize
-    if (box && (box.inlineSize > 0 || box.blockSize > 0)) {
-      return { width: box.inlineSize, height: box.blockSize }
+  function queueSize(width, height) {
+    if (paused.value) return
+    if (width < 1 || height < 1) return
+    pending = { width, height }
+    clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(() => {
+      if (!pending || paused.value) return
+      const { width: w, height: h } = pending
+      pending = null
+      const token = ++seq
+      void syncSize(w, h, token)
+    }, 16)
+  }
+
+  /** 显式计入 padding，避免 WebView 把 border-box 量矮导致裁切白卡片/吐纸 */
+  function measureRoot(el) {
+    if (!el) return { width: 0, height: 0 }
+    const style = getComputedStyle(el)
+    const padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
+    const padY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0)
+    const rect = el.getBoundingClientRect()
+
+    let flowBottom = 0
+    let flowRight = 0
+    for (const child of el.children) {
+      const cs = getComputedStyle(child)
+      if (cs.display === 'none') continue
+      if (cs.position === 'absolute' || cs.position === 'fixed') continue
+      flowBottom = Math.max(flowBottom, child.offsetTop + child.offsetHeight)
+      flowRight = Math.max(flowRight, child.offsetLeft + child.offsetWidth)
     }
-    const el = entry.target
-    return { width: el.offsetWidth, height: el.offsetHeight }
+
+    const width = Math.max(el.offsetWidth, Math.ceil(rect.width), Math.ceil(flowRight + padX))
+    const height = Math.max(el.offsetHeight, Math.ceil(rect.height), Math.ceil(flowBottom + padY))
+
+    return { width, height }
+  }
+
+  function push() {
+    if (!elRef.value || paused.value) return
+    const { width, height } = measureRoot(elRef.value)
+    queueSize(width, height)
   }
 
   onMounted(() => {
     if (!elRef.value) return
 
-    const push = (el) => {
-      if (paused.value) return
-      const width = el.offsetWidth
-      const height = el.offsetHeight
-      if (width < 1 || height < 1) return
-      syncSize(width, height)
-    }
+    push()
+    requestAnimationFrame(push)
+    setTimeout(push, 50)
+    setTimeout(push, 200)
+    setTimeout(push, 500)
 
-    push(elRef.value)
-    requestAnimationFrame(() => {
-      if (elRef.value) push(elRef.value)
-    })
-
-    ro = new ResizeObserver((entries) => {
-      if (paused.value) return
-      const { width, height } = measureBorderBox(entries[0])
-      if (width < 1 || height < 1) return
-      syncSize(width, height)
+    ro = new ResizeObserver(() => {
+      push()
     })
     ro.observe(elRef.value)
   })
 
-  onUnmounted(() => ro?.disconnect())
+  // 卡带/吐纸 padding 变化时强制再测（有时只改 style 不触发 RO）
+  if (deps.length) {
+    watch(deps, () => {
+      requestAnimationFrame(push)
+      setTimeout(push, 32)
+    })
+  }
 
-  return { paused }
+  onUnmounted(() => {
+    clearTimeout(debounceTimer)
+    seq += 1
+    ro?.disconnect()
+  })
+
+  return { paused, resync: push }
 }

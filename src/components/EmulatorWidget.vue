@@ -20,6 +20,8 @@ import RomCartridgeSlider from './drawer/logs/rom/RomCartridgeSlider.vue'
 /** 吐纸区上限（与 ToastHost.SPIT_AREA_H 一致） */
 const SPIT_H = 320
 const SPIT_PAD = 16
+/** 刀口+齿孔高度，绝对吐纸在卡片下，需一并计入窗口底部预留 */
+const CUTTER_H = 14
 
 const emu = useEmulator()
 const { logsOpen, shopOpen, settingsOpen, helpOpen } = storeToRefs(emu)
@@ -29,11 +31,9 @@ const cart = useCartData()
 const { flashInfo, opRunning, opKind } = storeToRefs(cart)
 const { handleDrop } = cart
 const toastStore = useToast()
-const { toasts } = storeToRefs(toastStore)
 
 const root = ref(null)
 const homepageDropZone = ref(null)
-useWindowSync(root)
 
 const BOOKMARK_W = 28
 
@@ -46,15 +46,16 @@ const romCartridgeShelfOpen = computed(() => cartridgeStageOpen.value && logsOpe
 const platformOperationLocked = computed(() =>
   opRunning.value && ['burn', 'erase', 'dump'].includes(opKind.value),
 )
-const cartridgeTopInset = computed(() => cartridgeStageOpen.value ? 220 : 0)
+const cartridgeTopInset = computed(() => (cartridgeStageOpen.value ? 220 : 0))
 
 /**
- * 按实际纸高预留底部（封顶 SPIT_H），避免 SkyEmu 下被假 520 垫出大片空白。
+ * 吐纸槽始终留刀口占位；有纸时按实际纸高预留（跟内容等高，不垫高）。
+ * 用 root padding，不进主栏文档流。
  */
 const toastBottomInset = computed(() => {
-  const h = Number(toastStore.paperHeight) || 0
-  if (h <= 0 && !(toasts.value?.length)) return 0
-  return Math.min(Math.max(h, toasts.value?.length ? 168 : 0), SPIT_H) + SPIT_PAD
+  const live = Number(toastStore.paperHeight) || 0
+  const paper = Math.min(Math.max(live, 0), SPIT_H)
+  return paper + CUTTER_H + SPIT_PAD
 })
 
 const frameWidth = computed(() => {
@@ -62,6 +63,8 @@ const frameWidth = computed(() => {
   if (secondPageOpen.value) return 760 + BOOKMARK_W
   return 348 + BOOKMARK_W
 })
+
+useWindowSync(root, [cartridgeTopInset, toastBottomInset, frameWidth])
 
 function handleKeydown(event) {
   if (event.key !== 'Escape') return

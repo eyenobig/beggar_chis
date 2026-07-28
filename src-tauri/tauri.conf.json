@@ -14,8 +14,8 @@
     "windows": [
       {
         "title": "Chis Flasher",
-        "width": 348,
-        "height": 520,
+        "width": 376,
+        "height": 780,
         "resizable": false,
         "maximizable": false,
         "decorations": false,

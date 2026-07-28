@@ -16,15 +16,19 @@ body,
   margin: 0;
   padding: 0;
   width: 100%;
-  height: 100%;
+  /* 勿写死 height:100%：会把子级压回「旧窗口高」，裁掉卡带 padding / 吐纸 / 白卡片底 */
+  min-height: 100%;
+  height: auto;
   overflow: hidden;
   background: transparent;
 }
 
-/* 桌宠舞台：占满整个窗口 */
+/* 桌宠舞台：跟内容增高，窗口再按根节点 border-box 同步 */
 #pet-stage {
   width: 100%;
-  height: 100%;
+  min-height: 100%;
+  height: auto;
+  overflow: visible;
   user-select: none;
   -webkit-user-select: none;
   cursor: grab;

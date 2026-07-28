@@ -16,9 +16,10 @@ export const useToast = defineStore('toast', () => {
     if (next.length !== toasts.value.length) toasts.value = next
   }
 
-  /** 清空全部热敏提示（撕纸后调用） */
+  /** 清空全部热敏提示（撕纸后调用）；占位高度由 EmulatorWidget 始终保留 */
   function clear() {
     if (toasts.value.length) toasts.value = []
+    if (paperHeight.value !== 0) paperHeight.value = 0
   }
 
   /** 原地更新文案；识别进度用，避免每步新吐一行 */
