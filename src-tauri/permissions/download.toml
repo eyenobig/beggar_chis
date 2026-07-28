@@ -1,0 +1,14 @@
+[[permission]]
+identifier = "allow-download-file"
+description = "Allow downloading SkyEmu (and other files) via download_file, and extracting zip releases."
+commands.allow = ["download_file", "extract_zip_exe"]
+
+[[permission]]
+identifier = "allow-launch-skyemu"
+description = "Allow writing DirectPlay virtual_rom.gba and launching SkyEmu with that ROM argument."
+commands.allow = ["launch_skyemu"]
+
+[[permission]]
+identifier = "allow-file-size"
+description = "Allow reading local file byte size via file_size (e.g. uploaded .sav display)."
+commands.allow = ["file_size"]

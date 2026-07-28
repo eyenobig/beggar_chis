@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tauri dev",
     "vite": "vite",
+    "vite:single": "node scripts/vite-singleton.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",

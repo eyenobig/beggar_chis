@@ -21,6 +21,20 @@ src-tauri/binaries/cfb-*
 
 # 本地客户端烧录验证产物
 .chis-verify.json
+.zindex-verify/
+_cmd_out/
+
+# SkyEmu：安装路径由用户选择并记在 localStorage，勿提交二进制/测试目录
+.tmp-skyemu*
+SkyEmu*.exe
+SkyEmu*.dmg
+SkyEmu*.AppImage
+SkyEmu*.zip
+
+# 本地密钥（若有）
+.env
+.env.*
+!.env.example
 
 .claude/settings.local.json
 .vscode/*
@@ -32,3 +46,8 @@ src-tauri/binaries/cfb-*
 *.njsproj
 *.sln
 *.sw?
+
+local-paths.json
+
+# Cursor / agent 本地技能缓存，勿提交
+.agents/

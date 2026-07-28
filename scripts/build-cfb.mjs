@@ -1,20 +1,34 @@
 #!/usr/bin/env node
 /** Build cfb from the sibling local repository and copy it into Tauri sidecars. */
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const sourceDir = resolve(process.env.CFB_LOCAL_DIR || join(root, '..', 'chis-burner-cmd'))
+const localPathsFile = join(root, 'local-paths.json')
+const localPaths = loadLocalPaths(localPathsFile)
+const sourceDir = resolve(
+  process.env.CFB_LOCAL_DIR || localPaths.cfbSourceDir || join(root, '..', 'chis-burner-cmd'),
+)
+const ruleDir = process.env.CFB_RULE_DIR || localPaths.ruleSourceDir || ''
 const manifest = join(sourceDir, 'Cargo.toml')
 const outDir = join(root, 'src-tauri', 'binaries')
 const isWin = process.platform === 'win32'
 
 if (!existsSync(manifest)) {
   console.error(`Local chis-burner-cmd was not found: ${manifest}`)
-  console.error('Set CFB_LOCAL_DIR when the repository is stored elsewhere.')
+  console.error('Set CFB_LOCAL_DIR or beggar_chis/local-paths.json { "cfbSourceDir": "..." } (source tree for cargo build; not Settings bin path).')
   process.exit(1)
+}
+
+function loadLocalPaths(file) {
+  try {
+    if (!existsSync(file)) return {}
+    return JSON.parse(readFileSync(file, 'utf8')) || {}
+  } catch {
+    return {}
+  }
 }
 
 const triple = detectTriple()
@@ -22,10 +36,15 @@ const binName = isWin ? 'cfb.exe' : 'cfb'
 const sidecarName = isWin ? `cfb-${triple}.exe` : `cfb-${triple}`
 
 console.log(`Building local cfb from ${sourceDir}`)
+if (ruleDir) console.log(`  using rule source: ${ruleDir}`)
 const build = spawnSync(
   'cargo',
   ['build', '--release', '--locked', '--manifest-path', manifest, '--target', triple],
-  { stdio: 'inherit', shell: isWin },
+  {
+    stdio: 'inherit',
+    shell: isWin,
+    env: { ...process.env, ...(ruleDir ? { CFB_RULE_DIR: resolve(ruleDir) } : {}) },
+  },
 )
 if (build.status !== 0) process.exit(build.status ?? 1)
 

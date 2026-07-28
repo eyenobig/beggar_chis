@@ -11,7 +11,7 @@ import RomPanel from './RomPanel.vue'
 
 const emu = useEmulator()
 const { logsOpen, activeTab } = storeToRefs(emu)
-const { toggleLogs } = emu
+const { closeDrawers, openBookmark } = emu
 
 const logStore = useLogStore()
 const { hasUnread, logs } = storeToRefs(logStore)
@@ -22,8 +22,7 @@ watch(logs, () => {
 }, { deep: false })
 
 function switchTab(name) {
-  activeTab.value = name
-  if (name === 'logs') logStore.markRead()
+  if (openBookmark(name) && name === 'logs') logStore.markRead()
 }
 
 function tabClass(name) {
@@ -35,34 +34,34 @@ function tabClass(name) {
 
 <template>
   <BaseDrawer :open="logsOpen" :width="440">
-    <div class="flex justify-between items-center px-5 py-3 border-b border-white/10 bg-zinc-900/50 shrink-0">
-      <div class="flex gap-0.5 bg-zinc-800/60 p-0.5 rounded-lg">
-        <button :class="tabClass('rom')" @click="switchTab('rom')">ROM</button>
+    <div class="flex min-h-0 flex-1 flex-col">
+      <div class="flex shrink-0 items-center justify-between border-b border-white/10 bg-zinc-900/50 px-5 py-3">
+        <div class="flex gap-0.5 rounded-lg bg-zinc-800/60 p-0.5">
+          <button :class="tabClass('rom')" @click="switchTab('rom')">ROM</button>
+          <button
+            :class="tabClass('logs')"
+            class="relative"
+            @click="switchTab('logs')"
+          >
+            Logs
+            <span
+              v-if="hasUnread && activeTab !== 'logs'"
+              class="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-red-500"
+              aria-hidden="true"
+            />
+          </button>
+        </div>
         <button
-          :class="tabClass('logs')"
-          class="relative"
-          @click="switchTab('logs')"
+          aria-label="Close"
+          class="p-1 text-zinc-500 transition-colors hover:text-white"
+          @click="closeDrawers()"
         >
-          Logs
-          <span
-            v-if="hasUnread && activeTab !== 'logs'"
-            class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-red-500"
-            aria-hidden="true"
-          />
+          <X class="h-3.5 w-3.5" :stroke-width="2.5" />
         </button>
       </div>
-      <button
-        @click="toggleLogs(false)"
-        aria-label="Close"
-        class="p-1 text-zinc-500 hover:text-white transition-colors"
-      >
-        <X class="w-3.5 h-3.5" :stroke-width="2.5" />
-      </button>
+
+      <LogsPanel v-show="activeTab === 'logs'" />
+      <RomPanel v-show="activeTab === 'rom'" />
     </div>
-
-    <LogsPanel v-show="activeTab === 'logs'" />
-
-
-    <RomPanel v-show="activeTab === 'rom'" />
   </BaseDrawer>
 </template>

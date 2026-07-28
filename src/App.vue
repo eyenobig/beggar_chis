@@ -6,6 +6,7 @@ import EmulatorWidget from './components/EmulatorWidget.vue'
 import { useConnection } from './stores/useConnection'
 import { useCartData } from './stores/useCartData'
 import { useEmulator } from './stores/useEmulator'
+import { useCfbSettings } from './stores/useCfbSettings'
 import { inTauri } from './services/cfb'
 
 const { t } = useI18n()
@@ -61,6 +62,8 @@ async function clientBurn(path) {
 }
 
 onMounted(() => {
+  // 尽早触发开发态/打包态路径 bootstrap，设置页打开前就填好。
+  useCfbSettings().ensurePathsReady()
   useConnection().startWatching()
 
   if (inTauri) {

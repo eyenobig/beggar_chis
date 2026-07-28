@@ -6,7 +6,9 @@ import { useEmulator } from '../../../stores/useEmulator'
 import BaseDrawer from '../BaseDrawer.vue'
 import ShopPanel from './ShopPanel.vue'
 
-const { shopOpen } = storeToRefs(useEmulator())
+const emu = useEmulator()
+const { shopOpen } = storeToRefs(emu)
+const { closeDrawers } = emu
 </script>
 
 <template>
@@ -29,7 +31,7 @@ const { shopOpen } = storeToRefs(useEmulator())
           <span class="text-[11px] font-black text-yellow-400 tracking-wider">99,999</span>
         </div>
         <button
-          @click="shopOpen = false"
+          @click="closeDrawers()"
           aria-label="Close"
           class="p-1 text-zinc-500 hover:text-white transition-colors"
         >

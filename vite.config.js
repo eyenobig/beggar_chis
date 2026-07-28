@@ -63,6 +63,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/payload-api/, ""),
       },
+      "/sticker-api": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/sticker-api/, "/api/rom-sticker"),
+      },
     },
   },
 });

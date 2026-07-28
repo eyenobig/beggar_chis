@@ -1,4 +1,5 @@
-// 鐑у綍鍣ㄨ繛鎺ョ姸鎬侊紙Pinia store锛夛細鎻掑叆鐑у綍鍣ㄨ嚜鍔ㄨ繛鎺ワ紝鎷斿嚭鑷姩鏂紑銆?// 銆岃繛鎺ャ€? cfb detect + select锛涖€屾柇寮€銆? cfb disconnect銆?
+// 烧录器连接状态（Pinia store）：插入烧录器自动连接，拔出自动断开。
+// 「连接」= cfb detect + select；「断开」= cfb disconnect。
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { cfbClient, inTauri } from '../services/cfb'
@@ -6,20 +7,48 @@ import { useCfbSettings } from './useCfbSettings'
 
 export const useConnection = defineStore('connection', () => {
   const settings = useCfbSettings()
-  const devices = ref([]) // [{port,vid,pid,burner,open,name}]
+  const devices = ref([]) // [{port,vid,pid,burner,open,name,serial}]
   const detecting = ref(false)
   const connected = ref(false)
   const dialogOpen = ref(false)
   const lastError = ref('')
   const selectedPort = ref(null)
-  // 鐢ㄦ埛涓诲姩鏂紑鍚庝笉鑷姩閲嶈繛锛岀洿鍒拌澶囨嫈鎻?
+  // 用户主动断开后不自动重连，直到设备拔插
   const autoConnect = ref(true)
 
-  const burners = computed(() => devices.value.filter((d) => d.burner))
-  const isConnected = computed(() => connected.value)
+  const burners = computed(() => dedupeBurners(devices.value.filter((d) => d.burner)))
+  const needsSelection = computed(
+    () => burners.value.length > 1 && !selectedPort.value,
+  )
+  const isConnected = computed(() => connected.value && !!selectedPort.value)
   const isConnecting = computed(() => detecting.value && !connected.value)
 
-  /** 璁颁綇绔彛锛屽悗缁?info/burn 璧板悓涓€鐑у綍鍣ㄣ€?*/
+  /**
+   * Windows 常把同一 USB 烧录器枚举成多个 COM（同 serial）。
+   * 不去重时清空 preferred 后会卡在「请选择设备」，识别/烧录按钮一直不可用。
+   */
+  function dedupeBurners(ports) {
+    const bySerial = new Map()
+    const noSerial = []
+    for (const p of ports) {
+      const sn = p.serial != null && String(p.serial).trim() !== '' ? String(p.serial) : ''
+      if (!sn) {
+        noSerial.push(p)
+        continue
+      }
+      const prev = bySerial.get(sn)
+      if (!prev) {
+        bySerial.set(sn, p)
+        continue
+      }
+      // 优先可打开；同 open 时保留较小 COM 名（COM13 < COM16），避开常见幽灵口。
+      if (p.open && !prev.open) bySerial.set(sn, p)
+      else if (p.open === prev.open && String(p.port) < String(prev.port)) bySerial.set(sn, p)
+    }
+    return [...bySerial.values(), ...noSerial]
+  }
+
+  /** 记住端口，后续 info/burn 走同一烧录器。 */
   async function selectPort(port) {
     if (!inTauri || !port) return false
     let ok = false
@@ -35,13 +64,18 @@ export const useConnection = defineStore('connection', () => {
     return ok
   }
 
-  /** cfb detect --json锛屽埛鏂?devices锛涙湁鐑у綍鍣ㄥ垯 select 绗竴鍙般€?*/
+  /**
+   * cfb detect --json，刷新 devices。
+   * - 0 台：清空选择
+   * - 1 台：自动 select
+   * - N 台：优先 preferred / 当前仍在线的 selected；否则留空等用户点选
+   */
   async function detect() {
     if (!inTauri) {
       lastError.value = 'cfb is only available in Tauri runtime. Use npm run dev.'
       return false
     }
-    if (detecting.value) return burners.value.length > 0
+    if (detecting.value) return burners.value.length > 0 && !!selectedPort.value
     detecting.value = true
     lastError.value = ''
     const found = []
@@ -55,24 +89,39 @@ export const useConnection = defineStore('connection', () => {
             burner: ev.burner,
             open: ev.open,
             name: ev.name,
+            serial: ev.serial || null,
           })
         } else if (ev.type === 'error') {
           lastError.value = ev.message
         }
       })
+      const unique = dedupeBurners(found.filter((d) => d.burner))
+      // 列表仍展示 detect 原始结果，选择逻辑按去重后的烧录器数量
       devices.value = found
-      if (found.length > 0) {
-        const preferred = settings.preferredPort && found.find((d) => d.port === settings.preferredPort)
-        await selectPort((preferred || found[0]).port)
-      } else {
+      if (unique.length === 0) {
         selectedPort.value = null
+      } else if (unique.length === 1) {
+        await selectPort(unique[0].port)
+      } else {
+        const preferred =
+          settings.preferredPort && unique.find((d) => d.port === settings.preferredPort)
+        const stillSelected =
+          selectedPort.value && unique.find((d) => d.port === selectedPort.value)
+        if (preferred) {
+          await selectPort(preferred.port)
+        } else if (stillSelected) {
+          // 会话内已选且仍在线：保持，并同步 CLI select / preferred
+          await selectPort(stillSelected.port)
+        } else {
+          selectedPort.value = null
+        }
       }
     } catch (e) {
       lastError.value = String(e?.message || e)
     } finally {
       detecting.value = false
     }
-    return burners.value.length > 0
+    return burners.value.length > 0 && !!selectedPort.value
   }
 
   function openDialog() {
@@ -83,9 +132,43 @@ export const useConnection = defineStore('connection', () => {
     dialogOpen.value = false
   }
 
+  /** 点选设备行：select 并视为已连接。 */
+  async function pickDevice(port) {
+    if (!port || detecting.value) return false
+    lastError.value = ''
+    const ok = await selectPort(port)
+    if (ok) {
+      autoConnect.value = true
+      connected.value = true
+    }
+    return ok
+  }
+
   async function connect() {
-    const ok = await detect()
+    if (needsSelection.value) {
+      lastError.value = 'select_required'
+      return false
+    }
+    // 已有选中口：只刷新列表并确认仍在线；否则走 detect 自动选（单机）
+    let ok = false
+    if (selectedPort.value) {
+      const stillThere = devices.value.some((d) => d.port === selectedPort.value)
+      if (!stillThere) {
+        ok = await detect()
+      } else {
+        ok = await selectPort(selectedPort.value)
+      }
+    } else {
+      ok = await detect()
+    }
+    if (needsSelection.value) {
+      lastError.value = 'select_required'
+      connected.value = false
+      return false
+    }
     connected.value = ok
+    if (ok) autoConnect.value = true
+    return ok
   }
 
   async function disconnect() {
@@ -108,8 +191,10 @@ export const useConnection = defineStore('connection', () => {
     if (burners.value.length === 0) {
       autoConnect.value = true
       if (connected.value) connected.value = false
-    } else if (autoConnect.value) {
+    } else if (autoConnect.value && selectedPort.value) {
       connected.value = true
+    } else if (!selectedPort.value) {
+      connected.value = false
     }
   }
 
@@ -132,10 +217,12 @@ export const useConnection = defineStore('connection', () => {
     dialogOpen,
     lastError,
     selectedPort,
+    needsSelection,
     isConnected,
     isConnecting,
     detect,
     selectPort,
+    pickDevice,
     connect,
     disconnect,
     handleDeviceChange,

@@ -51,6 +51,7 @@ body,
     0 3px 8px rgba(0, 0, 0, 0.12),
     inset 0 0 0 1px rgba(255, 255, 255, 0.72);
   border-radius: 24px;
+  /* 圆角裁切白卡片本体；Toast 在卡片外绝对定位，不依赖此处 visible */
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -99,12 +100,85 @@ body,
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
 }
 
+/* 存档操作按钮：同款棱光描边结构，语义色由 --save-edge-c* 注入
+   常态慢速 edge-spin；hover 轻微弹跳 + 柔和描边亮度脉冲（不用加速扫光） */
+.save-edge {
+  background:
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    linear-gradient(
+      var(--edge-angle),
+      var(--save-edge-c1),
+      var(--save-edge-c2),
+      var(--save-edge-c3),
+      var(--save-edge-c4)
+    ) border-box;
+  border: 1.5px solid transparent;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  animation: edge-spin 12s linear infinite;
+  transition:
+    border-width 0.2s ease,
+    transform 0.35s cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+.save-edge:hover:not(:disabled) {
+  border-width: 2.5px;
+  transform: scale(1.05);
+  animation:
+    edge-spin 12s linear infinite,
+    save-edge-glow 1.8s ease-in-out infinite;
+}
+/* 导出 · Pokémon Blue */
+.save-edge-blue {
+  --save-edge-c1: #2A75BB;
+  --save-edge-c2: #3D8FD4;
+  --save-edge-c3: #5BA3E0;
+  --save-edge-c4: #0070B8;
+  color: #0070B8;
+}
+/* 验证 · Pokémon Green */
+.save-edge-green {
+  --save-edge-c1: #4DAD5B;
+  --save-edge-c2: #5FBE6D;
+  --save-edge-c3: #78C984;
+  --save-edge-c4: #3E9B4A;
+  color: #3E9B4A;
+}
+/* 烧录/覆盖 · Pokémon Red */
+.save-edge-red {
+  --save-edge-c1: #E6392B;
+  --save-edge-c2: #EF5245;
+  --save-edge-c3: #F56B5F;
+  --save-edge-c4: #DA1F2A;
+  color: #DA1F2A;
+}
+
 @keyframes edge-spin {
   to { --edge-angle: 360deg; }
 }
+/* hover 描边亮度呼吸：用 currentColor 跟随蓝/绿/红语义色 */
+@keyframes save-edge-glow {
+  0%, 100% {
+    box-shadow:
+      0 5px 14px rgba(0, 0, 0, 0.06),
+      0 0 0 2px color-mix(in srgb, currentColor 18%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 7px 16px rgba(0, 0, 0, 0.08),
+      0 0 0 4px color-mix(in srgb, currentColor 28%, transparent),
+      0 0 12px color-mix(in srgb, currentColor 32%, transparent);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .gbc-prismatic,
-  .gba-edge { animation: none; }
+  .gba-edge,
+  .save-edge { animation: none; }
+  .save-edge:hover:not(:disabled) {
+    transform: none;
+    animation: none;
+    box-shadow:
+      0 5px 14px rgba(0, 0, 0, 0.06),
+      0 0 0 3px color-mix(in srgb, currentColor 22%, transparent);
+  }
 }
 
 /* 进度条宽度过渡 */

@@ -21,7 +21,7 @@ const messages = {
   ru,
 };
 
-// 右键菜单展示用：语言代码 -> 该语言的本地名称
+/** 右键菜单 / 设置下拉：语言代码 -> 本地名称 */
 export const SUPPORTED = {
   "zh-CN": "简体中文",
   en: "English",
@@ -33,28 +33,55 @@ export const SUPPORTED = {
   ru: "Русский",
 };
 
-const STORAGE_KEY = "app-locale";
+const PREF_KEY = "app-locale-pref"; // auto | zh-CN | en | …
+const STORAGE_KEY = "app-locale"; // 解析后的实际 locale
 
-function detectLocale() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved && messages[saved]) return saved;
-  const lang = (navigator.language || "").toLowerCase();
+export function detectSystemLocale() {
+  const lang = (typeof navigator !== "undefined" ? navigator.language : "" || "").toLowerCase();
   if (lang.startsWith("zh")) return "zh-CN";
   const prefix = lang.split("-")[0];
   return messages[prefix] ? prefix : "zh-CN";
 }
 
+/** 读取偏好：auto 或具体语言码 */
+export function getLocalePreference() {
+  if (typeof localStorage === "undefined") return "auto";
+  const pref = localStorage.getItem(PREF_KEY);
+  if (pref === "auto") return "auto";
+  if (pref && messages[pref]) return pref;
+  // 兼容旧版只存了 app-locale
+  const legacy = localStorage.getItem(STORAGE_KEY);
+  if (legacy && messages[legacy]) return legacy;
+  return "auto";
+}
+
+export function resolveLocale(pref) {
+  if (!pref || pref === "auto") return detectSystemLocale();
+  return messages[pref] ? pref : detectSystemLocale();
+}
+
+/** 应用语言偏好（auto / 具体码），同步 vue-i18n + localStorage */
+export function applyLocalePreference(pref) {
+  const normalized = !pref || pref === "auto" ? "auto" : messages[pref] ? pref : "auto";
+  const resolved = resolveLocale(normalized);
+  i18n.global.locale.value = resolved;
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(PREF_KEY, normalized);
+    localStorage.setItem(STORAGE_KEY, resolved);
+  }
+  return resolved;
+}
+
+/** 切换到具体语言（非 auto） */
+export function setLocale(code) {
+  if (!messages[code]) return;
+  applyLocalePreference(code);
+}
+
 export const i18n = createI18n({
-  legacy: false, // 使用组合式 API
-  globalInjection: true, // 模板里可直接用 $t
-  locale: detectLocale(),
+  legacy: false,
+  globalInjection: true,
+  locale: resolveLocale(getLocalePreference()),
   fallbackLocale: "zh-CN",
   messages,
 });
-
-// 切换语言并持久化
-export function setLocale(code) {
-  if (!messages[code]) return;
-  i18n.global.locale.value = code;
-  localStorage.setItem(STORAGE_KEY, code);
-}

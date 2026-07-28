@@ -6,7 +6,9 @@ import { useEmulator } from '../../../stores/useEmulator'
 import BaseDrawer from '../BaseDrawer.vue'
 import SettingsPanel from './SettingsPanel.vue'
 
-const { settingsOpen } = storeToRefs(useEmulator())
+const emu = useEmulator()
+const { settingsOpen } = storeToRefs(emu)
+const { closeDrawers } = emu
 </script>
 
 <template>
@@ -22,7 +24,7 @@ const { settingsOpen } = storeToRefs(useEmulator())
         <div class="text-xs font-black uppercase tracking-widest text-white">设置</div>
       </div>
       <button
-        @click="settingsOpen = false"
+        @click="closeDrawers()"
         aria-label="Close"
         class="p-1 text-zinc-500 hover:text-white transition-colors"
       >

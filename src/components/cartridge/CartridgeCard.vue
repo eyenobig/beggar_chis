@@ -1,7 +1,14 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
-defineProps({ cartridge: { type: Object, required: true } })
+const props = defineProps({ cartridge: { type: Object, required: true } })
+
+const isGbFamily = computed(() => {
+  const platform = String(props.cartridge?.platform || props.cartridge?.kind || '').toLowerCase()
+  const refKey = String(props.cartridge?.refKey || '').toLowerCase()
+  return platform === 'gb' || platform === 'gbc' || platform === 'gb_mbc'
+    || refKey.startsWith('gb__') || refKey.startsWith('gbc__')
+})
 
 const imageLoaded = ref(false)
 const imageFailed = ref(false)
@@ -16,15 +23,16 @@ const imageFailed = ref(false)
   >
     <span
       v-if="!imageLoaded && !imageFailed"
-      class="block h-[96px] w-[168px] animate-pulse rounded bg-zinc-800/15"
+      class="block h-[120px] animate-pulse rounded bg-zinc-800/15"
+      :class="isGbFamily ? 'w-[180px]' : 'w-[240px]'"
       aria-hidden="true"
     />
     <img
       v-if="!imageFailed"
       :src="cartridge.cartridgeImage"
       :alt="cartridge.title || cartridge.rom_title || cartridge.game_name || 'Cartridge'"
-      class="block h-auto max-h-[136px] w-auto max-w-[250px] select-none object-contain drop-shadow-[0_8px_7px_rgba(0,0,0,0.28)]"
-      :class="imageLoaded ? 'opacity-100' : 'absolute inset-0 opacity-0'"
+      class="block h-auto select-none object-contain drop-shadow-[0_8px_7px_rgba(0,0,0,0.28)]"
+      :class="[isGbFamily ? 'w-[180px]' : 'w-[240px]', imageLoaded ? 'opacity-100' : 'absolute inset-0 opacity-0']"
       draggable="false"
       @load="imageLoaded = true"
       @error="imageFailed = true"

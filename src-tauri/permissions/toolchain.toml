@@ -1,0 +1,19 @@
+[[permission]]
+identifier = "allow-toolchain"
+description = "Allow toolchain bin path bootstrap/detect, local cfb resolve/exec, and optional sidecar rebuild helpers."
+commands.allow = [
+  "bootstrap_toolchain_paths",
+  "sync_local_paths_json",
+  "detect_default_cfb_bin",
+  "detect_default_rule_dir",
+  "resolve_cfb_binary",
+  "cfb_exec",
+  "cfb_spawn",
+  "cfb_kill_process",
+  "read_cargo_version",
+  "git_head_sha",
+  "git_pull",
+  "rebuild_cfb_sidecar",
+  "sidecar_triple",
+  "sidecar_binaries_dir",
+]

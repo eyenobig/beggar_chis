@@ -1,2 +1,2 @@
 export { cfbClient } from './client'
-export { inTauri } from './transport'
+export { inTauri, ensureDirectBinary, clearDirectBinaryCache } from './transport'

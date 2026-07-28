@@ -6,7 +6,9 @@ import { useEmulator } from '../../../stores/useEmulator'
 import BaseDrawer from '../BaseDrawer.vue'
 import HelpPanel from './HelpPanel.vue'
 
-const { helpOpen } = storeToRefs(useEmulator())
+const emu = useEmulator()
+const { helpOpen } = storeToRefs(emu)
+const { closeDrawers } = emu
 </script>
 
 <template>
@@ -21,7 +23,7 @@ const { helpOpen } = storeToRefs(useEmulator())
         <div class="text-xs font-black uppercase tracking-widest text-white">说明文档</div>
       </div>
       <button
-        @click="helpOpen = false"
+        @click="closeDrawers()"
         aria-label="Close"
         class="p-1 text-zinc-500 hover:text-white transition-colors"
       >

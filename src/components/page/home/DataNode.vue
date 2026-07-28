@@ -5,6 +5,7 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useCartData } from '../../../stores/useCartData'
 import { useEmulator } from '../../../stores/useEmulator'
+import { gameCodeOf, romTitleOf } from '../../drawer/logs/rom/romFields'
 
 const props = defineProps({ kind: { type: String, required: true } }) // 'rom' | 'save'
 const cart = useCartData()
@@ -12,12 +13,26 @@ const { romFile, saveFile, cartInfo, cartReading } = storeToRefs(cart)
 const emu = useEmulator()
 const { logsOpen, activeTab } = storeToRefs(emu)
 
+/** 识别点击后短时忽略卡片点击，避免 disabled/穿透误开 ROM */
+let ignoreCardClickUntil = 0
+
 function handleCardClick() {
+  if (Date.now() < ignoreCardClickUntil) return
   if (isRom.value && logsOpen.value && activeTab.value === 'rom') {
     cart.pickRomFile()
   } else {
     emu.toggleLogs(true, 'rom')
   }
+}
+
+/** 读卡；成功后再展开 logs 抽屉的 ROM 页（失败不硬开） */
+async function onIdentify(event) {
+  event?.preventDefault?.()
+  event?.stopPropagation?.()
+  ignoreCardClickUntil = Date.now() + 800
+  emu.toggleLogs(true, 'rom')
+  if (cartReading.value) return
+  await cart.readCart()
 }
 
 const isRom = computed(() => props.kind === 'rom')
@@ -39,14 +54,16 @@ const view = computed(() => {
   if (isRom.value && cartInfo.value && (cartInfo.value.present || cartInfo.value.capacity_bytes > 0)) {
     const c = cartInfo.value
     const mb = c.capacity_bytes ? Math.round(c.capacity_bytes / 1024 / 1024) : 0
-    const hasGame = !!(c.rom_title || c.game_name)
+    const title = romTitleOf(c)
+    const code = gameCodeOf(c)
+    const hasGame = !!(title || code)
     const kindTag = c.kind === 'gba' ? 'GBA' : c.kind === 'gb_mbc' ? 'GB/GBC' : (c.kind || '卡带')
     return {
       state: 'current',
       tag: '当前卡带 · ' + kindTag,
-      name: hasGame ? (c.rom_title || c.game_name) : (mb ? `${mb}MB Flash` : '已识别 Flash'),
+      name: hasGame ? title : (mb ? `${mb}MB Flash` : '已识别 Flash'),
       sub: hasGame
-        ? ((c.game_code || '—') + (mb ? ' · ' + mb + 'MB' : ''))
+        ? ((code || '—') + (mb ? ' · ' + mb + 'MB' : ''))
         : (mb ? mb + 'MB' : null),
     }
   }
@@ -60,22 +77,18 @@ const view = computed(() => {
       <span class="text-[9px] font-black uppercase tracking-widest text-zinc-900">{{ label }}</span>
     </div>
 
-    <div class="grid grid-cols-[1fr_auto] gap-2">
+    <div class="grid grid-cols-[1fr_auto] items-stretch gap-2">
       <button
         data-no-drag
+        type="button"
         @click="handleCardClick"
-        class="flex-1 min-w-0 text-left rounded-2xl p-4 relative overflow-hidden shadow-md transition active:scale-[0.99]"
+        class="min-w-0 text-left rounded-2xl p-4 relative overflow-hidden shadow-md transition active:scale-[0.99]"
         :class="
           isRom
             ? 'bg-zinc-900 text-white'
             : 'bg-zinc-50 border border-zinc-200 text-zinc-900 shadow-sm'
         "
       >
-        <div
-          v-if="isRom"
-          class="absolute top-0 right-0 w-16 h-16 bg-white/5 rounded-full blur-xl -translate-y-1/2 translate-x-1/2"
-        ></div>
-
         <template v-if="view.state !== 'empty'">
           <p
             class="text-[8px] font-black uppercase tracking-widest mb-1 flex items-center gap-1.5"
@@ -121,14 +134,37 @@ const view = computed(() => {
         </template>
       </button>
 
-      <!-- 右侧识别按钮：始终显示，点击重新读卡 -->
+      <!-- 右侧识别：独立列；不用 disabled/pointer-events-none，避免点击穿透到卡片误开 ROM -->
       <button
         v-if="isRom"
         data-no-drag
-        @click="cart.readCart()"
-        :disabled="cartReading"
-        class="h-full aspect-square rounded-2xl p-4 flex items-center justify-center text-[10px] font-black shadow-md transition active:scale-[0.99] disabled:opacity-40 bg-zinc-900 text-zinc-400 hover:text-white"
-      >{{ cartReading ? '…' : '识别' }}</button>
+        type="button"
+        class="group relative z-30 flex w-14 shrink-0 items-center justify-center self-stretch rounded-2xl bg-zinc-800 text-zinc-400 shadow-md transition active:scale-[0.99] hover:bg-zinc-900 hover:text-white"
+        :class="cartReading ? 'opacity-40' : ''"
+        :aria-disabled="cartReading ? 'true' : 'false'"
+        :aria-label="$t('rom.identify')"
+        @click.stop.prevent="onIdentify"
+        @mousedown.stop
+        @pointerdown.stop
+      >
+        <svg
+          class="h-4 w-4 transition-opacity group-hover:opacity-0"
+          :class="cartReading ? 'animate-spin' : ''"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M21 12a9 9 0 1 1-2.6-6.2" />
+          <polyline points="21 3 21 9 15 9" />
+        </svg>
+        <span
+          class="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] font-black opacity-0 transition-opacity group-hover:opacity-100"
+        >{{ cartReading ? '…' : $t('rom.identify') }}</span>
+      </button>
     </div>
   </section>
 </template>

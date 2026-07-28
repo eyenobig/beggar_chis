@@ -1,5 +1,7 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { gameCodeOf, romTitleOf } from '../components/drawer/logs/rom/romFields'
+import { flashRomMatchesPlatform } from '../services/flashRom'
 
 const STORAGE_KEY = 'chis.cartridges.v2'
 
@@ -14,7 +16,7 @@ function loadRecords() {
 }
 
 function cartridgeKey(info) {
-  const identity = info?.game_code || info?.rom_title || info?.game_name || info?.id
+  const identity = gameCodeOf(info) || romTitleOf(info) || info?.id
   if (!identity) return ''
   return [info?.kind || 'cart', String(identity).trim().toUpperCase(), info?.revision ?? 0].join(':')
 }
@@ -30,7 +32,11 @@ export const useCartridgeCache = defineStore('cartridge-cache', () => {
 
   function activateCached(info) {
     const detectionKey = cartridgeKey(info)
-    const record = records.value.find((item) => item.detectionKey === detectionKey && item.cartridgeImage)
+    const record = records.value.find((item) =>
+      item.detectionKey === detectionKey
+      && item.cartridgeImage
+      && flashRomMatchesPlatform(item, info),
+    )
     activePayload.value = record?.payload || ''
     return record || null
   }
@@ -45,7 +51,7 @@ export const useCartridgeCache = defineStore('cartridge-cache', () => {
       payloadId: flashRom.id,
       detectionKey,
       refKey: flashRom.refKey || null,
-      title: flashRom.title || info.rom_title || info.game_name || null,
+      title: flashRom.title || romTitleOf(info) || null,
       serialCode: flashRom.serialCode || null,
       cartridgeImage: flashRom.cartridgeImage,
       platform: String(flashRom.refKey || '').split('__')[0] || null,

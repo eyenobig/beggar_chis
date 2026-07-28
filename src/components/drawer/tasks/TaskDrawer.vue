@@ -1,41 +1,63 @@
+<!-- 任务进度：极窄竖向方格条（单任务，无标题栏）。 -->
 <script setup>
 import { computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ListChecks, Trash2, X } from '@lucide/vue'
+import { X } from '@lucide/vue'
 import { useEmulator } from '../../../stores/useEmulator'
 import { useTaskProgress } from '../../../stores/useTaskProgress'
-import BaseDrawer from '../BaseDrawer.vue'
 import TaskPanel from './TaskPanel.vue'
+
+/** 第二层右缘 320+440=760；第三层在其外侧，窗口需加宽才不被裁切 */
+const STRIP_WIDTH = 36
+const OPEN_LEFT = 760
+const CLOSED_LEFT = OPEN_LEFT - STRIP_WIDTH
 
 const emulator = useEmulator()
 const taskStore = useTaskProgress()
-const { logsOpen, shopOpen, settingsOpen } = storeToRefs(emulator)
-const { drawerOpen, runningCount } = storeToRefs(taskStore)
-const hasSecondPage = computed(() => logsOpen.value || shopOpen.value || settingsOpen.value)
+const { logsOpen, shopOpen, settingsOpen, helpOpen } = storeToRefs(emulator)
+const { drawerOpen } = storeToRefs(taskStore)
+const hasSecondPage = computed(
+  () => logsOpen.value || shopOpen.value || settingsOpen.value || helpOpen.value,
+)
 const drawerVisible = computed(() => drawerOpen.value && hasSecondPage.value)
 
 watch([hasSecondPage, drawerOpen], ([parentOpen, childOpen]) => {
   if (!parentOpen && childOpen) drawerOpen.value = false
 }, { immediate: true })
+
+function closeStrip() {
+  drawerOpen.value = false
+}
 </script>
 
 <template>
-  <BaseDrawer :open="drawerVisible" :width="360" :left="720" :top="34" :bottom="128" :z-index="5">
-    <div class="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-zinc-900/50 shrink-0">
-      <div class="flex items-center gap-2">
-        <ListChecks class="w-4 h-4 text-emerald-400" />
-        <span class="text-xs font-black text-white">&#x4efb;&#x52a1;&#x8fdb;&#x5ea6;</span>
-        <span v-if="runningCount" class="text-[9px] font-black text-emerald-400">{{ runningCount }}</span>
-      </div>
-      <div class="flex items-center gap-1">
-        <button data-no-drag type="button" class="p-1 text-zinc-500 hover:text-white disabled:opacity-30" aria-label="Clear completed tasks" title="Clear completed tasks" @click="taskStore.clearCompleted">
-          <Trash2 class="w-3.5 h-3.5" />
-        </button>
-        <button data-no-drag type="button" class="p-1 text-zinc-500 hover:text-white" aria-label="Close task progress" @click="drawerOpen = false">
-          <X class="w-3.5 h-3.5" :stroke-width="2.5" />
-        </button>
-      </div>
+  <div
+    data-no-drag
+    class="group/strip absolute"
+    :class="drawerVisible ? 'drawer-transition' : ''"
+    :style="{
+      left: drawerVisible ? OPEN_LEFT + 'px' : CLOSED_LEFT + 'px',
+      top: '20px',
+      bottom: '20px',
+      width: drawerVisible ? STRIP_WIDTH + 'px' : '0px',
+      opacity: drawerVisible ? 1 : 0,
+      pointerEvents: drawerVisible ? 'auto' : 'none',
+      zIndex: 20,
+    }"
+  >
+    <!-- LED 条本体：圆角 + 裁切；关闭钮在外侧 absolute 叠盖，不占条内布局 -->
+    <div
+      class="h-full w-full overflow-hidden rounded-r-[4px] bg-zinc-950 border-y border-r border-white/10"
+    >
+      <TaskPanel />
     </div>
-    <TaskPanel />
-  </BaseDrawer>
+    <button
+      type="button"
+      aria-label="Close"
+      class="absolute -top-0.5 -right-0.5 z-10 flex items-center justify-center rounded-sm p-0.5 text-zinc-500 bg-zinc-950/90 opacity-0 transition-opacity group-hover/strip:opacity-100 hover:text-white"
+      @click.stop="closeStrip"
+    >
+      <X class="w-3 h-3" :stroke-width="2.5" />
+    </button>
+  </div>
 </template>

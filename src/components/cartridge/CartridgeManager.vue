@@ -1,29 +1,45 @@
 <script setup>
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Sparkle } from '@lucide/vue'
 import { useCartData } from '../../stores/useCartData'
 import { useCartridgeCache } from '../../stores/useCartridgeCache'
-import { useEmulator } from '../../stores/useEmulator'
 import { findFlashRom } from '../../services/flashRom'
 import CartridgeCard from './CartridgeCard.vue'
 import UnknownCartridge from './UnknownCartridge.vue'
 
 const cart = useCartData()
 const cache = useCartridgeCache()
-const emulator = useEmulator()
-const { cartInfo } = storeToRefs(cart)
+const { cartInfo, flashInfo, opRunning, opKind, progressPct } = storeToRefs(cart)
 const { activeCartridge } = storeToRefs(cache)
 const insertionKey = ref(0)
+/** true = 弹出展示（bottom 较高）；false = 插入隐藏（压在 homepage 下） */
 const cardRaised = ref(false)
 const cardMotion = ref('')
 const ejectStars = ref([])
+/** 烧录中持续飘起的小星星 */
+const burnStars = ref([])
 let previousPayload = ''
 let lookupSequence = 0
 let motionTimer = null
 let starTimer = null
 let motionFrame = null
 let queuedToggle = false
+let burnSpawnTimer = null
+let burnStarSeq = 0
+
+/** 识别成功 / 在位：与 flashInfo（present 或有容量）一致 */
+const hasCart = computed(() => !!flashInfo.value)
+/** 槽位是否应展示卡带 UI（有卡：配图卡或未知卡；无卡/断开：隐藏） */
+const cartridgeVisible = computed(() => hasCart.value)
+
+
+const burning = computed(() => opRunning.value && opKind.value === 'burn')
+/** 进度越高，星星越多、越快（0~1） */
+const burnIntensity = computed(() => {
+  if (!burning.value) return 0
+  return Math.min(1, Math.max(0.15, (progressPct.value || 0) / 100))
+})
 
 function resetEffects() {
   clearTimeout(motionTimer)
@@ -34,21 +50,80 @@ function resetEffects() {
   queuedToggle = false
 }
 
+function stopBurnStars() {
+  if (burnSpawnTimer) {
+    clearInterval(burnSpawnTimer)
+    burnSpawnTimer = null
+  }
+  burnStars.value = []
+}
+
+function spawnBurnStar() {
+  const id = ++burnStarSeq
+  const intensity = burnIntensity.value
+  const left = 4 + Math.random() * 40 // 偏左上区域
+  const size = 4 + Math.floor(Math.random() * 5)
+  const duration = Math.max(0.45, 1.6 - intensity * 1.0)
+  burnStars.value.push({ id, left, size, duration })
+  setTimeout(() => {
+    burnStars.value = burnStars.value.filter((s) => s.id !== id)
+  }, duration * 1000 + 50)
+}
+
+function startBurnStars() {
+  if (burnSpawnTimer) return
+  const tick = () => {
+    if (!burning.value) return
+    const intensity = burnIntensity.value
+    const count = 1 + Math.floor(intensity * 3)
+    for (let i = 0; i < count; i++) spawnBurnStar()
+  }
+  tick()
+  burnSpawnTimer = setInterval(tick, 160)
+}
+
+watch(burning, (on) => {
+  if (on) startBurnStars()
+  else stopBurnStars()
+})
+
+/** 识别成功：升起卡带（配图卡 / 未知卡均可见；勿再插入隐藏被主栏压住）。 */
+function raiseCartridge() {
+  cardRaised.value = true
+}
+
+/** 命中配图后绑定并升起。 */
 function useRecord(record) {
   resetEffects()
   if (record?.payload !== previousPayload) insertionKey.value += 1
   previousPayload = record?.payload || ''
+  raiseCartridge()
+}
+
+function hideCartridge() {
+  resetEffects()
+  previousPayload = ''
   cardRaised.value = false
+  cache.clearActive()
+}
+
+/** 有卡无配图 / 配图查询失败：清 active，UnknownCartridge 占位，仍保持升起。 */
+function showUnknownRaised() {
+  previousPayload = ''
+  cache.clearActive()
+  raiseCartridge()
 }
 
 watch(cartInfo, async (info) => {
   const sequence = ++lookupSequence
   const present = info && (info.present === true || info.capacity_bytes > 0)
   if (!present) {
-    previousPayload = ''
-    cache.clearActive()
+    hideCartridge()
     return
   }
+
+  // 识别成功立刻升起：不等配图、不依赖烧录后再读
+  raiseCartridge()
 
   const cached = cache.activateCached(info)
   if (cached) {
@@ -62,15 +137,12 @@ watch(cartInfo, async (info) => {
     const record = cache.remember(info, flashRom)
     if (record) {
       useRecord(record)
-      emulator.addLog(`Cartridge artwork matched: ${record.title} (#${record.payload})`, 'success')
     } else {
-      cache.clearActive()
-      emulator.addLog(`No FlashRom cartridge image matched ${info.game_code || info.rom_title || info.game_name || 'this cartridge'}.`, 'warn')
+      showUnknownRaised()
     }
-  } catch (error) {
+  } catch {
     if (sequence !== lookupSequence) return
-    cache.clearActive()
-    emulator.addLog(`Unable to load FlashRom cartridge data: ${String(error)}`, 'error')
+    showUnknownRaised()
   }
 }, { immediate: true, deep: true })
 
@@ -122,11 +194,14 @@ function runCartridgeMotion() {
   }, ejecting ? 340 : 240)
 }
 
-onBeforeUnmount(resetEffects)
+onBeforeUnmount(() => {
+  resetEffects()
+  stopBurnStars()
+})
 </script>
 
 <template>
-  <div data-no-drag class="h-[220px] w-full cursor-default overflow-visible bg-transparent">
+  <div data-no-drag class="pointer-events-none h-[220px] w-full cursor-default overflow-visible bg-transparent">
     <div class="relative h-full w-full overflow-visible">
       <div class="pointer-events-none absolute inset-0 z-20 overflow-visible" aria-hidden="true">
         <Sparkle
@@ -143,14 +218,26 @@ onBeforeUnmount(resetEffects)
             '--star-delay': `${star.delay}ms`,
           }"
         />
+        <Sparkle
+          v-for="star in burnStars"
+          :key="'b' + star.id"
+          class="burn-star absolute fill-amber-300 text-amber-400"
+          :style="{
+            left: star.left + '%',
+            top: '8%',
+            width: star.size + 'px',
+            height: star.size + 'px',
+            animationDuration: star.duration + 's',
+          }"
+        />
       </div>
 
       <Transition name="cartridge-insert" mode="out-in" appear>
         <CartridgeCard
-          v-if="activeCartridge"
+          v-if="cartridgeVisible && activeCartridge"
           :key="activeCartridge.payload + '-' + insertionKey"
           :cartridge="activeCartridge"
-          class="absolute left-1/2 -translate-x-1/2 transition-[bottom]"
+          class="pointer-events-auto absolute left-1/2 -translate-x-1/2 transition-[bottom]"
           :class="[
             cardRaised ? 'bottom-[-18px] duration-[160ms] ease-out' : 'bottom-[-118px] duration-[120ms] ease-in',
             cardMotion === 'eject' ? 'cartridge-ejecting' : '',
@@ -158,7 +245,16 @@ onBeforeUnmount(resetEffects)
           ]"
           @click="toggleCartridgeHeight"
         />
-        <UnknownCartridge v-else key="unknown" />
+        <UnknownCartridge
+          v-else-if="cartridgeVisible"
+          key="unknown"
+          class="pointer-events-auto absolute left-1/2 -translate-x-1/2 transition-[bottom]"
+          :class="[
+            cardRaised ? 'bottom-[-18px] duration-[160ms] ease-out' : 'bottom-[-118px] duration-[120ms] ease-in',
+          ]"
+          :busy="burning"
+          :intensity="burnIntensity"
+        />
       </Transition>
     </div>
   </div>
@@ -171,6 +267,12 @@ onBeforeUnmount(resetEffects)
 .cartridge-star { opacity: 0; }
 .cartridge-star-eject { animation: cartridge-star-burst 460ms ease-out var(--star-delay) both; }
 .cartridge-star-insert { animation: cartridge-star-impact 300ms ease-out var(--star-delay) both; }
+.burn-star {
+  opacity: 0;
+  animation-name: burn-star-rise;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+}
 @keyframes cartridge-slam {
   0% { transform: translate(-50%, -66px); }
   62% { transform: translate(-50%, 7px); }
@@ -201,11 +303,17 @@ onBeforeUnmount(resetEffects)
   12% { opacity: 1; }
   100% { opacity: 0; transform: translate3d(var(--star-x), var(--star-y), 0) rotate(190deg); }
 }
+@keyframes burn-star-rise {
+  0% { opacity: 0; transform: translate3d(0, 8px, 0) scale(0.4) rotate(0deg); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(-6px, -48px, 0) scale(1.2) rotate(120deg); }
+}
 @media (prefers-reduced-motion: reduce) {
   .cartridge-insert-enter-active,
   .cartridge-ejecting,
   .cartridge-inserting,
   .cartridge-star-eject,
-  .cartridge-star-insert { animation-duration: 1ms; }
+  .cartridge-star-insert,
+  .burn-star { animation-duration: 1ms; }
 }
 </style>

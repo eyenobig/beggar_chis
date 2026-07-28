@@ -5,6 +5,9 @@ export const useTaskProgress = defineStore('task-progress', () => {
   const drawerOpen = ref(false)
   const tasks = ref([])
   const runningCount = computed(() => tasks.value.filter((task) => task.status === 'running').length)
+  const romOperationRunning = computed(() =>
+    tasks.value.some((task) => task.status === 'running' && ['burn', 'erase', 'dump'].includes(task.kind)),
+  )
   function startTask({ kind, title, detail = '' }) {
     const task = {
       id: nextTaskId++,
@@ -29,6 +32,10 @@ export const useTaskProgress = defineStore('task-progress', () => {
   function updateProgress(id, done, total) {
     updateTask(id, { done: Number(done) || 0, total: Number(total) || 0 })
   }
+  /** 烧录/擦除成功启动或阶段切换时清空进度条（避免残留上一阶段 %）。 */
+  function resetProgress(id) {
+    updateTask(id, { done: 0, total: 0 })
+  }
   function completeTask(id, detail) {
     const task = tasks.value.find((item) => item.id === id)
     const patch = { status: 'success', finishedAt: Date.now() }
@@ -50,9 +57,11 @@ export const useTaskProgress = defineStore('task-progress', () => {
     drawerOpen,
     tasks,
     runningCount,
+    romOperationRunning,
     startTask,
     updateTask,
     updateProgress,
+    resetProgress,
     completeTask,
     failTask,
     clearCompleted,

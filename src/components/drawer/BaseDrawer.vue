@@ -5,9 +5,10 @@ import { computed } from 'vue'
 const props = defineProps({
   open: Boolean,
   width: { type: Number, default: 440 },
-  left: { type: Number, default: 300 },
+  left: { type: Number, default: 320 },
   top: { type: Number, default: 20 },
-  bottom: { type: Number, default: 112 },
+  /** 上下都留白，贴齐主栏视觉边距 */
+  bottom: { type: Number, default: 20 },
   animate: { type: Boolean, default: true },
   zIndex: { type: Number, default: 10 },
 })
@@ -23,7 +24,8 @@ const outerStyle = computed(() => {
     width: '0px',
     opacity: props.animate ? 0 : 1,
     pointerEvents: 'none',
-    transform: props.animate ? 'translateX(-10px)' : 'none',
+    // 从右侧滑入，避免 translateX(-N) 短暂压住主栏「识别」按钮
+    transform: props.animate ? 'translateX(12px)' : 'none',
     zIndex: props.zIndex,
   }
 })
@@ -37,7 +39,7 @@ const outerStyle = computed(() => {
     :style="outerStyle"
   >
     <div
-      class="absolute top-0 left-0 h-full overflow-hidden bg-zinc-950 border-y border-r border-white/10 rounded-r-[18px] pl-[20px] flex flex-col"
+      class="absolute top-0 left-0 flex h-full min-h-0 w-full flex-col overflow-hidden bg-zinc-950 border-y border-r border-white/10 rounded-r-[18px] pl-[20px]"
       :style="{ width: width + 'px' }"
     >
       <slot />

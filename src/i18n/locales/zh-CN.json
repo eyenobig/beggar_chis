@@ -19,12 +19,112 @@
     "none": "未检测到设备",
     "burner": "烧录器",
     "connect": "连接",
-    "disconnect": "断开连接"
+    "disconnect": "断开连接",
+    "selected": "已选",
+    "selectHint": "检测到多台烧录器，请点击选择要使用的设备",
+    "selectHintShort": "请选择设备",
+    "busy": "占用中"
   },
   "bookmark": {
     "logs": "日志",
+    "rom": "ROM",
     "settings": "设置",
-    "help": "说明",
+    "help": "帮助",
     "shop": "商店"
+  },
+  "rom": {
+    "identify": "识别",
+    "upload": "上传",
+    "replace": "更换",
+    "side": {
+      "cart": "当前卡带",
+      "file": "待写入"
+    },
+    "hint": {
+      "connect": "请先连接烧录器",
+      "reading": "读取 Flash…",
+      "empty": "未检测到卡带"
+    },
+    "op": {
+      "identifying": "正在识别卡带…",
+      "probeGba": "正在以 GBA 模式探测…",
+      "probeMbc": "正在以 GB/GBC 模式探测…",
+      "identifyOk": "识别成功：{name}",
+      "identifyEmpty": "未检测到卡带",
+      "identifyFail": "识别失败：{err}",
+      "redetectPort": "串口失效，正在重新检测烧录器…",
+      "burnStart": "正在烧录：{name}",
+      "burnOk": "烧录完成",
+      "burnFail": "烧录失败",
+      "burnAbort": "烧录已中断",
+      "eraseStart": "正在擦除卡带…",
+      "eraseOk": "擦除完成",
+      "eraseFail": "擦除失败",
+      "eraseAbort": "擦除已中断"
+    },
+    "field": {
+      "gameName": "Game Name:",
+      "romTitle": "ROM Title:",
+      "codeRev": "Game Code and Revision:",
+      "cartType": "Cartridge Type:",
+      "batteryless": "Batteryless SRAM:",
+      "rtc": "Real Time Clock:",
+      "bootLogo": "Boot Logo:",
+      "headerChecksum": "Header Checksum:",
+      "romChecksum": "ROM Checksum:",
+      "capacity": "Capacity:",
+      "buffer": "Write Buffer:",
+      "chipId": "Chip ID:"
+    },
+    "rtc": {
+      "reading": "读取中…",
+      "refresh": "刷新 RTC"
+    }
+  },
+  "launch": {
+    "gbcUnsupported": "GB/GBC 不支持模拟器"
+  },
+  "settings": {
+    "toolchain": "工具链",
+    "cfbPath": "cfb 可执行文件",
+    "rulePath": "rule 数据目录",
+    "cfbPathPick": "选择 cfb 可执行文件",
+    "rulePathPick": "选择 rule 数据目录",
+    "pathUnset": "未设置",
+    "pathUpdated": "路径已更新",
+    "pathPickDesktopOnly": "请在桌面客户端中设置路径",
+    "verify": "验证",
+    "verifying": "验证中…",
+    "verifyOk": "工具链可用：{path}（{bin}）",
+    "verifyMissing": "未找到可执行的 cfb，请选择已构建的 cfb 可执行文件或 bins 目录",
+    "verifyFail": "验证失败：{err}",
+    "skyemu": "SkyEmu",
+    "skyemuPath": "安装路径",
+    "skyemuPathHint": "下载 SkyEmu 时默认使用此目录；也可在此手动指定。",
+    "skyemuUnset": "未设置",
+    "skyemuPick": "选择路径",
+    "skyemuDownload": "下载 SkyEmu",
+    "skyemuClear": "清除路径",
+    "cache": "缓存",
+    "cartCache": "卡带缓存",
+    "cartCacheCount": "{n} 条本地记录",
+    "command": "命令",
+    "language": "语言",
+    "languageHint": "同时切换界面语言与 chis-burner-cmd 输出语言。",
+    "langAuto": "跟随系统",
+    "burn": "烧录",
+    "chipErase": "全片擦除模式",
+    "chipEraseHint": "烧录前擦除整颗 Flash。",
+    "unlockPpb": "烧录前解锁 PPB",
+    "unlockPpbHint": "烧录前解除持久保护位。",
+    "verifyAfter": "烧录后校验",
+    "verifyAfterHint": "烧录完成后读取数据并进行一致性检查。",
+    "voltage": "GB/GBC 电压",
+    "voltageHint": "GBA 固定使用 3.3V；GB/GBC 可自动识别，也可手动选择 3.3V 或 5V。",
+    "voltageAuto": "自动识别",
+    "voltageAutoDesc": "根据卡带自动选择电压",
+    "voltageManual": "手动电压",
+    "voltageManualDesc": "关闭自动识别后生效",
+    "voltageAutoLabel": "自动识别"
   }
 }

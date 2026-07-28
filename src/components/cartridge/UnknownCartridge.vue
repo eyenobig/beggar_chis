@@ -1,11 +1,19 @@
 <script setup>
-import { onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Sparkle } from '@lucide/vue'
+
+const props = defineProps({
+  /** 烧录中：加快、加多环境星星 */
+  busy: { type: Boolean, default: false },
+  /** 0~1，越大越快越多 */
+  intensity: { type: Number, default: 0 },
+})
 
 const burstStars = ref([])
 let nextStarId = 1
 const timers = new Set()
-const ambientStars = [
+
+const baseAmbient = [
   { left: 6, delay: 0.1, duration: 1.9, size: 7 },
   { left: 14, delay: 1.2, duration: 2.3, size: 5 },
   { left: 23, delay: 0.6, duration: 1.7, size: 6 },
@@ -20,6 +28,29 @@ const ambientStars = [
   { left: 94, delay: 0.2, duration: 2.3, size: 6 },
 ]
 
+const busyExtra = [
+  { left: 10, delay: 0.05, duration: 1.1, size: 6 },
+  { left: 18, delay: 0.35, duration: 0.95, size: 5 },
+  { left: 27, delay: 0.15, duration: 1.05, size: 7 },
+  { left: 35, delay: 0.55, duration: 0.9, size: 5 },
+  { left: 42, delay: 0.25, duration: 1.0, size: 6 },
+  { left: 50, delay: 0.45, duration: 0.85, size: 5 },
+  { left: 58, delay: 0.2, duration: 1.15, size: 7 },
+  { left: 66, delay: 0.6, duration: 0.95, size: 5 },
+]
+
+const ambientStars = computed(() => {
+  if (!props.busy) return baseAmbient
+  const speed = Math.max(0.35, 1 - props.intensity * 0.55)
+  const scaled = [...baseAmbient, ...busyExtra].map((s, i) => ({
+    ...s,
+    delay: s.delay * speed * 0.4,
+    duration: Math.max(0.45, s.duration * speed),
+    size: s.size + (i % 3 === 0 ? 1 : 0),
+  }))
+  return scaled
+})
+
 function addStar() {
   const id = nextStarId++
   const positions = [18, 34, 50, 66, 82]
@@ -31,14 +62,45 @@ function addStar() {
   timers.add(timer)
 }
 
+watch(
+  () => props.busy,
+  (on) => {
+    if (!on) return
+    for (let i = 0; i < 4; i++) setTimeout(() => addStar(), i * 80)
+  },
+)
+
 onBeforeUnmount(() => timers.forEach(clearTimeout))
 </script>
 
 <template>
-  <div class="unknown-cartridge relative w-full h-full overflow-hidden">
-    <Sparkle v-for="(star, index) in ambientStars" :key="index" class="ambient-star absolute text-amber-400 fill-amber-300" :style="{ left: star.left + '%', width: star.size + 'px', height: star.size + 'px', animationDelay: star.delay + 's', animationDuration: star.duration + 's' }" />
-    <Sparkle v-for="star in burstStars" :key="star.id" class="burst-star absolute bottom-2 w-2.5 h-2.5 text-amber-400 fill-amber-300" :style="{ left: star.left + '%' }" />
-    <button data-no-drag type="button" class="unknown-mark absolute left-1/2 bottom-0 h-[88px] w-[110px] pb-1 text-[75px] leading-none font-black italic text-zinc-700 cursor-pointer" aria-label="Unknown cartridge" title="Click to reveal another star" @click="addStar">?</button>
+  <div class="unknown-cartridge relative h-full w-full overflow-hidden">
+    <Sparkle
+      v-for="(star, index) in ambientStars"
+      :key="index + '-' + (busy ? 'b' : 'n')"
+      class="ambient-star pointer-events-none absolute fill-amber-300 text-amber-400"
+      :style="{
+        left: star.left + '%',
+        width: star.size + 'px',
+        height: star.size + 'px',
+        animationDelay: star.delay + 's',
+        animationDuration: star.duration + 's',
+      }"
+    />
+    <Sparkle
+      v-for="star in burstStars"
+      :key="star.id"
+      class="burst-star pointer-events-none absolute bottom-2 h-2.5 w-2.5 fill-amber-300 text-amber-400"
+      :style="{ left: star.left + '%' }"
+    />
+    <button
+      data-no-drag
+      type="button"
+      class="unknown-mark absolute bottom-0 left-1/2 h-[88px] w-[110px] cursor-pointer pb-1 text-[75px] font-black italic leading-none text-zinc-700"
+      aria-label="Unknown cartridge"
+      title="Click to reveal another star"
+      @click="addStar"
+    >?</button>
   </div>
 </template>
 

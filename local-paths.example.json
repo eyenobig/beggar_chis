@@ -1,0 +1,5 @@
+{
+  "_comment": "Dev build-script paths only (npm run build:cfb:local). Settings toolchain uses runtime bin paths, not these.",
+  "cfbSourceDir": "Z:/Project/chis-burner-cmd",
+  "ruleSourceDir": "Z:/Project/chis-burner-cmd/vendor/chis-burner-rule"
+}

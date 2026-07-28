@@ -1,18 +1,60 @@
 <script setup>
-// SkyEmu 启动逻辑（emulator.rs）已移除：客户端统一走 cfb sidecar。
-// 此按钮保留为禁用占位，维持 EmulatorWidget 底部布局不塌。
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { LoaderCircle, Play, Download } from '@lucide/vue'
+import { useSkyEmuDownload } from '../composables/useSkyEmuDownload'
+
+const { t } = useI18n()
+const { downloading, canLaunch, emulatorSupported, downloadSkyEmu, launchSkyEmu } =
+  useSkyEmuDownload()
+
+const blocked = computed(() => !emulatorSupported.value)
+const disabled = computed(() => downloading.value || blocked.value)
+const reason = computed(() => (blocked.value ? t('launch.gbcUnsupported') : undefined))
+
+function onClick() {
+  if (disabled.value) return
+  if (canLaunch.value) return launchSkyEmu()
+  return downloadSkyEmu()
+}
 </script>
 
 <template>
-  <div class="p-4 bg-white relative border-t border-zinc-100 shrink-0 z-10">
+  <!-- 紧跟存档区：细线后立刻是按钮；底仅留圆角余量（Toast 在卡外下沿） -->
+  <div class="relative z-10 shrink-0 border-t border-zinc-100 bg-white px-4 pt-2 pb-3">
     <button
-      disabled
-      class="w-full mt-2 bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed h-12 rounded-xl flex items-center justify-center gap-2 transition-all"
+      type="button"
+      data-no-drag
+      class="flex h-12 w-full items-center justify-center gap-2 rounded-xl border transition-all"
+      :class="disabled
+        ? blocked && !downloading
+          ? 'cursor-not-allowed bg-zinc-200 text-zinc-400 border-zinc-200'
+          : 'cursor-wait bg-zinc-800 text-white border-zinc-800 opacity-90'
+        : 'cursor-pointer bg-zinc-900 text-white border-zinc-900 hover:bg-black active:scale-[0.99]'"
+      :disabled="disabled"
+      :title="reason"
+      :aria-disabled="blocked || undefined"
+      :aria-label="reason"
+      @click="onClick"
     >
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728" />
-      </svg>
-      <span class="text-[10px] font-black uppercase tracking-[0.2em]">SkyEmu 未接入</span>
+      <LoaderCircle
+        v-if="downloading"
+        class="h-4 w-4 animate-spin"
+        :stroke-width="2.5"
+      />
+      <Play
+        v-else-if="canLaunch"
+        class="h-4 w-4"
+        :stroke-width="2.5"
+      />
+      <Download
+        v-else
+        class="h-4 w-4"
+        :stroke-width="2.5"
+      />
+      <span class="text-[10px] font-black uppercase tracking-[0.2em]">
+        {{ downloading ? '下载中…' : canLaunch ? '启动' : '下载Skyemu' }}
+      </span>
     </button>
   </div>
 </template>

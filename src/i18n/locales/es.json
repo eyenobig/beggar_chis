@@ -19,12 +19,95 @@
     "none": "Sin dispositivo",
     "burner": "grabador",
     "connect": "Conectar",
-    "disconnect": "Desconectar"
+    "disconnect": "Desconectar",
+    "selected": "Seleccionado",
+    "selectHint": "Varios grabadores detectados — toca el que quieras usar",
+    "selectHintShort": "Elegir dispositivo",
+    "busy": "Ocupado"
   },
   "bookmark": {
     "logs": "Registros",
+    "rom": "ROM",
     "settings": "Ajustes",
     "help": "Ayuda",
     "shop": "Tienda"
+  },
+  "rom": {
+    "identify": "Identificar",
+    "upload": "Subir",
+    "replace": "Cambiar",
+    "side": {
+      "cart": "Cartucho",
+      "file": "A escribir"
+    },
+    "hint": {
+      "connect": "Conecta primero el grabador",
+      "reading": "Leyendo Flash…",
+      "empty": "No se detectó cartucho"
+    },
+    "field": {
+      "gameName": "Game Name:",
+      "romTitle": "ROM Title:",
+      "codeRev": "Game Code and Revision:",
+      "cartType": "Cartridge Type:",
+      "batteryless": "Batteryless SRAM:",
+      "rtc": "Real Time Clock:",
+      "bootLogo": "Boot Logo:",
+      "headerChecksum": "Header Checksum:",
+      "romChecksum": "ROM Checksum:",
+      "capacity": "Capacity:",
+      "buffer": "Write Buffer:",
+      "chipId": "Chip ID:"
+    },
+    "rtc": {
+      "reading": "Leyendo…",
+      "refresh": "Actualizar RTC"
+    }
+  },
+  "launch": {
+    "gbcUnsupported": "GB/GBC does not support the emulator"
+  },
+  "settings": {
+    "toolchain": "Toolchain",
+    "cfbPath": "cfb executable",
+    "rulePath": "rule data folder",
+    "cfbPathPick": "Choose cfb executable",
+    "rulePathPick": "Choose rule data folder",
+    "pathUnset": "Not set",
+    "pathUpdated": "Path updated",
+    "pathPickDesktopOnly": "Set paths in the desktop app",
+    "verify": "Verify",
+    "verifying": "Verifying…",
+    "verifyOk": "Toolchain OK: {path} ({bin})",
+    "verifyMissing": "cfb executable not found. Choose a built cfb binary or bins folder",
+    "verifyFail": "Verify failed: {err}",
+    "skyemu": "SkyEmu",
+    "skyemuPath": "Install path",
+    "skyemuPathHint": "Used as the default folder when downloading SkyEmu.",
+    "skyemuUnset": "Not set",
+    "skyemuPick": "Choose path",
+    "skyemuClear": "Clear path",
+    "cache": "Cache",
+    "cartCache": "Cartridge cache",
+    "cartCacheCount": "{n} local records",
+    "command": "Command",
+    "language": "Language",
+    "languageHint": "Switches both UI language and chis-burner-cmd output language.",
+    "langAuto": "Follow system",
+    "burn": "Burn",
+    "chipErase": "Full chip erase",
+    "chipEraseHint": "Erase the entire Flash before burning.",
+    "unlockPpb": "Unlock PPB before burn",
+    "unlockPpbHint": "Clear persistent protection bits before burning.",
+    "verifyAfter": "Verify after burn",
+    "verifyAfterHint": "Read back and verify data after burning.",
+    "voltage": "GB/GBC voltage",
+    "voltageHint": "GBA always uses 3.3V; GB/GBC can auto-detect or use 3.3V / 5V manually.",
+    "voltageAuto": "Auto detect",
+    "voltageAutoDesc": "Pick voltage from the cartridge",
+    "voltageManual": "Manual voltage",
+    "voltageManualDesc": "Applies when auto detect is off",
+    "voltageAutoLabel": "Auto",
+    "skyemuDownload": "Download SkyEmu"
   }
 }

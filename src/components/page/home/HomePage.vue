@@ -1,11 +1,12 @@
-<!-- Home 页面（默认）：中间内容区。ROM / Save 两个数据节点抽象在此页内。 -->
+<!-- Home 页面（默认）：ROM/存档节点（操作在 ROM 页）。卡带视觉由 EmulatorWidget 槽位直接挂载。 -->
 <script setup>
 import DataNode from './DataNode.vue'
+import SaveNode from './SaveNode.vue'
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="relative space-y-3">
     <DataNode kind="rom" />
-    <DataNode kind="save" />
+    <SaveNode />
   </div>
 </template>

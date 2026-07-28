@@ -11,6 +11,13 @@
     "core:window:allow-set-size",
     "opener:default",
     {
+      "identifier": "opener:allow-open-path",
+      "allow": [
+        { "path": "**/*" },
+        { "path": "/**" }
+      ]
+    },
+    {
       "identifier": "shell:allow-spawn",
       "allow": [
         { "name": "binaries/cfb", "sidecar": true, "args": true }
@@ -23,6 +30,10 @@
       ]
     },
     "shell:allow-kill",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "allow-download-file",
+    "allow-launch-skyemu",
+    "allow-file-size",
+    "allow-toolchain"
   ]
 }
