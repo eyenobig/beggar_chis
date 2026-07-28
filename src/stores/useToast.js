@@ -6,36 +6,20 @@ let _seq = 0
 export const useToast = defineStore('toast', () => {
   /** @type {import('vue').Ref<Array<{ id: number, message: string, type: 'info' | 'success' | 'error', createdAt: number }>>} */
   const toasts = ref([])
-  /** 固定吐纸区高度（有纸=占用，无纸=0），供窗口预留，不再随纸无限增高 */
+  /** 当前整张热敏纸高度，供窗口预留；随连续出纸变高 */
   const paperHeight = ref(0)
 
-  /** 按 id 移除一条（烧录/擦除进度收尾用） */
+  /** 按 id 移除一条；连续出纸一般不删旧行，整叠清除用 clear() */
   function dismiss(id) {
     if (id == null) return
     const next = toasts.value.filter((t) => t.id !== id)
     if (next.length !== toasts.value.length) toasts.value = next
   }
 
-  /** 清空全部热敏提示（撕纸后调用）；占位高度由 EmulatorWidget 始终保留 */
+  /** 清空全部热敏提示（撕纸后调用） */
   function clear() {
     if (toasts.value.length) toasts.value = []
     if (paperHeight.value !== 0) paperHeight.value = 0
-  }
-
-  /** 原地更新文案；识别进度用，避免每步新吐一行 */
-  function upsert(id, message, type = 'info') {
-    const text = String(message || '').trim()
-    if (!text) return id ?? null
-    if (id != null) {
-      const idx = toasts.value.findIndex((t) => t.id === id)
-      if (idx >= 0) {
-        const copy = toasts.value.slice()
-        copy[idx] = { ...copy[idx], message: text, type, createdAt: Date.now() }
-        toasts.value = copy
-        return id
-      }
-    }
-    return push(text, type)
   }
 
   function setPaperHeight(px) {
@@ -44,6 +28,7 @@ export const useToast = defineStore('toast', () => {
   }
 
   /**
+   * 追加一条（连续出纸，不替换旧行）
    * @param {string} message
    * @param {'info' | 'success' | 'error'} [type]
    */
@@ -67,5 +52,5 @@ export const useToast = defineStore('toast', () => {
     return push(message, 'error')
   }
 
-  return { toasts, paperHeight, push, upsert, info, success, error, dismiss, clear, setPaperHeight }
+  return { toasts, paperHeight, push, info, success, error, dismiss, clear, setPaperHeight }
 })

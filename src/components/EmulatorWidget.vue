@@ -18,7 +18,7 @@ import CartridgeManager from './cartridge/CartridgeManager.vue'
 import RomCartridgeSlider from './drawer/logs/rom/RomCartridgeSlider.vue'
 
 /** 吐纸区上限（与 ToastHost.SPIT_AREA_H 一致） */
-const SPIT_H = 320
+const SPIT_H = 480
 const SPIT_PAD = 16
 /** 刀口+齿孔高度，绝对吐纸在卡片下，需一并计入窗口底部预留 */
 const CUTTER_H = 14

@@ -251,8 +251,6 @@ export const useCartData = defineStore('cart', () => {
   let _opAborted = false
   /** 识别成功后静默切平台时，跳过 platform watch 触发的二次 readCart。 */
   let _suppressPlatformRead = false
-  /** 识别进度共用一条热敏 toast，避免多轮识别各自 push 堆成「死循环」外观。 */
-  let _identifyToastId = null
 
   async function abortOp() {
     if (!opRunning.value || !_opChild) return
@@ -408,10 +406,12 @@ export const useCartData = defineStore('cart', () => {
     cartError.value = ''
     rtcInfo.value = null
 
-    /** 识别过程共用一条热敏纸原地更新；silent 自动刷新不打扰。 */
+    /** 热敏纸连续出纸：每条状态追加一行，整张纸随内容变高；silent 不打扰。 */
     const showStatus = (msg, type = 'info') => {
       if (silent) return
-      _identifyToastId = toast.upsert(_identifyToastId, msg, type)
+      if (type === 'success') toast.success(msg)
+      else if (type === 'error') toast.error(msg)
+      else toast.info(msg)
     }
 
     showStatus(t('rom.op.identifying'))
@@ -592,7 +592,7 @@ export const useCartData = defineStore('cart', () => {
     // 烧录成功启动：清空进度条，避免沿用上一次操作的残条/%
     taskProgress.resetProgress(taskId)
     taskProgress.drawerOpen = true
-    let opToastId = toast.info(t('rom.op.burnStart', { name: f.name }))
+    toast.info(t('rom.op.burnStart', { name: f.name }))
     const burnStartedAt = Date.now()
     const fmtElapsed = () => {
       const sec = (Date.now() - burnStartedAt) / 1000
@@ -696,14 +696,12 @@ export const useCartData = defineStore('cart', () => {
         const sizePart = r.bytes ? `${(r.bytes / 1024 / 1024).toFixed(1)}MB` : ''
         const doneId = logStore.addLog(['烧录完成', sizePart].filter(Boolean).join(' '), 'success')
         logStore.setLogElapsed(doneId, timePart)
-        if (opToastId != null) toast.dismiss(opToastId)
         toast.success(t('rom.op.burnOk'))
       } else if (opResult.value && !opResult.value.ok) {
         taskProgress.failTask(taskId, opResult.value.error)
         const failLabel = _opAborted ? '烧录已中断' : '烧录失败'
         const failId = logStore.addLog(failLabel, _opAborted ? 'warn' : 'error')
         logStore.setLogElapsed(failId, timePart)
-        if (opToastId != null) toast.dismiss(opToastId)
         if (_opAborted) toast.info(t('rom.op.burnAbort'))
         else toast.error(t('rom.op.burnFail'))
       }
@@ -747,7 +745,7 @@ export const useCartData = defineStore('cart', () => {
     // 擦除成功启动：清空进度条
     taskProgress.resetProgress(taskId)
     taskProgress.drawerOpen = true
-    let opToastId = toast.info(t('rom.op.eraseStart'))
+    toast.info(t('rom.op.eraseStart'))
     const eraseStartedAt = Date.now()
     const fmtEraseElapsed = () => `${((Date.now() - eraseStartedAt) / 1000).toFixed(1)}s`
     // 起始行保留；进度「擦除 N%」单行原地更新；完成/失败另起一行
@@ -808,13 +806,11 @@ export const useCartData = defineStore('cart', () => {
         taskProgress.completeTask(taskId)
         const doneId = logStore.addLog('擦除完成', 'success')
         logStore.setLogElapsed(doneId, timePart)
-        if (opToastId != null) toast.dismiss(opToastId)
         toast.success(t('rom.op.eraseOk'))
       } else if (opResult.value && !opResult.value.ok) {
         taskProgress.failTask(taskId, opResult.value.error)
         const failId = logStore.addLog(_opAborted ? '擦除已中断' : '擦除失败', _opAborted ? 'warn' : 'error')
         logStore.setLogElapsed(failId, timePart)
-        if (opToastId != null) toast.dismiss(opToastId)
         if (_opAborted) toast.info(t('rom.op.eraseAbort'))
         else toast.error(t('rom.op.eraseFail'))
       }

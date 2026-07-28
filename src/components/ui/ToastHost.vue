@@ -1,6 +1,11 @@
-<!-- 「下载 SKYEMU」正下方：WAAPI 恒速吐纸；点击从刀口撕下坠落（非展开） -->
+<!--
+  SkyEmu 下热敏纸：
+  - 新行出现在刀口下方（最上）
+  - 吐纸时整张纸（新行+旧行）一起往下走
+  - 一条吐完再吐下一条；点击撕下
+-->
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useToast } from '../../stores/useToast'
 
@@ -8,40 +13,55 @@ const toast = useToast()
 const { toasts } = storeToRefs(toast)
 
 const receiptRef = ref(null)
-const wellRef = ref(null)
 
-/** 可见吐纸区上限（与 EmulatorWidget.SPIT_H 一致） */
-const SPIT_AREA_H = 320
-/** 井高下限：仅避免 0 塌陷，高度跟文案走 */
-const MIN_PAPER_H = 40
+const SPIT_AREA_H = 480
+const MIN_PAPER_H = 36
 const SPIT_PX_PER_SEC = 56
+/** 二条及以上量高失败时的保底增量，避免 delta=0 变成覆盖 */
+const MIN_LINE_DELTA = 28
 
 const wellH = ref(0)
+/** 整张纸的 translateY；吐纸时从 -delta → 0 */
 const spitY = ref(0)
 
 const tearing = ref(false)
 /** @type {import('vue').Ref<Array<{ id: number, message: string, type: string }>>} */
 const tearItems = ref([])
-/** 撕纸时 transform 由 WAAPI 接管，这里只作结束清理 */
 const tearDriving = ref(false)
 
-/** 吐纸进行中：transform 交给 WAAPI，避免 Vue :style 抢写 */
-const spitDriving = ref(false)
+/** 已吐出的 id（先到的在数组前 = 纸面上更靠下） */
+const revealedIds = ref(/** @type {number[]} */ ([]))
+/** @type {number[]} */
+let spitQueue = []
+let draining = false
 
 let prevHeight = 0
-let animating = false
-let pendingGrow = false
 let rafId = 0
-/** @type {Animation | null} */
-let spitAnim = null
+let spitRafId = 0
 /** @type {Animation | null} */
 let tearAnim = null
 
-const liveItems = computed(() => [...toasts.value].reverse())
+const toastById = computed(() => {
+  /** @type {Map<number, { id: number, message: string, type: string }>} */
+  const map = new Map()
+  for (const t of toasts.value) map.set(t.id, t)
+  return map
+})
+
+/** 刀口在上：最新一行贴近刀口，更早的行在下方 */
+const liveItems = computed(() => {
+  const rows = []
+  for (const id of revealedIds.value) {
+    const t = toastById.value.get(id)
+    if (t) rows.push(t)
+  }
+  return rows.reverse()
+})
+
 const items = computed(() => (tearing.value ? tearItems.value : liveItems.value))
 
 const receiptStyle = computed(() => {
-  if (tearing.value || tearDriving.value || spitDriving.value) return {}
+  if (tearing.value || tearDriving.value) return {}
   return { transform: `translateY(${spitY.value}px)` }
 })
 
@@ -56,9 +76,8 @@ function reportArea(occupied) {
     toast.setPaperHeight(0)
     return
   }
-  // 跟收据内容等高，不再强行垫高
   const h = Math.min(Math.max(wellH.value, MIN_PAPER_H), SPIT_AREA_H)
-  toast.setPaperHeight(h)
+  if ((toast.paperHeight || 0) !== h) toast.setPaperHeight(h)
 }
 
 function cancelRaf() {
@@ -68,14 +87,10 @@ function cancelRaf() {
   }
 }
 
-function cancelSpitAnim() {
-  if (spitAnim) {
-    try {
-      spitAnim.cancel()
-    } catch {
-      /* ignore */
-    }
-    spitAnim = null
+function cancelSpitRaf() {
+  if (spitRafId) {
+    cancelAnimationFrame(spitRafId)
+    spitRafId = 0
   }
 }
 
@@ -96,28 +111,45 @@ function rAF() {
 
 function measureReceipt(el) {
   if (!el) return 0
+  // 不要用被父级裁切影响的 clientHeight；scrollHeight / 强制布局更稳
+  void el.offsetHeight
   return Math.max(el.scrollHeight || 0, el.offsetHeight || 0)
 }
 
-function finishSpit() {
-  animating = false
-  spitDriving.value = false
+/** 量「贴刀口那一行」的占位高度（含与下一行的分隔） */
+function measureTopLineDelta(receipt) {
+  if (!receipt) return MIN_LINE_DELTA
+  const lines = receipt.querySelectorAll('.toast-line')
+  const top = lines[0]
+  if (!top) return MIN_LINE_DELTA
+  const style = window.getComputedStyle(top)
+  const mt = Number.parseFloat(style.marginTop) || 0
+  const mb = Number.parseFloat(style.marginBottom) || 0
+  // 第二行起才有分隔，但新行在最上时，分隔在「新行与旧行」之间，落在旧行（lines[1]）上
+  let sep = 0
+  const second = lines[1]
+  if (second) {
+    const s2 = window.getComputedStyle(second)
+    sep =
+      (Number.parseFloat(s2.marginTop) || 0) +
+      (Number.parseFloat(s2.paddingTop) || 0) +
+      (Number.parseFloat(s2.borderTopWidth) || 0)
+  }
+  const h = top.getBoundingClientRect().height || top.offsetHeight || MIN_LINE_DELTA
+  return Math.max(MIN_LINE_DELTA, Math.ceil(h + mt + mb + sep))
+}
+
+function resetSpitState() {
+  spitQueue = []
+  draining = false
+  revealedIds.value = []
+  prevHeight = 0
   spitY.value = 0
-  const el = receiptRef.value
-  if (el && !tearing.value) el.style.transform = 'translateY(0px)'
-  if (tearing.value) return
-  if (liveItems.value.length) {
-    const h = measureReceipt(receiptRef.value) || prevHeight
-    wellH.value = Math.min(Math.max(h, MIN_PAPER_H), SPIT_AREA_H)
-    reportArea(true)
-  } else {
-    wellH.value = 0
-    reportArea(false)
-  }
-  if (pendingGrow) {
-    pendingGrow = false
-    void spitGrow()
-  }
+  cancelRaf()
+  cancelSpitRaf()
+  cancelTearAnim()
+  wellH.value = 0
+  reportArea(false)
 }
 
 function animateWell(fromWell, toWell, durationMs) {
@@ -125,14 +157,14 @@ function animateWell(fromWell, toWell, durationMs) {
     cancelRaf()
     const start = performance.now()
     wellH.value = fromWell
-    reportArea(true)
+    reportArea(fromWell > 0)
     const tick = (now) => {
       if (tearing.value) {
         rafId = 0
         resolve()
         return
       }
-      const t = Math.min(1, (now - start) / durationMs)
+      const t = Math.min(1, (now - start) / Math.max(1, durationMs))
       wellH.value = fromWell + (toWell - fromWell) * t
       reportArea(true)
       if (t < 1) rafId = requestAnimationFrame(tick)
@@ -147,101 +179,168 @@ function animateWell(fromWell, toWell, durationMs) {
   })
 }
 
-async function spitGrow() {
-  if (tearing.value) return
-  if (animating) {
-    pendingGrow = true
-    return
-  }
-  animating = true
-  // 动画开始前先撑开窗口底部，避免纸在 overflow 外吐
-  reportArea(true)
+/** 整张纸 translateY：from → to，与井高同步 */
+function animateSpitY(fromY, toY, durationMs) {
+  return new Promise((resolve) => {
+    cancelSpitRaf()
+    const start = performance.now()
+    spitY.value = fromY
+    const tick = (now) => {
+      if (tearing.value) {
+        spitRafId = 0
+        resolve()
+        return
+      }
+      const t = Math.min(1, (now - start) / Math.max(1, durationMs))
+      spitY.value = fromY + (toY - fromY) * t
+      if (t < 1) spitRafId = requestAnimationFrame(tick)
+      else {
+        spitY.value = toY
+        spitRafId = 0
+        resolve()
+      }
+    }
+    spitRafId = requestAnimationFrame(tick)
+  })
+}
 
-  await nextTick()
-  await rAF()
-  await nextTick()
-  await rAF()
-
-  if (tearing.value) {
-    animating = false
-    return
-  }
-
-  let receipt = receiptRef.value
-  if (!receipt || !liveItems.value.length) {
+/**
+ * 等 DOM 行数对齐后再量高（二条时 nextTick 偶发仍是旧高 → delta=0 → 覆盖）
+ */
+async function waitLinesReady(expected) {
+  for (let i = 0; i < 8; i++) {
     await nextTick()
+    const n = receiptRef.value?.querySelectorAll('.toast-line')?.length || 0
+    if (n >= expected) {
+      await rAF()
+      return true
+    }
     await rAF()
-    receipt = receiptRef.value
   }
-  if (!receipt || !liveItems.value.length) {
+  return (receiptRef.value?.querySelectorAll('.toast-line')?.length || 0) >= expected
+}
+
+/**
+ * 吐出刚揭示的那一行：
+ * 先 -delta（新行藏刀口，旧行视觉不动）→ 再落到 0（整张一起下）
+ */
+async function spitCurrentSheet() {
+  if (tearing.value) return
+  const expectedLines = revealedIds.value.length
+  if (!expectedLines) {
     prevHeight = 0
-    finishSpit()
-    return
-  }
-
-  const prevWell = wellH.value
-  wellH.value = Math.max(prevWell, SPIT_AREA_H)
-  void receipt.offsetHeight
-  const newH = measureReceipt(receipt)
-  wellH.value = prevWell
-  void (wellRef.value || receipt).offsetHeight
-
-  const oldH = prevHeight
-  const delta = newH - oldH
-  const fromWell = Math.min(oldH, SPIT_AREA_H)
-  const toWell = Math.min(Math.max(newH, MIN_PAPER_H), SPIT_AREA_H)
-
-  if (delta <= 0 || newH <= 0) {
-    prevHeight = Math.max(newH, oldH)
+    wellH.value = 0
     spitY.value = 0
-    wellH.value = toWell || Math.max(prevHeight, MIN_PAPER_H)
-    finishSpit()
+    reportArea(false)
     return
   }
 
-  prevHeight = newH
-  const duration = Math.max(420, Math.round((delta / SPIT_PX_PER_SEC) * 1000))
+  const oldH = Math.max(0, prevHeight)
 
-  spitDriving.value = true
+  // 二条起：揭示前就抬纸，避免首帧新行盖住旧行
+  if (oldH > 0) {
+    spitY.value = -MIN_LINE_DELTA
+    wellH.value = Math.min(oldH, SPIT_AREA_H)
+    reportArea(true)
+  }
+
+  await waitLinesReady(expectedLines)
+  if (tearing.value) return
+
+  const receipt = receiptRef.value
+  if (!receipt) {
+    // 没有节点就按保底长高，避免卡死队列
+    const fallback = oldH > 0 ? oldH + MIN_LINE_DELTA : MIN_PAPER_H
+    prevHeight = fallback
+    wellH.value = Math.min(fallback, SPIT_AREA_H)
+    spitY.value = 0
+    reportArea(true)
+    return
+  }
+
+  // 保持井=旧高 + 已上移，避免量高时撑开闪帧；scrollHeight 不受 overflow 裁切
+  wellH.value = Math.min(oldH || MIN_PAPER_H, SPIT_AREA_H)
+  await nextTick()
+  void receipt.offsetHeight
+
+  let newH = measureReceipt(receipt)
+  const lineDelta = oldH > 0 ? measureTopLineDelta(receipt) : 0
+
+  if (oldH <= 0) {
+    if (newH < MIN_PAPER_H) newH = MIN_PAPER_H
+  } else {
+    // 关键：整表增量 与 「顶行占位」取大，杜绝 delta=0 变成覆盖
+    const bySheet = Math.max(0, newH - oldH)
+    const delta = Math.max(bySheet, lineDelta, MIN_LINE_DELTA)
+    newH = oldH + delta
+  }
+
+  const delta = oldH <= 0 ? newH : newH - oldH
+  const fromWell = Math.min(oldH, SPIT_AREA_H)
+  const toWell = Math.min(newH, SPIT_AREA_H)
+  const duration = Math.max(320, Math.round((delta / SPIT_PX_PER_SEC) * 1000))
+
   spitY.value = -delta
   wellH.value = fromWell
-  receipt.style.transform = `translateY(${-delta}px)`
-  void receipt.offsetHeight
-  reportArea(true)
-
-  cancelSpitAnim()
-  spitAnim = receipt.animate(
-    [
-      { transform: `translateY(${-delta}px)` },
-      { transform: 'translateY(0px)' },
-    ],
-    { duration, easing: 'linear', fill: 'forwards' },
-  )
+  reportArea(fromWell > 0)
+  await rAF()
 
   try {
-    await Promise.all([spitAnim.finished.catch(() => {}), animateWell(fromWell, toWell, duration)])
+    await Promise.all([
+      animateSpitY(-delta, 0, duration),
+      animateWell(fromWell, toWell, duration),
+    ])
   } catch {
     /* cancelled */
   }
 
-  cancelSpitAnim()
-  if (receipt) receipt.style.transform = 'translateY(0px)'
   spitY.value = 0
-  spitDriving.value = false
-  finishSpit()
+  prevHeight = newH
+  wellH.value = toWell
+  reportArea(true)
 }
 
-/** 点击：整张纸从刀口拧断并坠落（扭转前置、幅度够大） */
+async function drainSpitQueue() {
+  if (draining || tearing.value) return
+  draining = true
+  try {
+    while (spitQueue.length && !tearing.value) {
+      const id = spitQueue.shift()
+      if (id == null) continue
+      if (revealedIds.value.includes(id)) continue
+      if (!toastById.value.has(id)) continue
+
+      revealedIds.value = [...revealedIds.value, id]
+      await spitCurrentSheet()
+    }
+  } finally {
+    draining = false
+    if (spitQueue.length && !tearing.value) void drainSpitQueue()
+  }
+}
+
+function enqueueNewToasts(ids) {
+  if (tearing.value) return
+  const known = new Set([...revealedIds.value, ...spitQueue])
+  let added = false
+  for (const id of ids) {
+    if (known.has(id)) continue
+    spitQueue.push(id)
+    known.add(id)
+    added = true
+  }
+  if (added) void drainSpitQueue()
+}
+
 async function tearOff(e) {
   e?.preventDefault?.()
   e?.stopPropagation?.()
   if (tearing.value || !liveItems.value.length) return
 
-  pendingGrow = false
-  animating = false
-  spitDriving.value = false
+  spitQueue = []
+  draining = false
   cancelRaf()
-  cancelSpitAnim()
+  cancelSpitRaf()
   cancelTearAnim()
 
   tearItems.value = liveItems.value.map((t) => ({ ...t }))
@@ -257,6 +356,11 @@ async function tearOff(e) {
     tearing.value = false
     tearDriving.value = false
     tearItems.value = []
+    revealedIds.value = []
+    toast.clear()
+    prevHeight = 0
+    wellH.value = 0
+    reportArea(false)
     return
   }
 
@@ -268,29 +372,17 @@ async function tearOff(e) {
 
   const holdWell = Math.max(wellH.value, measureReceipt(receipt) || MIN_PAPER_H, MIN_PAPER_H)
   wellH.value = holdWell
+  revealedIds.value = []
   toast.clear()
   prevHeight = 0
 
   const fall = Math.max(480, holdWell + 320)
-  // 一开始就拧开（约 -22°），坠落过程拧到 -38°，避免「只有下落没有扭转」
   tearAnim = receipt.animate(
     [
-      {
-        transform: 'translateY(0px) rotateZ(0deg) skewX(0deg)',
-        offset: 0,
-      },
-      {
-        transform: 'translateY(12px) rotateZ(-22deg) skewX(-8deg)',
-        offset: 0.12,
-      },
-      {
-        transform: `translateY(${fall * 0.45}px) rotateZ(-32deg) skewX(-10deg)`,
-        offset: 0.45,
-      },
-      {
-        transform: `translateY(${fall}px) rotateZ(-38deg) skewX(-12deg)`,
-        offset: 1,
-      },
+      { transform: 'translateY(0px) rotateZ(0deg) skewX(0deg)', offset: 0 },
+      { transform: 'translateY(12px) rotateZ(-22deg) skewX(-8deg)', offset: 0.12 },
+      { transform: `translateY(${fall * 0.45}px) rotateZ(-32deg) skewX(-10deg)`, offset: 0.45 },
+      { transform: `translateY(${fall}px) rotateZ(-38deg) skewX(-12deg)`, offset: 1 },
     ],
     {
       duration: 700,
@@ -299,7 +391,6 @@ async function tearOff(e) {
     },
   )
 
-  // 井高后半段收起
   const wellPromise = new Promise((resolve) => {
     const start = performance.now()
     const duration = 700
@@ -336,44 +427,28 @@ async function tearOff(e) {
 }
 
 watch(
-  () => toasts.value.map((t) => t.id).join(','),
-  (ids, prevIds) => {
+  () => toasts.value.map((t) => t.id),
+  (ids) => {
     if (tearing.value) return
-    if (!ids) {
-      prevHeight = 0
-      animating = false
-      pendingGrow = false
-      spitDriving.value = false
-      cancelRaf()
-      cancelSpitAnim()
-      cancelTearAnim()
-      spitY.value = 0
-      wellH.value = 0
-      reportArea(false)
+    if (!ids.length) {
+      resetSpitState()
       return
     }
-    const grew = !prevIds || ids.split(',').length > prevIds.split(',').length
-    if (grew) {
-      reportArea(true)
-      void spitGrow()
-    }
-    else {
-      nextTick(() => {
-        if (tearing.value) return
-        prevHeight = measureReceipt(receiptRef.value)
-        wellH.value = Math.min(Math.max(prevHeight, MIN_PAPER_H), SPIT_AREA_H)
-        spitY.value = 0
-        reportArea(true)
-      })
-    }
+    enqueueNewToasts(ids)
   },
+  { immediate: true },
 )
 
+onMounted(() => {
+  if (toasts.value.length) enqueueNewToasts(toasts.value.map((t) => t.id))
+})
+
 onBeforeUnmount(() => {
+  spitQueue = []
+  draining = false
   cancelRaf()
-  cancelSpitAnim()
+  cancelSpitRaf()
   cancelTearAnim()
-  reportArea(false)
 })
 </script>
 
@@ -402,7 +477,6 @@ onBeforeUnmount(() => {
 
       <div class="toast-stage relative z-30 -mt-[8px] w-full">
         <div
-          ref="wellRef"
           class="toast-spit-well w-full"
           :class="{ 'toast-spit-well--tearing': tearing }"
           :style="{ height: `${wellH}px` }"
@@ -412,7 +486,7 @@ onBeforeUnmount(() => {
             ref="receiptRef"
             data-no-drag
             class="toast-receipt relative z-40 m-0 w-full cursor-pointer px-3 py-2.5 font-mono text-[10px] text-zinc-800"
-            :class="{ 'toast-receipt--tearing': tearing }"
+            :class="{ 'toast-receipt--tearing': tearing || tearDriving }"
             :style="receiptStyle"
             role="button"
             tabindex="0"
