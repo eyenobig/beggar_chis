@@ -1,6 +1,6 @@
 [[permission]]
 identifier = "allow-download-file"
-description = "Allow downloading SkyEmu (and other files) via download_file, and extracting zip releases."
+description = "Allow toolchain asset download (SkyEmu/cfb/rule) via download_file, and extracting zip releases via extract_zip_exe."
 commands.allow = ["download_file", "extract_zip_exe"]
 
 [[permission]]

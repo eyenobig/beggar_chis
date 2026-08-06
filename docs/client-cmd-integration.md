@@ -1,50 +1,30 @@
 # Client and cfb integration
 
-`beggar_chis` does not link the Rust command project as a library. The desktop app starts the released `cfb` executable as a Tauri sidecar and exchanges newline-delimited JSON (NDJSON) over stdio.
+`beggar_chis` does not link the Rust command project as a library. The desktop app runs the released `cfb` executable (Tauri sidecar or Settings absolute bin path) and exchanges NDJSON over stdio.
 
-## Repository layout (architectural decision)
+**Agent / path truth:** [`.claude/skills/cfb-bridge/SKILL.md`](../.claude/skills/cfb-bridge/SKILL.md) — config only (`scripts/cfb-config.mjs`).
 
-`chis-burner-cmd` is a **separate, standalone repository** consumed only as a prebuilt binary — it is **intentionally NOT** a git submodule and is **NOT** nested inside `beggar_chis/`. This is a deliberate decision, not a leftover:
+## Repositories
 
-- **Decoupled release cadence.** cfb ships its own `v*` tags, CI, and GitHub Releases; `beggar_chis` pins a release via `CFB_RELEASE_TAG` and downloads the matching `cfb-<target>` asset. Neither repo blocks the other.
-- **Reusable by other clients** (Electron, etc.) — cfb is not hard-wired to Tauri.
-- **Submodule was tried and rejected.** An earlier submodule reference pointed at a commit that no longer existed, which broke CI checkout (`exit 128`) and had to be purged. Re-introducing a submodule would re-create that fragility.
+`chis-burner-cmd` is a **separate** repo ([GitHub](https://github.com/eyenobig/chis-burner-cmd)), intentionally **not** a git submodule.
 
-Layout during local development (the only place the sibling path matters):
+- Local source: `CFB_LOCAL_DIR` → `local-paths.json.cfbSourceDir` → default `../chis-burner-cmd`.
+- No `Cargo.toml` there / release: `CFB_GITHUB_REPO` (default `eyenobig/chis-burner-cmd`).
+- Submodule was tried and rejected (broken CI checkout).
 
-```text
-Z:\Project\
-  beggar_chis\        ← this repo
-  chis-burner-cmd\    ← separate repo; only dev builds read it
-```
-
-`npm run build:cfb:local` builds cfb from `../chis-burner-cmd` by default; override with `CFB_LOCAL_DIR` when it lives elsewhere. Production never reads this path — it downloads the sidecar.
+## Call stack
 
 ```text
-Vue components
-    |
-Pinia stores
-    |  named operations: detect(), readCartridge(), burnRom(), ...
-    v
-src/services/cfb/client.js
-    |  command names, flags, port/burn settings
-    v
-src/services/cfb/transport.js
-    |  Tauri Command.sidecar + NDJSON parsing
-    v
-src-tauri/binaries/cfb-<target>[.exe]
-    |  stdout: one JSON event per line
-    |  stderr: diagnostics
-    v
-chis-burner-cmd
+Vue / Pinia
+  → src/services/cfb/client.js   (command names / flags)
+  → src/services/cfb/transport.js  (sidecar or direct bin + NDJSON)
+  → cfb executable
 ```
 
-## Client boundary
-
-- `client.js` is the only place where UI code should know cfb command names and flags.
-- `transport.js` is the only place that imports `@tauri-apps/plugin-shell` or parses NDJSON.
-- Stores own application state and react to typed events; they do not assemble command arrays.
-- `useCfbSettings.js` owns persisted language, port and burn preferences. The client applies those preferences before transport starts a process.
+- `client.js` is the only place UI code should know cfb command names.
+- `transport.js` is the only place that talks to shell/NDJSON.
+- Stores own state; they do not assemble argv arrays.
+- `useCfbSettings.js` owns language / port / burn prefs and `cfbBinPath` (exe or bins dir — never source tree).
 
 ## Command map
 
@@ -55,26 +35,24 @@ chis-burner-cmd
 | `disconnect` | `disconnect --json` | buffered |
 | `setVoltage` | `voltage <value> --json` | buffered |
 | `readRomFile` | `rom-info --file <path> --json` | buffered |
+| `version` | `version --json` | buffered |
 | `readCartridge` | `info [--mbc] [--port] --json` | buffered |
 | `readRtc` | `rtc [--mbc] [--port] --json` | buffered |
 | `burnRom` | `burn --rom <path> ... --json` | streaming |
 | `erase` | `erase [--mbc] [--port] --json` | streaming |
 | `dumpRom` | `dump --out <path> ... --json` | streaming |
-
-Buffered commands use `executeCfb`; long operations use `streamCfb` so `progress`, `log`, `error` and `result` events reach the UI while the process is running.
+| `saveDump` / `saveWrite` / `saveVerify` / `saveErase` | `save-*` | streaming |
 
 ## Tauri boundary
 
-- Vue calls the sidecar directly through the Tauri Shell plugin; there is no custom Rust `invoke` proxy for cfb commands.
-
-- `src-tauri/tauri.conf.json` declares `binaries/cfb` as an external binary.
-- `src-tauri/capabilities/default.json` allows only that sidecar to execute/spawn.
-- The Tauri Rust backend is a thin shell (opener/shell/dialog plugins only). Device hotplug detection is manual: `useConnection.startWatching()` runs one initial `cfbClient.detect()` on startup, and re-detection happens via the connection dialog. (A native `device_watcher` was removed in favor of going through cfb exclusively.)
-- Development reuses a sidecar in `src-tauri/binaries`; `npm run build:cfb:local` refreshes it from the sibling repository.
-- Production workflows download a prebuilt sidecar from a `chis-burner-cmd` GitHub Release.
+- Vue drives cfb via shell plugin / direct invoke; no custom Rust invoke proxy for each CLI verb.
+- `tauri.conf.json` declares `binaries/cfb`; capabilities allow that sidecar.
+- Dev: `ensure:cfb` keeps `src-tauri/binaries` current (download or optional local build).
+- Prod: Release download / updater under app-data toolchain.
 
 ## Protocol
 
-Every stdout line in `--json` mode is one JSON object with a `type` discriminator. Diagnostics belong on stderr. The canonical event schema is maintained in `chis-burner-cmd/docs/client-protocol.md` and implemented by `chis-burner-cmd/src/event.rs`.
+Stdout: one JSON object per line with `type`. Stderr: diagnostics only.
+Canonical schema: chis-burner-cmd `docs/client-protocol.md` / `src/event.rs` / skill `cfb-output`.
 
-When adding a command, update the cmd event schema first, add one named method to `client.js`, and keep event-to-state handling in the relevant store.
+New operations: update cmd schema first, then one named method on `client.js`, then store handlers.

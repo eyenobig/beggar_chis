@@ -190,6 +190,7 @@ export const useCartData = defineStore('cart', () => {
 
   const romFile = ref(null) // { name, path, mbc }
   const saveFile = ref(null) // { name, path, size? }
+  const saveType = ref('sram')
 
   const drawerOpen = ref(false)
   const drawerKind = ref('rom') // 'rom' | 'save'
@@ -933,7 +934,7 @@ export const useCartData = defineStore('cart', () => {
         const pct = total ? Math.round((done / total) * 100) : 0
         return `读取存档 ${dKb} / ${tKb} KB (${pct}%)`
       }
-      const { error } = await cfbClient.saveDump({ outputPath: outPath, mbc: mbcArgs() }, (ev) => {
+      const { error } = await cfbClient.saveDump({ outputPath: outPath, mbc: mbcArgs(), type: saveType.value }, (ev) => {
         if (ev.type === 'progress') {
           progress.value = { done: ev.done, total: ev.total }
           taskProgress.updateProgress(taskId, ev.done, ev.total)
@@ -975,6 +976,21 @@ export const useCartData = defineStore('cart', () => {
   async function saveWrite() {
     const f = saveFile.value
     if (!f || opRunning.value) return
+
+    if (!conn.isConnected) {
+      const msg = conn.needsSelection ? t('conn.selectHint') : t('rom.hint.connect')
+      toast.error(msg)
+      logStore.addLog(msg, 'warn')
+      if (conn.needsSelection || !conn.selectedPort) conn.openDialog()
+      return
+    }
+    if (!flashInfo.value) {
+      const msg = cartError.value || t('rom.op.identifyEmpty')
+      toast.error(msg)
+      logStore.addLog(msg, 'warn')
+      return
+    }
+
     opRunning.value = true
     opKind.value = 'saveWrite'
     opResult.value = null
@@ -992,7 +1008,7 @@ export const useCartData = defineStore('cart', () => {
         const pct = total ? Math.round((done / total) * 100) : 0
         return `写入存档 ${dKb} / ${tKb} KB (${pct}%)`
       }
-      const { error } = await cfbClient.saveWrite({ savePath: f.path, mbc: mbcArgs() }, (ev) => {
+      const { error } = await cfbClient.saveWrite({ savePath: f.path, mbc: mbcArgs(), type: saveType.value }, (ev) => {
         if (ev.type === 'progress') {
           progress.value = { done: ev.done, total: ev.total }
           taskProgress.updateProgress(taskId, ev.done, ev.total)
@@ -1033,7 +1049,28 @@ export const useCartData = defineStore('cart', () => {
   /** 校验存档（cfb save-verify，只读比对）。镜像 saveWrite，结果含 mismatch_bytes。 */
   async function saveVerify() {
     const f = saveFile.value
-    if (!f || opRunning.value) return
+    if (opRunning.value) return
+    if (!f) {
+      const msg = t('rom.op.verifyNeedSave')
+      toast.error(msg)
+      logStore.addLog(msg, 'warn')
+      return
+    }
+
+    if (!conn.isConnected) {
+      const msg = conn.needsSelection ? t('conn.selectHint') : t('rom.hint.connect')
+      toast.error(msg)
+      logStore.addLog(msg, 'warn')
+      if (conn.needsSelection || !conn.selectedPort) conn.openDialog()
+      return
+    }
+    if (!flashInfo.value) {
+      const msg = cartError.value || t('rom.op.identifyEmpty')
+      toast.error(msg)
+      logStore.addLog(msg, 'warn')
+      return
+    }
+
     opRunning.value = true
     opKind.value = 'saveVerify'
     opResult.value = null
@@ -1041,17 +1078,18 @@ export const useCartData = defineStore('cart', () => {
     opLogs.value = []
     saveInfo.value = null
     _opAborted = false
-    const taskId = taskProgress.startTask({ kind: 'saveVerify', title: '校验存档', detail: f.name || '' })
-    logStore.addLog(`开始校验存档 ${f.name}`, 'warn')
+    const taskId = taskProgress.startTask({ kind: 'saveVerify', title: t('rom.op.verifyTitle'), detail: f.name || '' })
+    logStore.addLog(t('rom.op.verifyStart', { name: f.name }), 'warn')
+    toast.info(t('rom.op.verifyStart', { name: f.name }))
     try {
       let progId = null
       const fmt = (done, total) => {
         const dKb = (done / 1024).toFixed(0)
         const tKb = (total / 1024).toFixed(0)
         const pct = total ? Math.round((done / total) * 100) : 0
-        return `校验存档 ${dKb} / ${tKb} KB (${pct}%)`
+        return `${t('rom.op.verifyTitle')} ${dKb} / ${tKb} KB (${pct}%)`
       }
-      const { error } = await cfbClient.saveVerify({ savePath: f.path, mbc: mbcArgs() }, (ev) => {
+      const { error } = await cfbClient.saveVerify({ savePath: f.path, mbc: mbcArgs(), type: saveType.value }, (ev) => {
         if (ev.type === 'progress') {
           progress.value = { done: ev.done, total: ev.total }
           taskProgress.updateProgress(taskId, ev.done, ev.total)
@@ -1069,22 +1107,34 @@ export const useCartData = defineStore('cart', () => {
         else if (ev.type === 'result') opResult.value = { ...ev }
         else if (ev.type === 'error') { opResult.value = { ok: false, error: ev.message }; logStore.addLog(ev.message, 'error') }
       }, (child) => { _opChild = child })
-      if (_opAborted) opResult.value = { ok: false, error: '已中断', aborted: true }
+      if (_opAborted) opResult.value = { ok: false, error: t('rom.op.verifyAbort'), aborted: true }
       else if (error && !opResult.value) { opResult.value = { ok: false, error }; logStore.addLog(error, 'error') }
     } catch (e) {
-      if (_opAborted) opResult.value = { ok: false, error: '已中断', aborted: true }
+      if (_opAborted) opResult.value = { ok: false, error: t('rom.op.verifyAbort'), aborted: true }
       else { const msg = String(e?.message || e); opResult.value = { ok: false, error: msg }; logStore.addLog(msg, 'error') }
     } finally {
       _opChild = null
       opRunning.value = false
       if (!opResult.value) {
-        opResult.value = { ok: false, error: _opAborted ? '已中断' : '操作未返回结果', aborted: _opAborted }
+        opResult.value = { ok: false, error: _opAborted ? t('rom.op.verifyAbort') : t('rom.op.verifyNoResult'), aborted: _opAborted }
         if (!_opAborted) logStore.addLog(opResult.value.error, 'error')
       }
-      if (opResult.value?.ok) { taskProgress.completeTask(taskId); logStore.addLog('存档校验完成', 'success') }
-      else if (opResult.value && !opResult.value.ok) {
+      if (opResult.value?.ok) {
+        taskProgress.completeTask(taskId)
+        const mismatch = Number(opResult.value.mismatch_bytes) || 0
+        if (mismatch > 0) {
+          const msg = t('rom.op.verifyMismatch', { n: mismatch })
+          logStore.addLog(msg, 'warn')
+          toast.error(msg)
+        } else {
+          const msg = t('rom.op.verifyOk')
+          logStore.addLog(msg, 'success')
+          toast.success(msg)
+        }
+      } else if (opResult.value && !opResult.value.ok) {
         taskProgress.failTask(taskId, opResult.value.error)
-        if (!opResult.value.aborted) toast.error(opResult.value.error || '存档校验失败')
+        if (!opResult.value.aborted) toast.error(opResult.value.error || t('rom.op.verifyFail'))
+        else toast.info(t('rom.op.verifyAbort'))
       }
     }
   }
@@ -1109,8 +1159,9 @@ export const useCartData = defineStore('cart', () => {
         const pct = total ? Math.round((done / total) * 100) : 0
         return `擦除存档 ${dKb} / ${tKb} KB (${pct}%)`
       }
-      const len = cartInfo.value?.save_size_bytes || undefined
-      const { error } = await cfbClient.saveErase({ mbc: mbcArgs(), len }, (ev) => {
+      const isEeprom = saveType.value === 'eeprom4k' || saveType.value === 'eeprom64k'
+      const len = isEeprom ? undefined : (cartInfo.value?.save_size_bytes || undefined)
+      const { error } = await cfbClient.saveErase({ mbc: mbcArgs(), type: saveType.value, len }, (ev) => {
         if (ev.type === 'progress') {
           progress.value = { done: ev.done, total: ev.total }
           taskProgress.updateProgress(taskId, ev.done, ev.total)
@@ -1192,11 +1243,17 @@ export const useCartData = defineStore('cart', () => {
       }, 250)
     },
   )
+  watch(preferMbc, (isMbc) => {
+    if (isMbc && ['eeprom4k', 'eeprom64k', 'flash'].includes(saveType.value)) {
+      saveType.value = 'sram'
+    }
+  })
   // 展开 ROM / 切到 ROM 页不自动读卡；仅手动点「识别」才刷新
 
   return {
     romFile,
     saveFile,
+    saveType,
     drawerOpen,
     drawerKind,
     currentFile,

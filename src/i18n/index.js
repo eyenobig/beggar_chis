@@ -1,6 +1,7 @@
 // 基于 vue-i18n 的多语言配置
 // 新增语言：在 locales/ 下加 <code>.json，并在下方两处（import + messages + SUPPORTED）登记
 import { createI18n } from "vue-i18n";
+import { getLocalLocale, getLocalSettings, loadLocalConfig, saveLocalConfig } from "../services/localConfig";
 import zhCN from "./locales/zh-CN.json";
 import en from "./locales/en.json";
 import ja from "./locales/ja.json";
@@ -33,9 +34,6 @@ export const SUPPORTED = {
   ru: "Русский",
 };
 
-const PREF_KEY = "app-locale-pref"; // auto | zh-CN | en | …
-const STORAGE_KEY = "app-locale"; // 解析后的实际 locale
-
 export function detectSystemLocale() {
   const lang = (typeof navigator !== "undefined" ? navigator.language : "" || "").toLowerCase();
   if (lang.startsWith("zh")) return "zh-CN";
@@ -45,13 +43,12 @@ export function detectSystemLocale() {
 
 /** 读取偏好：auto 或具体语言码 */
 export function getLocalePreference() {
-  if (typeof localStorage === "undefined") return "auto";
-  const pref = localStorage.getItem(PREF_KEY);
+  const locale = getLocalLocale();
+  const pref = locale.pref || getLocalSettings().language;
   if (pref === "auto") return "auto";
   if (pref && messages[pref]) return pref;
-  // 兼容旧版只存了 app-locale
-  const legacy = localStorage.getItem(STORAGE_KEY);
-  if (legacy && messages[legacy]) return legacy;
+  // 兼容旧版只存了 resolved
+  if (locale.resolved && messages[locale.resolved]) return locale.resolved;
   return "auto";
 }
 
@@ -60,15 +57,15 @@ export function resolveLocale(pref) {
   return messages[pref] ? pref : detectSystemLocale();
 }
 
-/** 应用语言偏好（auto / 具体码），同步 vue-i18n + localStorage */
+/** 应用语言偏好（auto / 具体码），同步 vue-i18n + 统一本地配置 */
 export function applyLocalePreference(pref) {
   const normalized = !pref || pref === "auto" ? "auto" : messages[pref] ? pref : "auto";
   const resolved = resolveLocale(normalized);
   i18n.global.locale.value = resolved;
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem(PREF_KEY, normalized);
-    localStorage.setItem(STORAGE_KEY, resolved);
-  }
+  const doc = loadLocalConfig();
+  doc.locale = { ...doc.locale, pref: normalized, resolved };
+  doc.settings = { ...doc.settings, language: normalized };
+  saveLocalConfig(doc);
   return resolved;
 }
 

@@ -1,11 +1,14 @@
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
-import { dirname } from '@tauri-apps/api/path'
 import { inTauri, cfbClient } from '../services/cfb'
-import { downloadSkyEmuTo, resolveSkyEmuRelease } from '../services/skyemu'
+import { downloadSkyEmuTo, resolveSkyEmuRelease } from '../services/toolchain'
+import {
+  pickAssetDestDir,
+  resolveAssetDestDir,
+  runToolchainDownloadTask,
+} from './useToolchainDownload'
 import { useEmulator, BOOKMARK_IDS } from '../stores/useEmulator'
 import { useConnection } from '../stores/useConnection'
 import { useCartData } from '../stores/useCartData'
@@ -33,26 +36,6 @@ export function useSkyEmuDownload() {
 
   /** DirectPlay / SkyEmu 启动仅支持 GBA；平台 `gbc` 含 GB&GBC。 */
   const emulatorSupported = computed(() => currentPlatform.value !== 'gbc')
-
-  async function resolveDestDir(path) {
-    if (!path) return null
-    const normalized = String(path).replace(/[/\\]+$/, '')
-    if (/\.(exe|dmg|zip|AppImage)$/i.test(normalized)) {
-      return await dirname(normalized)
-    }
-    return normalized
-  }
-
-  async function pickDestDir() {
-    const selected = await openDialog({
-      directory: true,
-      multiple: false,
-      title: '选择 SkyEmu 保存路径',
-      defaultPath: (await resolveDestDir(skyEmuPath.value)) || undefined,
-    })
-    if (!selected) return null
-    return typeof selected === 'string' ? selected : selected[0]
-  }
 
   function openSettingsWithProgress() {
     emu.openBookmark(BOOKMARK_IDS.settings)
@@ -128,49 +111,42 @@ export function useSkyEmuDownload() {
     }
 
     downloading.value = true
-    let taskId = null
     try {
-      let destDir = await resolveDestDir(skyEmuPath.value)
+      let destDir = await resolveAssetDestDir(skyEmuPath.value)
       if (!destDir) {
-        destDir = await pickDestDir()
+        destDir = await pickAssetDestDir({
+          title: '选择 SkyEmu 保存路径',
+          defaultPath: await resolveAssetDestDir(skyEmuPath.value),
+        })
         if (!destDir) return
         emu.setSkyEmuPath(destDir)
       }
 
-      openSettingsWithProgress()
-      taskId = taskProgress.startTask({
-        kind: 'download',
+      await runToolchainDownloadTask({
         title: '下载 SkyEmu',
         detail: destDir,
-      })
-      emu.addLog('开始下载 SkyEmu…', 'warn')
+        addLog: (msg, level) => emu.addLog(msg, level),
+        onOpenProgress: openSettingsWithProgress,
+        run: async ({ taskId, updateDetail, updateProgress }) => {
+          const release = await resolveSkyEmuRelease()
+          updateDetail(`${release.tag} · ${release.name}`)
+          if (release.size > 0) updateProgress(0, release.size)
 
-      const release = await resolveSkyEmuRelease()
-      taskProgress.updateTask(taskId, { detail: `${release.tag} · ${release.name}` })
-      if (release.size > 0) {
-        taskProgress.updateProgress(taskId, 0, release.size)
-      }
-
-      const dest = await downloadSkyEmuTo({
-        url: release.url,
-        destDir,
-        fileName: release.name,
-        taskId,
-        onProgress: (done, total) => {
-          taskProgress.updateProgress(taskId, done, total || release.size || 0)
+          const dest = await downloadSkyEmuTo({
+            url: release.url,
+            destDir,
+            fileName: release.name,
+            taskId,
+            onProgress: (done, total) => {
+              updateProgress(done, total || release.size || 0)
+            },
+          })
+          emu.setSkyEmuPath(dest)
+          return dest
         },
       })
-
-      emu.setSkyEmuPath(dest)
-      taskProgress.completeTask(taskId, dest)
-      const msg = `SkyEmu 已下载 · ${release.name}`
-      toast.success(msg)
-      emu.addLog(`${msg}\n${dest}`, 'success')
-    } catch (error) {
-      const msg = String(error?.message || error || '下载失败')
-      if (taskId != null) taskProgress.failTask(taskId, msg)
-      toast.error(msg)
-      emu.addLog(msg, 'error')
+    } catch {
+      // toast/log already handled in runToolchainDownloadTask
     } finally {
       downloading.value = false
     }
@@ -183,6 +159,10 @@ export function useSkyEmuDownload() {
     emulatorSupported,
     downloadSkyEmu,
     launchSkyEmu,
-    pickDestDir,
+    pickDestDir: () =>
+      pickAssetDestDir({
+        title: '选择 SkyEmu 保存路径',
+        defaultPath: skyEmuPath.value || undefined,
+      }),
   }
 }

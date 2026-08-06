@@ -1,94 +1,75 @@
-<script setup>
-import { computed, ref, watch } from 'vue'
+﻿<script setup>
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ImageUp, Pencil, Plus, X } from '@lucide/vue'
+import { openUrl } from '@tauri-apps/plugin-opener'
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus, Check } from '@lucide/vue'
 import { useCartData } from '../../../../stores/useCartData'
 import { useCartridgeCache } from '../../../../stores/useCartridgeCache'
-import { findFlashRomGroup, submitFlashSticker, updateFlashRom } from '../../../../services/flashRom'
+import { useEmulator } from '../../../../stores/useEmulator'
+import { findFlashRomGroup, approvedStickersOf } from '../../../../services/flashRom'
+import { buildGbmakeStickerUrl, resolveStickerMode } from '../../../../services/gbmakeStickerUrl'
 import { gameCodeOf, romTitleOf } from './romFields'
-
-const REGION_OPTIONS = ['jp', 'us', 'eu', 'de', 'fr', 'es', 'it', 'cn', 'kr', 'au', 'world']
 
 const cart = useCartData()
 const cache = useCartridgeCache()
+const emu = useEmulator()
 const { cartInfo } = storeToRefs(cart)
 const { activePayload } = storeToRefs(cache)
 
 const matches = ref([])
 const loading = ref(false)
 const loadError = ref('')
-const sliderTrack = ref(null)
 const activeStickerId = ref('')
 const selectedRomId = ref('')
+/** 下缩隐藏贴纸主体，仅保留顶栏；默认折叠 */
+const shelfCollapsed = ref(true)
+const titleTrack = ref(null)
+const titleText = ref(null)
+const titleHover = ref(false)
+const titleOverflowPx = ref(0)
+const titleScrollMs = ref(0)
 let loadSequence = 0
-
-const romEditOpen = ref(false)
-const regionMenuOpen = ref(false)
-const romSaving = ref(false)
-const romError = ref('')
-const romForm = ref({ title: '', region: 'world', serialCode: '', revision: '', cartridgeImage: '' })
-
-const uploadOpen = ref(false)
-const uploading = ref(false)
-const uploadError = ref('')
-const uploadResult = ref('')
-const uploadForm = ref({
-  romId: '',
-  name: '',
-  description: '',
-  previewBase64: '',
-  previewMimetype: 'image/png',
-  fileName: '',
-})
 
 const identity = computed(() => gameCodeOf(cartInfo.value) || romTitleOf(cartInfo.value) || '')
 const canShow = computed(() => !!cartInfo.value && !!identity.value)
 
 function stickersOf(rom) {
-  const raw = rom?.stickers
-  return Array.isArray(raw) ? raw : Array.isArray(raw?.docs) ? raw.docs : []
+  return approvedStickersOf(rom)
 }
 
-const stickerItems = computed(() => matches.value.flatMap((rom) =>
-  stickersOf(rom).map((sticker) => ({ rom, sticker })),
-))
 const selectedRom = computed(() =>
   matches.value.find((rom) => String(rom.id) === String(selectedRomId.value))
   || matches.value.find((rom) => String(rom.id) === String(activePayload.value))
   || matches.value[0]
   || null,
 )
-const activeSticker = computed(() =>
-  stickerItems.value.find((item) => String(item.sticker.id) === String(activeStickerId.value)) || null,
-)
-const selectedSticker = computed(() => {
-  if (activeSticker.value && String(activeSticker.value.rom.id) === String(selectedRom.value?.id)) {
-    return activeSticker.value
-  }
-  return stickerItems.value.find((item) => String(item.rom.id) === String(selectedRom.value?.id)) || null
+const headerTitle = computed(() => selectedRom.value?.title || romTitleOf(cartInfo.value) || '—')
+const titleScrollStyle = computed(() => ({
+  '--title-shift': titleHover.value && titleOverflowPx.value > 0
+    ? `-${titleOverflowPx.value}px`
+    : '0px',
+  '--title-duration': `${titleScrollMs.value}ms`,
+}))
+/** 当前选中 ROM 的贴纸。 */
+const currentStickers = computed(() => stickersOf(selectedRom.value))
+/** 加号卡片比例：跟随当前机型贴纸尺寸（GBA 44×23、GB 44×38），与贴纸卡片同高。
+ *  GBA 宽扁、GB 接近方形；无卡带时回落 GB 比例。 */
+const editCardStyle = computed(() => {
+  const mode = resolveStickerMode(selectedRom.value, currentStickers.value[0])
+  // GBA bleed 44×23mm，GB bleed 44×38mm（width/height）。
+  return { aspectRatio: mode === 'gba' ? '44 / 23' : '44 / 38' }
 })
-const uploadRom = computed(() =>
-  matches.value.find((rom) => String(rom.id) === String(uploadForm.value.romId)) || null,
-)
-
+/** ROM 指示：当前是第几个 / 共几个。 */
+const romIndexLabel = computed(() => {
+  const list = matches.value
+  if (!list.length) return ''
+  const cur = selectedRom.value
+  const idx = cur ? list.findIndex((rom) => String(rom.id) === String(cur.id)) : -1
+  return `${Math.max(idx, 0) + 1} / ${list.length}`
+})
 function regionFlagUrl(region) {
   const code = String(region || '').toLowerCase()
   return code && code !== 'world' ? `https://flagcdn.com/24x18/${code}.png` : ''
-}
-
-function selectRegion(region) {
-  romForm.value.region = region
-  regionMenuOpen.value = false
-}
-
-function closeRegionMenu(event) {
-  if (!event.currentTarget.contains(event.relatedTarget)) regionMenuOpen.value = false
-}
-
-
-function romTag(rom) {
-  const index = matches.value.findIndex((item) => String(item.id) === String(rom?.id))
-  return `ROM ${Math.max(index, 0) + 1}`
 }
 
 function selectRomCartridge(rom) {
@@ -97,9 +78,33 @@ function selectRomCartridge(rom) {
   else cache.clearActive()
 }
 
-function selectSticker(item) {
+function isActiveSticker(sticker) {
+  return String(activeStickerId.value) === String(sticker?.id)
+}
+
+async function openGbmakePage({ rom = null, sticker = null } = {}) {
+  const url = buildGbmakeStickerUrl({
+    rom: rom || selectedRom.value,
+    sticker,
+    cartInfo: cartInfo.value,
+  })
+  try {
+    await openUrl(url)
+  } catch {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+}
+
+/** 点击贴纸：选中并直接跳转 gbmake（带 sticker + ROM 参数堆）。 */
+async function openStickerPage(item) {
   activeStickerId.value = String(item.sticker.id)
   selectRomCartridge(item.rom)
+  await openGbmakePage({ rom: item.rom, sticker: item.sticker })
+}
+
+/** 加号：新建贴纸，只带当前 ROM 参数堆。 */
+async function openGbmakeEditor() {
+  await openGbmakePage({ rom: selectedRom.value, sticker: null })
 }
 
 async function loadMatches() {
@@ -119,12 +124,12 @@ async function loadMatches() {
     matches.value = docs
     const initialRom = docs.find((rom) => String(rom.id) === String(activePayload.value)) || docs[0]
     selectedRomId.value = String(initialRom?.id || '')
-    const firstSticker = stickerItems.value.find((item) => String(item.rom.id) === String(initialRom?.id))
-      || stickerItems.value[0]
-    activeStickerId.value = String(firstSticker?.sticker?.id || '')
+    activeStickerId.value = String(stickersOf(initialRom)[0]?.id || '')
     if (initialRom?.cartridgeImage) cache.remember(cartInfo.value, initialRom)
   } catch (error) {
-    if (sequence === loadSequence) loadError.value = String(error?.message || error)
+    if (sequence === loadSequence) {
+      loadError.value = String(error?.message || error)
+    }
   } finally {
     if (sequence === loadSequence) loading.value = false
   }
@@ -136,300 +141,201 @@ watch(
   { immediate: true },
 )
 
-function scrollSlider(direction) {
-  sliderTrack.value?.scrollBy({ left: direction * 220, behavior: 'smooth' })
+/** 左右按钮：在 matches 数组里切换当前 ROM（而非滚动）。 */
+function switchRom(direction) {
+  const list = matches.value
+  if (!list.length) return
+  const current = selectedRom.value
+  const idx = current ? list.findIndex((rom) => String(rom.id) === String(current.id)) : -1
+  const next = (idx + direction + list.length) % list.length
+  selectRomCartridge(list[next])
 }
 
-function openRomEdit() {
-  const rom = selectedRom.value
-  if (!rom) return
-  romForm.value = {
-    title: rom.title || '',
-    region: rom.region || 'world',
-    serialCode: rom.serialCode || '',
-    revision: rom.revision || '',
-    cartridgeImage: rom.cartridgeImage || '',
-  }
-  romError.value = ''
-  regionMenuOpen.value = false
-  uploadOpen.value = false
-  romEditOpen.value = true
+function prevRom() {
+  switchRom(-1)
 }
 
-async function saveRomEdit() {
-  const rom = selectedRom.value
-  if (!rom) return
-  romError.value = ''
-  if (!romForm.value.title.trim()) {
-    romError.value = '请填写 ROM 标题。'
+function nextRom() {
+  switchRom(1)
+}
+
+function toggleShelfCollapsed() {
+  shelfCollapsed.value = !shelfCollapsed.value
+  emu.romShelfCollapsed = shelfCollapsed.value
+}
+
+watch(shelfCollapsed, (v) => {
+  emu.romShelfCollapsed = v
+}, { immediate: true })
+
+onBeforeUnmount(() => {
+  emu.romShelfCollapsed = false
+})
+
+async function measureTitleOverflow() {
+  await nextTick()
+  const track = titleTrack.value
+  const text = titleText.value
+  if (!track || !text) {
+    titleOverflowPx.value = 0
+    titleScrollMs.value = 0
     return
   }
-  romSaving.value = true
-  try {
-    const saved = await updateFlashRom(rom.id, {
-      title: romForm.value.title.trim(),
-      region: romForm.value.region,
-      serialCode: romForm.value.serialCode.trim(),
-      revision: romForm.value.revision.trim(),
-      cartridgeImage: romForm.value.cartridgeImage.trim(),
-    })
-    romEditOpen.value = false
-    await loadMatches()
-    const refreshed = matches.value.find((item) => String(item.id) === String(saved?.id)) || saved
-    if (refreshed?.cartridgeImage) cache.remember(cartInfo.value, refreshed)
-  } catch (error) {
-    romError.value = String(error?.message || error)
-  } finally {
-    romSaving.value = false
-  }
+  const overflow = Math.max(0, text.scrollWidth - track.clientWidth)
+  titleOverflowPx.value = overflow
+  // ~40px/s，最短 600ms，最长 6s
+  titleScrollMs.value = overflow > 0 ? Math.min(6000, Math.max(600, Math.round(overflow * 25))) : 0
 }
 
-function openStickerUpload() {
-  const rom = selectedRom.value
-  uploadForm.value = {
-    romId: String(rom?.id || ''),
-    name: rom?.title || romTitleOf(cartInfo.value) || '',
-    description: '',
-    previewBase64: '',
-    previewMimetype: 'image/png',
-    fileName: '',
-  }
-  uploadError.value = ''
-  uploadResult.value = ''
-  romEditOpen.value = false
-  uploadOpen.value = true
+function onTitleEnter() {
+  titleHover.value = true
+  measureTitleOverflow()
 }
 
-function closeEditor() {
-  romEditOpen.value = false
-  uploadOpen.value = false
-  regionMenuOpen.value = false
+function onTitleLeave() {
+  titleHover.value = false
 }
 
-function onStickerFile(event) {
-  const file = event.target?.files?.[0]
-  if (!file) return
-  uploadError.value = ''
-  if (!String(file.type).startsWith('image/')) {
-    uploadError.value = '请选择图片文件。'
-    return
-  }
-  const reader = new FileReader()
-  reader.onload = () => {
-    uploadForm.value.previewBase64 = String(reader.result || '')
-    uploadForm.value.previewMimetype = file.type || 'image/png'
-    uploadForm.value.fileName = file.name
-  }
-  reader.onerror = () => { uploadError.value = '读取图片失败。' }
-  reader.readAsDataURL(file)
-}
-
-async function submitSticker() {
-  uploadError.value = ''
-  uploadResult.value = ''
-  if (!uploadForm.value.romId) {
-    uploadError.value = '请选择对应 ROM。'
-    return
-  }
-  if (!uploadForm.value.name.trim()) {
-    uploadError.value = '请填写贴纸名称。'
-    return
-  }
-  if (!uploadForm.value.previewBase64) {
-    uploadError.value = '请选择需要上传的贴纸图片。'
-    return
-  }
-  uploading.value = true
-  try {
-    const result = await submitFlashSticker({
-      romId: uploadForm.value.romId,
-      name: uploadForm.value.name.trim(),
-      description: uploadForm.value.description.trim() || undefined,
-      visibility: 'public',
-      config: {},
-      previewBase64: uploadForm.value.previewBase64,
-      previewMimetype: uploadForm.value.previewMimetype,
-    })
-    uploadResult.value = result.status === 'review'
-      ? '上传成功，贴纸已进入审核队列。'
-      : '上传成功。'
-    await loadMatches()
-  } catch (error) {
-    uploadError.value = String(error?.message || error)
-  } finally {
-    uploading.value = false
-  }
-}
+watch(headerTitle, () => {
+  titleHover.value = false
+  measureTitleOverflow()
+})
 </script>
 
 <template>
-  <section v-if="canShow" class="shrink-0 bg-transparent px-2 py-1.5">
-    <div class="flex items-center gap-1">
-      <button data-no-drag type="button" class="shelf-control" aria-label="上一组贴纸" @click="scrollSlider(-1)">
+  <section
+    v-if="canShow"
+    class="rom-shelf shrink-0 bg-transparent px-2 pb-0 pt-0"
+    :class="{ 'is-collapsed': shelfCollapsed }"
+  >
+    <!-- 顶部：切 ROM + 标题 + 国旗/序号 + 折叠 -->
+    <div class="flex shrink-0 items-center gap-1 leading-none">
+      <button data-no-drag type="button" class="shelf-control" aria-label="上一个 ROM" :disabled="matches.length < 2" @click="prevRom">
         <ChevronLeft class="h-4 w-4" :stroke-width="2.5" />
       </button>
 
-      <div ref="sliderTrack" class="no-scrollbar flex min-w-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto px-2 py-3">
-        <button
-          v-for="item in stickerItems"
-          :key="`${item.rom.id}:${item.sticker.id}`"
-          data-no-drag
-          type="button"
-          class="relative flex h-[82px] w-[94px] shrink-0 snap-start flex-col items-center justify-center bg-transparent text-center transition hover:-translate-y-0.5"
-          :class="String(activeStickerId) === String(item.sticker.id) ? 'opacity-100' : 'opacity-75 hover:opacity-100'"
-          :title="`${item.sticker.name || item.rom.title} → ${item.rom.title}`"
-          @click="selectSticker(item)"
+      <div class="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-1">
+        <div
+          ref="titleTrack"
+          class="title-marquee min-w-0 flex-1"
+          :title="headerTitle"
+          @mouseenter="onTitleEnter"
+          @mouseleave="onTitleLeave"
         >
           <span
-            v-if="String(activeStickerId) === String(item.sticker.id)"
-            class="pointer-events-none absolute left-1/2 top-[35px] z-0 h-12 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_3px_#18181b,0_0_0_7px_rgba(255,255,255,0.92),0_0_18px_8px_rgba(24,24,27,0.38)]"
-            aria-hidden="true"
-          />
-          <span class="absolute right-0.5 top-0 z-20 flex h-[18px] w-6 items-center justify-center" :title="item.rom.region || 'world'">
-            <img v-if="regionFlagUrl(item.rom.region)" :src="regionFlagUrl(item.rom.region)" :alt="item.rom.region" class="h-[14px] w-[19px] rounded-[2px] object-cover" />
-            <span v-else class="text-sm leading-none">🌐</span>
-          </span>
-          <img
-            :src="item.sticker.image"
-            :alt="item.sticker.name || item.rom.title"
-            class="relative z-10 max-h-[48px] max-w-[84px] object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.24)]"
-          />
-          <span class="relative z-20 mt-1 rounded border border-black bg-white px-1.5 py-px text-[7px] font-black leading-none text-black shadow-[1px_1px_0_#18181b]">
-            {{ romTag(item.rom) }}
-          </span>
-
-        </button>
-
-        <div v-if="!loading && stickerItems.length === 0" class="flex h-[82px] min-w-[150px] items-center text-[9px] text-zinc-600">
-          暂无已通过贴纸
+            ref="titleText"
+            class="title-marquee__text inline-block text-[10px] font-bold whitespace-nowrap text-black"
+            :class="{ 'is-hover': titleHover }"
+            :style="{ ...titleScrollStyle, textShadow: '1px 1px 0 #fff, -1px 1px 0 #fff, 1px -1px 0 #fff, -1px -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff, 0 1px 0 #fff, 0 -1px 0 #fff' }"
+          >{{ headerTitle }}</span>
         </div>
+        <span class="inline-flex shrink-0 items-center gap-1">
+          <img
+            v-if="regionFlagUrl(selectedRom?.region)"
+            :src="regionFlagUrl(selectedRom?.region)"
+            :alt="selectedRom?.region"
+            class="h-[12px] w-[17px] rounded-[2px] object-cover"
+          />
+          <span
+            v-if="romIndexLabel"
+            class="rounded border border-black bg-white px-1 py-px text-[7px] font-black leading-none text-black shadow-[1px_1px_0_#18181b]"
+          >{{ romIndexLabel }}</span>
+        </span>
       </div>
 
-      <button data-no-drag type="button" class="shelf-control" aria-label="下一组贴纸" @click="scrollSlider(1)">
+      <button data-no-drag type="button" class="shelf-control" aria-label="下一个 ROM" :disabled="matches.length < 2" @click="nextRom">
         <ChevronRight class="h-4 w-4" :stroke-width="2.5" />
       </button>
 
       <button
         data-no-drag
         type="button"
-        :disabled="!selectedRom"
-        class="shelf-control ml-1 disabled:cursor-not-allowed disabled:opacity-35"
-        title="编辑对应 ROM 与卡带"
-        @click="openRomEdit"
+        class="shelf-control ml-1"
+        :title="shelfCollapsed ? '展开贴纸' : '下缩隐藏贴纸'"
+        :aria-label="shelfCollapsed ? '展开贴纸' : '下缩隐藏贴纸'"
+        :aria-expanded="!shelfCollapsed"
+        @click="toggleShelfCollapsed"
       >
-        <Pencil class="h-3.5 w-3.5" :stroke-width="2.5" />
-      </button>
-
-      <button data-no-drag type="button" class="shelf-control ml-1" title="上传新贴纸" @click="openStickerUpload">
-        <Plus class="h-4 w-4" :stroke-width="2.5" />
+        <ChevronUp v-if="shelfCollapsed" class="h-4 w-4" :stroke-width="2.5" />
+        <ChevronDown v-else class="h-4 w-4" :stroke-width="2.5" />
       </button>
     </div>
 
-    <p v-if="loadError" class="mt-1 px-7 text-[8px] text-red-400">{{ loadError }}</p>
-  </section>
+    <Transition name="shelf-body">
+      <div v-show="!shelfCollapsed" class="shelf-body">
+        <!-- 外层滚动 + 内层水平优先 grid；末尾加号跳转 gbmake -->
+        <div
+          data-no-drag
+          class="sticker-scroll"
+          @wheel.stop
+        >
+          <div class="sticker-grid">
+            <button
+              v-for="sticker in currentStickers"
+              :key="sticker.id"
+              data-no-drag
+              type="button"
+              class="sticker-card relative bg-transparent text-center"
+              :class="isActiveSticker(sticker) ? 'is-active' : ''"
+              :title="sticker.name || selectedRom?.title"
+              :aria-pressed="isActiveSticker(sticker)"
+              @click="openStickerPage({ rom: selectedRom, sticker })"
+            >
+              <img
+                :src="sticker.image"
+                :alt="sticker.name || selectedRom?.title"
+                loading="lazy"
+                class="sticker-card__img w-full rounded-md object-contain"
+                draggable="false"
+              />
+              <span
+                v-if="isActiveSticker(sticker)"
+                class="sticker-badge"
+                aria-hidden="true"
+              >
+                <Check class="h-2.5 w-2.5" :stroke-width="3" />
+              </span>
+            </button>
 
-  <Teleport to="body">
-    <div v-if="romEditOpen || uploadOpen" data-no-drag class="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center">
-      <div class="pointer-events-auto w-[380px] space-y-3 rounded-2xl border border-white/10 bg-zinc-950 p-4">
-        <div class="flex items-center justify-between">
-          <span class="text-[10px] font-black text-zinc-200">ROM 与贴纸</span>
-          <button data-no-drag type="button" class="text-zinc-500 hover:text-white" aria-label="关闭" @click="closeEditor"><X class="h-4 w-4" /></button>
-        </div>
-
-        <div class="grid grid-cols-2 rounded-lg bg-zinc-900 p-1">
-          <button
-            data-no-drag
-            type="button"
-            class="rounded-md px-3 py-1.5 text-[9px] font-black transition"
-            :class="romEditOpen ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-white'"
-            @click="openRomEdit"
-          >
-            ROM
-          </button>
-          <button
-            data-no-drag
-            type="button"
-            class="rounded-md px-3 py-1.5 text-[9px] font-black transition"
-            :class="uploadOpen ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-white'"
-            @click="openStickerUpload"
-          >
-            贴纸
-          </button>
-        </div>
-
-        <div v-if="romEditOpen" class="space-y-3">
-          <div class="text-[8px] font-bold text-zinc-500">编辑 ROM #{{ selectedRom?.id }}</div>
-          <input v-model="romForm.title" data-no-drag class="field" placeholder="ROM 标题 *" />
-          <div class="grid grid-cols-3 gap-2">
-            <div class="relative" @focusout="closeRegionMenu">
-              <button data-no-drag type="button" class="field flex w-full items-center gap-2 text-left" :aria-expanded="regionMenuOpen" @click="regionMenuOpen = !regionMenuOpen">
-                <img v-if="regionFlagUrl(romForm.region)" :src="regionFlagUrl(romForm.region)" :alt="romForm.region" class="h-[12px] w-[17px] shrink-0 rounded-[2px] object-cover" />
-                <span v-else class="text-xs leading-none">🌐</span>
-                <span class="min-w-0 flex-1 truncate">{{ romForm.region.toUpperCase() }}</span>
-                <ChevronDown class="h-3 w-3 shrink-0 transition-transform" :class="regionMenuOpen ? 'rotate-180' : ''" />
-              </button>
-              <div v-if="regionMenuOpen" data-no-drag class="absolute left-0 top-[calc(100%+4px)] z-30 w-full overflow-hidden rounded-lg border border-white/15 bg-zinc-900 py-1 shadow-xl">
-                <button
-                  v-for="region in REGION_OPTIONS"
-                  :key="region"
-                  data-no-drag
-                  type="button"
-                  class="flex w-full items-center gap-2 px-2 py-1.5 text-left text-[9px] text-zinc-300 hover:bg-white/10 hover:text-white"
-                  @click="selectRegion(region)"
-                >
-                  <img v-if="regionFlagUrl(region)" :src="regionFlagUrl(region)" :alt="region" class="h-[12px] w-[17px] shrink-0 rounded-[2px] object-cover" />
-                  <span v-else class="w-[17px] text-center text-xs leading-none">🌐</span>
-                  <span class="flex-1">{{ region.toUpperCase() }}</span>
-                  <Check v-if="romForm.region === region" class="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-            <input v-model="romForm.serialCode" data-no-drag class="field font-mono" placeholder="序列号" />
-            <input v-model="romForm.revision" data-no-drag class="field" placeholder="Revision" />
+            <button
+              data-no-drag
+              type="button"
+              class="sticker-edit-card inline-flex items-center justify-center rounded-md border border-dashed border-zinc-500 bg-zinc-900/50 text-zinc-100 transition hover:border-zinc-300 hover:bg-zinc-900/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              :style="editCardStyle"
+              :disabled="!selectedRom?.id"
+              :title="selectedRom ? `在 GBMake 编辑「${selectedRom.title || selectedRom.id}」贴纸` : '在 GBMake 编辑贴纸'"
+              aria-label="在 GBMake 编辑贴纸"
+              @click="openGbmakeEditor"
+            >
+              <Plus class="sticker-edit-card__icon h-7 w-7 shrink-0" :stroke-width="2.5" aria-hidden="true" />
+            </button>
           </div>
-          <div class="flex min-h-24 items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2">
-            <img v-if="selectedSticker?.sticker.image" :src="selectedSticker.sticker.image" :alt="selectedSticker.sticker.name || '当前贴纸'" class="max-h-32 max-w-full object-contain" />
-            <span v-else class="text-[9px] text-zinc-600">当前 ROM 暂无对应贴纸</span>
+
+          <div v-if="!loading && currentStickers.length === 0" class="flex min-h-[48px] items-center justify-center text-[9px] text-zinc-600">
+            暂无已通过贴纸
           </div>
-          <p v-if="romError" class="text-[8px] text-red-400">{{ romError }}</p>
-          <div class="flex justify-end gap-2">
-            <button data-no-drag type="button" class="px-2.5 py-1.5 text-[9px] font-bold text-zinc-500 hover:text-white" @click="closeEditor">取消</button>
-            <button data-no-drag type="button" :disabled="romSaving" class="rounded-md bg-emerald-500 px-3 py-1.5 text-[9px] font-black text-white disabled:opacity-40" @click="saveRomEdit">{{ romSaving ? '保存中…' : '保存修改' }}</button>
+          <div v-if="loading" class="flex min-h-[48px] items-center justify-center text-[9px] text-zinc-500">
+            加载中…
           </div>
         </div>
 
-        <div v-else class="space-y-3">
-          <div class="text-[8px] font-bold text-zinc-500">上传 ROM 贴纸</div>
-          <div class="relative">
-            <img v-if="regionFlagUrl(uploadRom?.region)" :src="regionFlagUrl(uploadRom?.region)" :alt="uploadRom?.region" class="pointer-events-none absolute left-2 top-1/2 z-10 h-[12px] w-[17px] -translate-y-1/2 rounded-[2px] object-cover" />
-            <span v-else class="pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-1/2 text-xs">🌐</span>
-            <select v-model="uploadForm.romId" data-no-drag class="field pl-8">
-              <option v-for="rom in matches" :key="rom.id" :value="String(rom.id)">{{ rom.title || `ROM #${rom.id}` }}</option>
-            </select>
-          </div>
-          <input v-model="uploadForm.name" data-no-drag class="field" placeholder="贴纸名称 *" />
-          <textarea v-model="uploadForm.description" data-no-drag rows="2" class="field resize-none" placeholder="不同 ROM ID、版本或来源备注" />
-
-          <label data-no-drag class="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/20 bg-zinc-900 px-3 py-2 text-[9px] font-bold text-zinc-400 hover:border-white/40 hover:text-white">
-            <ImageUp class="h-4 w-4" />
-            <span class="min-w-0 flex-1 truncate">{{ uploadForm.fileName || '选择贴纸图片' }}</span>
-            <input type="file" accept="image/*" class="hidden" @change="onStickerFile" />
-          </label>
-          <img v-if="uploadForm.previewBase64" :src="uploadForm.previewBase64" alt="贴纸上传预览" class="mx-auto max-h-24 max-w-full object-contain" />
-
-          <p v-if="uploadError" class="text-[8px] text-red-400">{{ uploadError }}</p>
-          <p v-if="uploadResult" class="text-[8px] text-emerald-400">{{ uploadResult }}</p>
-          <div class="flex justify-end gap-2">
-            <button data-no-drag type="button" class="px-2.5 py-1.5 text-[9px] font-bold text-zinc-500 hover:text-white" @click="closeEditor">关闭</button>
-            <button data-no-drag type="button" :disabled="uploading" class="rounded-md bg-emerald-500 px-3 py-1.5 text-[9px] font-black text-white disabled:opacity-40" @click="submitSticker">{{ uploading ? '上传中…' : '上传并提交' }}</button>
-          </div>
-        </div>
+        <p v-if="loadError" class="mt-1 px-1 text-[8px] text-red-400">{{ loadError }}</p>
       </div>
-    </div>
-  </Teleport>
+    </Transition>
+  </section>
 </template>
 
 <style scoped>
+/* 与 EmulatorWidget.CARTRIDGE_STAGE_H 对齐：展开时占满顶部固定舞台高度 */
+.rom-shelf {
+  --shelf-stage-h: 220px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+.rom-shelf:not(.is-collapsed) {
+  height: var(--shelf-stage-h);
+}
 .shelf-control {
   display: flex;
   width: 28px;
@@ -448,14 +354,133 @@ async function submitSticker() {
   transform: translate(1px, 1px);
   box-shadow: none;
 }
-.field {
+.shelf-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+.title-marquee {
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+}
+.title-marquee__text {
+  will-change: transform;
+}
+.title-marquee__text.is-hover {
+  animation: title-marquee-run var(--title-duration, 800ms) linear alternate infinite;
+}
+@keyframes title-marquee-run {
+  from { transform: translateX(0); }
+  to { transform: translateX(var(--title-shift, 0px)); }
+}
+.shelf-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+.shelf-body-enter-active,
+.shelf-body-leave-active {
+  overflow: hidden;
+  transition: opacity 160ms ease, transform 180ms ease, max-height 200ms ease;
+}
+.shelf-body-enter-from,
+.shelf-body-leave-to {
+  opacity: 0;
+  max-height: 0;
+  transform: translateY(8px);
+}
+.shelf-body-enter-to,
+.shelf-body-leave-from {
+  opacity: 1;
+  max-height: var(--shelf-stage-h);
+  transform: translateY(0);
+}
+/* 外层占满剩余高度并滚动；内层水平优先 grid */
+.sticker-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* 上下留白，避免 hover 上浮 / 阴影被裁切 */
+  padding: 8px 6px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #52525b transparent;
+}
+.sticker-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.sticker-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sticker-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #52525b;
+}
+.sticker-scroll::-webkit-scrollbar-thumb:hover {
+  background: #71717a;
+}
+.sticker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 12px;
+  row-gap: 12px;
+  align-items: start;
+}
+@media (min-width: 380px) {
+  .sticker-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.sticker-card,
+.sticker-edit-card {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  background: #18181b;
-  padding: 8px;
-  color: #d4d4d8;
-  font-size: 9px;
-  outline: none;
+  min-width: 0;
+  overflow: visible;
+}
+/* 加号格比例由 editCardStyle 按机型动态注入（GBA 44/23、GB 44/38）；加号默认可见，不依赖 hover */
+.sticker-edit-card {
+  color: #f4f4f5;
+}
+.sticker-edit-card__icon {
+  display: block;
+  color: inherit;
+  pointer-events: none;
+}
+.sticker-card {
+  opacity: 0.78;
+  transition: transform 150ms ease, opacity 150ms ease, filter 150ms ease;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.24));
+}
+.sticker-card:hover,
+.sticker-card.is-active {
+  z-index: 2;
+  opacity: 1;
+  transform: translateY(-2px);
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.32));
+}
+.sticker-card__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+.sticker-badge {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #18181b;
+  border-radius: 999px;
+  background: #facc15;
+  color: #18181b;
+  box-shadow: 1px 1px 0 #18181b;
+  pointer-events: none;
 }
 </style>

@@ -4,13 +4,27 @@ import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { CheckCircle2, Download, Square, Trash2, Upload } from '@lucide/vue'
 import { useCartData } from '../../../stores/useCartData'
+import UiSelect from '../../ui/UiSelect.vue'
 
 const cart = useCartData()
-const { saveFile, flashInfo, opRunning, opKind, opResult, confirm } = storeToRefs(cart)
+const { saveFile, saveType, flashInfo, opRunning, opKind, opResult, confirm, preferMbc } = storeToRefs(cart)
+
+const saveTypeOptions = computed(() => preferMbc.value
+  ? [
+      { value: 'sram', label: 'SRAM' },
+    ]
+  : [
+      { value: 'eeprom4k', label: '4K EEPROM (512B)' },
+      { value: 'eeprom64k', label: '64K EEPROM (8KiB)' },
+      { value: 'sram', label: 'SRAM' },
+      { value: 'flash', label: 'FLASH' },
+    ])
 
 const SAVE_OPS = ['saveDump', 'saveWrite', 'saveVerify', 'saveErase']
 const isSaveOp = computed(() => opRunning.value && SAVE_OPS.includes(opKind.value))
-const canWrite = computed(() => !opRunning.value && !!saveFile.value && !!flashInfo.value)
+/** 有存档即可点；未连接/未识别时由 saveWrite/saveVerify 内 toast，避免按钮灰着「无法使用」。 */
+const canWrite = computed(() => !opRunning.value && !!saveFile.value)
+const canVerify = computed(() => !opRunning.value && !!saveFile.value)
 const canDump = computed(() => !opRunning.value && !!flashInfo.value)
 const isDangerConfirm = computed(() => confirm.value === 'saveWrite' || confirm.value === 'saveErase')
 
@@ -22,10 +36,25 @@ watch(opRunning, (running) => {
   if (running) showResult.value = false
 })
 
+const resultOk = computed(() => {
+  if (!showResult.value || !opResult.value) return false
+  if (!opResult.value.ok) return false
+  if (opKind.value === 'saveVerify') {
+    return !(Number(opResult.value.mismatch_bytes) > 0)
+  }
+  return true
+})
+
 const resultText = computed(() => {
   if (!showResult.value) return ''
   const r = opResult.value
   if (!r) return ''
+  if (opKind.value === 'saveVerify') {
+    if (!r.ok) return r.error || '校验失败'
+    const mismatch = Number(r.mismatch_bytes) || 0
+    if (mismatch > 0) return `校验不符 · ${mismatch} 字节`
+    return '校验通过'
+  }
   if (!r.ok) return r.error || '操作失败'
   const details = ['操作完成']
   if (r.bytes) details.push(formatSize(r.bytes))
@@ -51,25 +80,44 @@ function dismissResult() { showResult.value = false }
         data-no-drag
         type="button"
         class="min-w-0 truncate text-left text-[8px] font-black tracking-wider"
-        :class="opResult?.ok ? 'text-emerald-400' : 'text-red-400'"
+        :class="resultOk ? 'text-emerald-400' : 'text-red-400'"
         :title="resultText"
         @click="dismissResult"
       >
         {{ resultText }}
       </button>
+      <div v-else-if="isSaveOp && opKind === 'saveVerify'" class="text-[8px] font-black uppercase tracking-wider text-amber-400">
+        验证中…
+      </div>
       <div v-else class="text-[8px] font-black uppercase tracking-wider text-zinc-500">存档操作</div>
-      <button
-        data-no-drag
-        type="button"
-        class="min-w-0 truncate text-[8px] font-bold text-zinc-500 hover:text-zinc-300 disabled:opacity-40"
-        :title="saveFile?.path || '点击选择存档'"
-        :disabled="opRunning"
-        @click.stop.prevent="cart.pickSaveFile()"
-        @mousedown.stop
-        @pointerdown.stop
-      >
-        {{ saveFile?.name || '点击选择存档' }}
-      </button>
+      <div class="flex min-w-0 items-center gap-1">
+        <div
+          class="w-[7.5rem] shrink-0"
+          data-no-drag
+          title="存档类型"
+          @mousedown.stop
+          @pointerdown.stop
+        >
+          <UiSelect
+            v-model="saveType"
+            size="sm"
+            :options="saveTypeOptions"
+            :disabled="opRunning"
+          />
+        </div>
+        <button
+          data-no-drag
+          type="button"
+          class="min-w-0 truncate text-[8px] font-bold text-zinc-500 hover:text-zinc-300 disabled:opacity-40"
+          :title="saveFile?.path || '点击选择存档'"
+          :disabled="opRunning"
+          @click.stop.prevent="cart.pickSaveFile()"
+          @mousedown.stop
+          @pointerdown.stop
+        >
+          {{ saveFile?.name || '点击选择存档' }}
+        </button>
+      </div>
     </div>
 
     <!-- 写入 / 擦除确认态：二次确认 -->
@@ -129,8 +177,8 @@ function dismissResult() { showResult.value = false }
         <button
           data-no-drag type="button"
           class="inline-flex h-7 items-center justify-center gap-0.5 rounded-md bg-white text-[9px] font-black text-zinc-950 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-30"
-          :disabled="!canWrite"
-          :class="{ 'opacity-30': !saveFile }"
+          :disabled="!canVerify"
+          :title="canVerify ? '比对本地存档与卡带' : '请先选择存档文件'"
           @click="cart.saveVerify()"
         >
           <CheckCircle2 class="h-3 w-3 text-emerald-500" />
@@ -140,7 +188,7 @@ function dismissResult() { showResult.value = false }
           data-no-drag type="button"
           class="inline-flex h-7 items-center justify-center gap-0.5 rounded-md bg-white text-[9px] font-black text-zinc-950 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-30"
           :disabled="!canWrite"
-          :class="{ 'opacity-30': !saveFile }"
+          :title="canWrite ? '写入存档到卡带' : '请先选择存档文件'"
           @click="cart.requestConfirm('saveWrite')"
         >
           <Upload class="h-3 w-3 text-orange-500" />

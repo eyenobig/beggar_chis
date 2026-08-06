@@ -13,7 +13,7 @@ const cache = useCartridgeCache()
 const { cartInfo, flashInfo, opRunning, opKind, progressPct } = storeToRefs(cart)
 const { activeCartridge } = storeToRefs(cache)
 const insertionKey = ref(0)
-/** true = 弹出展示（bottom 较高）；false = 插入隐藏（压在 homepage 下） */
+/** true = 弹出展示（bottom 较高）；false = 插入（压在 homepage 下）。默认插入。 */
 const cardRaised = ref(false)
 const cardMotion = ref('')
 const ejectStars = ref([])
@@ -87,17 +87,17 @@ watch(burning, (on) => {
   else stopBurnStars()
 })
 
-/** 识别成功：升起卡带（配图卡 / 未知卡均可见；勿再插入隐藏被主栏压住）。 */
-function raiseCartridge() {
-  cardRaised.value = true
+/** 识别成功：保持插入态（可点击切换弹出）。 */
+function keepInserted() {
+  cardRaised.value = false
 }
 
-/** 命中配图后绑定并升起。 */
+/** 命中配图后绑定；默认插入，不自动弹出。 */
 function useRecord(record) {
   resetEffects()
   if (record?.payload !== previousPayload) insertionKey.value += 1
   previousPayload = record?.payload || ''
-  raiseCartridge()
+  keepInserted()
 }
 
 function hideCartridge() {
@@ -107,11 +107,11 @@ function hideCartridge() {
   cache.clearActive()
 }
 
-/** 有卡无配图 / 配图查询失败：清 active，UnknownCartridge 占位，仍保持升起。 */
-function showUnknownRaised() {
+/** 有卡无配图 / 配图查询失败：清 active，UnknownCartridge 占位，仍保持插入。 */
+function showUnknownInserted() {
   previousPayload = ''
   cache.clearActive()
-  raiseCartridge()
+  keepInserted()
 }
 
 watch(cartInfo, async (info) => {
@@ -122,8 +122,8 @@ watch(cartInfo, async (info) => {
     return
   }
 
-  // 识别成功立刻升起：不等配图、不依赖烧录后再读
-  raiseCartridge()
+  // 识别成功：默认插入，不自动升起
+  keepInserted()
 
   const cached = cache.activateCached(info)
   if (cached) {
@@ -138,11 +138,11 @@ watch(cartInfo, async (info) => {
     if (record) {
       useRecord(record)
     } else {
-      showUnknownRaised()
+      showUnknownInserted()
     }
   } catch {
     if (sequence !== lookupSequence) return
-    showUnknownRaised()
+    showUnknownInserted()
   }
 }, { immediate: true, deep: true })
 

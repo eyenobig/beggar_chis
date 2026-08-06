@@ -1,5 +1,6 @@
 <!-- 存档节点（HomePage）：
      2 栏：①当前存档(只显示大小) ②上传存档(.sav，可点选/拖入)。
+     视觉与 ROM Payload（DataNode）默认深色卡片一致。
      导出 / 验证 / 烧录 在 ROM 页 SaveControls。 -->
 <script setup>
 import { computed } from 'vue'
@@ -49,32 +50,57 @@ async function onPickSave(event) {
 </script>
 
 <template>
-  <section class="relative z-10">
+  <section>
     <div class="mb-2 px-1">
       <span class="text-[9px] font-black uppercase tracking-widest text-zinc-900">Save Data</span>
     </div>
 
-    <!-- 始终展示两栏：上传存档不依赖 hasCart，避免「看不见/点不了」 -->
+    <!-- 始终展示两栏：上传存档不依赖 hasCart；卡片壳与 ROM Payload 默认样式一致 -->
     <div class="grid grid-cols-2 items-stretch gap-2">
-      <div class="rounded-2xl bg-zinc-50 border border-zinc-200 p-3 shadow-sm">
-        <p class="text-[8px] font-black uppercase tracking-widest mb-1 text-zinc-500">当前存档</p>
-        <p v-if="hasCart" class="text-sm font-black mono text-zinc-900">{{ saveSizeText }}</p>
-        <p v-else class="text-xs font-bold text-zinc-400">待插入卡带</p>
+      <div class="rounded-2xl bg-zinc-900 p-4 text-white shadow-md">
+        <p class="mb-1 text-[8px] font-black uppercase tracking-widest text-zinc-400">当前存档</p>
+        <p v-if="hasCart" class="mono text-xs font-black text-zinc-100">{{ saveSizeText }}</p>
+        <div v-else class="flex items-center gap-2">
+          <svg
+            class="h-4 w-4 shrink-0 text-zinc-500"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <rect x="3" y="2" width="18" height="15" rx="2" />
+            <path d="M3 13h18" />
+            <path d="M7 13v4M10 13v4M14 13v4M17 13v4" />
+            <rect x="5.5" y="4.5" width="13" height="6" rx="1" />
+          </svg>
+          <span class="text-xs font-bold text-zinc-500">待插入卡带</span>
+        </div>
       </div>
       <button
         data-no-drag
         type="button"
-        class="relative z-20 rounded-2xl bg-zinc-50 border border-zinc-200 p-3 shadow-sm text-left transition hover:bg-zinc-100 cursor-pointer"
+        class="rounded-2xl bg-zinc-900 p-4 text-left text-white shadow-md transition active:scale-[0.99] hover:bg-zinc-800"
         :title="hasSaveFile ? '点击更换存档' : '点击选择 .sav / .srm'"
         @click.stop.prevent="onPickSave"
         @mousedown.stop
         @pointerdown.stop
       >
-        <p class="text-[8px] font-black uppercase tracking-widest mb-1 text-zinc-500 pointer-events-none">上传存档</p>
-        <template v-if="hasSaveFile">
-          <p class="text-sm font-black mono text-zinc-900 truncate pointer-events-none" :title="saveFile.path">{{ saveFile.name }}</p>
-        </template>
-        <p v-else class="text-xs font-bold text-zinc-400 pointer-events-none">点击或拖入 .sav / .srm</p>
+        <p class="pointer-events-none mb-1 flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-zinc-400">
+          <span
+            v-if="hasSaveFile"
+            class="h-1.5 w-1.5 shrink-0 rounded-full bg-yellow-400"
+          />
+          {{ hasSaveFile ? 'SAVE · 待写入' : '上传存档' }}
+        </p>
+        <p
+          v-if="hasSaveFile"
+          class="pointer-events-none mono truncate text-xs font-black text-zinc-100"
+          :title="saveFile.path"
+        >{{ saveFile.name }}</p>
+        <p v-else class="pointer-events-none text-xs font-bold text-zinc-500">点击或拖入 .sav / .srm</p>
       </button>
     </div>
   </section>

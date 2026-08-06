@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Chis Flasher",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "identifier": "com.z.chis-flasher",
   "build": {
     "beforeDevCommand": "npm run ensure:cfb && npm run vite:single",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build:web",
     "frontendDist": "../dist"
   },
   "app": {
@@ -25,12 +25,13 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' tauri: asset:; img-src 'self' data: https: blob: tauri: asset:; connect-src 'self' https://payload.gbmake.com https://g.gbmake.com https://admin.gbmake.com https://assets.gbmake.com http://localhost:* https://localhost:* ws://localhost:* ipc: http://ipc tauri:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:"
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "targets": ["nsis"],
     "externalBin": [
       "binaries/cfb"
     ],
@@ -41,5 +42,16 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk3REIzMjQwREQyM0ZEREEKUldUYS9TUGRRRExibHcvQ1dlbGN0a0NZRjBQeHQ1OEFXdkRiaCs1WGpYQjhjalhJUUdialdKYzQK",
+      "endpoints": [
+        "https://github.com/eyenobig/beggar_chis/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

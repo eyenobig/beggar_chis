@@ -55,19 +55,19 @@ export const cfbClient = Object.freeze({
 
   // ---- 存档 (save RAM) ----
   saveDump({ outputPath, mbc = false, type }, onEvent, onChild) {
-    const args = withTargetPort(withMbc(['save-dump', '--out', outputPath], mbc))
-    if (type) args.splice(2, 0, '--type', type) // 在 --out 前插 --type
-    return streamCfb(args, onEvent, onChild)
+    const args = withMbc(['save-dump', '--out', outputPath], mbc)
+    if (type) args.push('--type', type)
+    return streamCfb(withTargetPort(args), onEvent, onChild)
   },
   saveWrite({ savePath, mbc = false, type }, onEvent, onChild) {
-    const args = withTargetPort(withMbc(['save-write', '--file', savePath], mbc))
-    if (type) args.splice(2, 0, '--type', type)
-    return streamCfb(args, onEvent, onChild)
+    const args = withMbc(['save-write', '--file', savePath], mbc)
+    if (type) args.push('--type', type)
+    return streamCfb(withTargetPort(args), onEvent, onChild)
   },
   saveVerify({ savePath, mbc = false, type }, onEvent, onChild) {
-    const args = withTargetPort(withMbc(['save-verify', '--file', savePath], mbc))
-    if (type) args.splice(2, 0, '--type', type)
-    return streamCfb(args, onEvent, onChild)
+    const args = withMbc(['save-verify', '--file', savePath], mbc)
+    if (type) args.push('--type', type)
+    return streamCfb(withTargetPort(args), onEvent, onChild)
   },
   saveErase({ mbc = false, type, len }, onEvent, onChild) {
     const args = withTargetPort(withMbc(['save-erase'], mbc))

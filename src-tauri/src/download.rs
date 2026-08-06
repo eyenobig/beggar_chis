@@ -122,54 +122,54 @@ pub fn extract_zip_sync(archive: &str, dest_dir: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 解压 zip，返回其中的可执行文件路径（优先 SkyEmu.exe）。
+/// 解压 zip，返回其中的可执行文件路径。
+/// `preferred_names`：优先匹配的文件名（大小写不敏感）；默认 SkyEmu 兼容名。
 #[tauri::command]
-pub async fn extract_zip_exe(archive: String, dest_dir: String) -> Result<String, String> {
-    tokio::task::spawn_blocking(move || extract_zip_exe_sync(&archive, &dest_dir))
-        .await
-        .map_err(|e| format!("解压任务失败: {e}"))?
+pub async fn extract_zip_exe(
+    archive: String,
+    dest_dir: String,
+    preferred_names: Option<Vec<String>>,
+) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        extract_zip_exe_sync(&archive, &dest_dir, preferred_names.as_deref())
+    })
+    .await
+    .map_err(|e| format!("解压任务失败: {e}"))?
 }
 
-fn extract_zip_exe_sync(archive: &str, dest_dir: &str) -> Result<String, String> {
+fn extract_zip_exe_sync(
+    archive: &str,
+    dest_dir: &str,
+    preferred_names: Option<&[String]>,
+) -> Result<String, String> {
     extract_zip_sync(archive, dest_dir)?;
-    find_skyemu_exe(std::path::Path::new(dest_dir))
+    find_preferred_exe(std::path::Path::new(dest_dir), preferred_names)
 }
 
-/// 静默下载到 dest（无前端进度事件），供首次安装拉取工具链使用。
-pub async fn download_file_silent(url: &str, dest: &str) -> Result<(), String> {
-    let client = reqwest::Client::builder()
-        .user_agent("chis-flasher")
-        .redirect(reqwest::redirect::Policy::limited(10))
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| format!("下载请求失败: {e}"))?;
-
-    if !response.status().is_success() {
-        return Err(format!("下载失败: HTTP {}", response.status()));
-    }
-
-    if let Some(parent) = std::path::Path::new(dest).parent() {
-        tokio::fs::create_dir_all(parent)
-            .await
-            .map_err(|e| format!("创建目录失败: {e}"))?;
-    }
-
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("读取下载内容失败: {e}"))?;
-    tokio::fs::write(dest, &bytes)
-        .await
-        .map_err(|e| format!("写入失败: {e}"))?;
-    Ok(())
+fn default_preferred_exe_names() -> Vec<String> {
+    vec![
+        "skyemu.exe".into(),
+        "skyemu".into(),
+        "skyemu.app".into(),
+    ]
 }
 
-fn find_skyemu_exe(dir: &std::path::Path) -> Result<String, String> {
+/// 工具链共用：按 preferred 文件名定位产物，否则回退到任意 .exe / .app。
+fn find_preferred_exe(
+    dir: &std::path::Path,
+    preferred_names: Option<&[String]>,
+) -> Result<String, String> {
+    let defaults = default_preferred_exe_names();
+    let preferred_list: Vec<String> = preferred_names
+        .filter(|names| !names.is_empty())
+        .map(|names| {
+            names
+                .iter()
+                .map(|n| n.to_ascii_lowercase())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or(defaults);
+
     let mut preferred: Option<std::path::PathBuf> = None;
     let mut any_exe: Option<std::path::PathBuf> = None;
     let walker = walkdir_exe(dir);
@@ -179,20 +179,18 @@ fn find_skyemu_exe(dir: &std::path::Path) -> Result<String, String> {
             .and_then(|n| n.to_str())
             .unwrap_or("")
             .to_ascii_lowercase();
-        if name == "skyemu.exe" || name == "skyemu" {
+        if preferred_list.iter().any(|want| want == &name) {
             preferred = Some(path);
             break;
         }
-        if any_exe.is_none()
-            && (name.ends_with(".exe") || name == "skyemu.app" || name.ends_with(".app"))
-        {
+        if any_exe.is_none() && (name.ends_with(".exe") || name.ends_with(".app")) {
             any_exe = Some(path);
         }
     }
     preferred
         .or(any_exe)
         .map(|p| p.to_string_lossy().into_owned())
-        .ok_or_else(|| "解压后未找到 SkyEmu 可执行文件".to_string())
+        .ok_or_else(|| "解压后未找到可执行文件".to_string())
 }
 
 fn walkdir_exe(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
@@ -218,4 +216,3 @@ pub fn file_size(path: String) -> Result<u64, String> {
         .map(|m| m.len())
         .map_err(|e| format!("无法读取文件大小: {e}"))
 }
-

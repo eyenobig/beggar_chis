@@ -1,13 +1,17 @@
 <!--
-  SkyEmu 下热敏纸：
-  - 新行出现在刀口下方（最上）
-  - 吐纸时整张纸（新行+旧行）一起往下走
-  - 一条吐完再吐下一条；点击撕下
+  热敏纸（thermal）或紧凑横幅（banner）：
+  - thermal：挂在左栏 absolute top-full（与抽屉同列层级，不挡右侧点击）
+  - banner：关闭热敏纸时 Teleport；仅有 toast 时挂载，外层 pointer-events-none
 -->
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useToast } from '../../stores/useToast'
+
+const props = defineProps({
+  /** false 时走 banner，保证关闭「热敏纸」后仍有反馈 */
+  thermal: { type: Boolean, default: true },
+})
 
 const toast = useToast()
 const { toasts } = storeToRefs(toast)
@@ -329,7 +333,11 @@ function enqueueNewToasts(ids) {
     known.add(id)
     added = true
   }
-  if (added) void drainSpitQueue()
+  if (added) {
+    // 立刻预留最小纸高，避免吐纸动画首帧被 body overflow 裁切
+    if ((toast.paperHeight || 0) < MIN_PAPER_H) toast.setPaperHeight(MIN_PAPER_H)
+    void drainSpitQueue()
+  }
 }
 
 async function tearOff(e) {
@@ -429,6 +437,11 @@ async function tearOff(e) {
 watch(
   () => toasts.value.map((t) => t.id),
   (ids) => {
+    if (!props.thermal) {
+      // banner 模式不跑吐纸机；清空热敏纸占位高度
+      if (toast.paperHeight) toast.setPaperHeight(0)
+      return
+    }
     if (tearing.value) return
     if (!ids.length) {
       resetSpitState()
@@ -439,8 +452,21 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => props.thermal,
+  (on) => {
+    if (!on) {
+      resetSpitState()
+      return
+    }
+    if (toasts.value.length) enqueueNewToasts(toasts.value.map((t) => t.id))
+  },
+)
+
 onMounted(() => {
-  if (toasts.value.length) enqueueNewToasts(toasts.value.map((t) => t.id))
+  if (props.thermal && toasts.value.length) {
+    enqueueNewToasts(toasts.value.map((t) => t.id))
+  }
 })
 
 onBeforeUnmount(() => {
@@ -449,12 +475,47 @@ onBeforeUnmount(() => {
   cancelRaf()
   cancelSpitRaf()
   cancelTearAnim()
+  toast.setPaperHeight(0)
 })
+
+function bannerClass(type) {
+  if (type === 'success') return 'border-emerald-500/40 bg-emerald-950 text-emerald-100'
+  if (type === 'error') return 'border-red-500/40 bg-red-950 text-red-100'
+  return 'border-white/15 bg-zinc-900 text-zinc-100'
+}
+
+function dismissBanner(id) {
+  toast.dismiss(id)
+}
 </script>
 
 <template>
+  <!-- 关闭热敏纸：仅有消息时挂载；外层永不接收指针 -->
+  <Teleport v-if="!thermal && toasts.length" to="body">
+    <div
+      class="pointer-events-none fixed inset-x-0 bottom-3 z-[9999] flex flex-col items-center gap-1.5 px-3"
+      aria-live="polite"
+    >
+      <button
+        v-for="item in toasts"
+        :key="item.id"
+        data-no-drag
+        type="button"
+        class="pointer-events-auto max-w-[min(420px,92vw)] rounded-md border px-3 py-2 text-left font-mono text-[11px] font-medium leading-snug shadow-lg shadow-black/40"
+        :class="bannerClass(item.type)"
+        :title="item.message"
+        @click="dismissBanner(item.id)"
+      >
+        <span class="mr-1.5 text-[9px] font-bold tracking-wider opacity-70">[{{ mark(item.type).tag }}]</span>
+        {{ item.message }}
+      </button>
+    </div>
+  </Teleport>
+
+  <!-- 热敏纸：absolute 在左栏卡片下沿；外层 pointer-events-none，仅刀口/纸可点 -->
   <div
-    class="pointer-events-none absolute left-0 top-full z-[100] flex w-full -translate-y-[3px] flex-col items-stretch overflow-visible px-4"
+    v-else-if="thermal"
+    class="pointer-events-none absolute left-0 top-full z-10 flex w-full -translate-y-[3px] flex-col items-stretch overflow-visible px-4"
     aria-live="polite"
   >
     <div

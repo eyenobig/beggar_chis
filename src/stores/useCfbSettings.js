@@ -1,28 +1,12 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { invoke } from '@tauri-apps/api/core'
 import { applyLocalePreference, getLocalePreference } from '../i18n'
-
-const STORAGE_KEY = 'chis.cfb.settings.v1'
+import { ensureCfbPaths, resolveCfbBinary } from '../services/toolchain'
+import { getLocalPaths, getLocalSettings, patchLocalConfig } from '../services/localConfig'
 
 const inTauri =
   typeof window !== 'undefined' &&
   ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
-
-function loadSettings() {
-  if (typeof localStorage === 'undefined') return {}
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
-  } catch {
-    return {}
-  }
-}
-
-function saveSettings(value) {
-  if (typeof localStorage === 'undefined') return
-  // 路径只进本机 localStorage，绝不写入仓库内可提交文件。
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
-}
 
 function cleanPort(port) {
   const s = String(port || '').trim()
@@ -30,7 +14,8 @@ function cleanPort(port) {
 }
 
 export const useCfbSettings = defineStore('cfbSettings', () => {
-  const saved = loadSettings()
+  const saved = getLocalSettings()
+  const savedPaths = getLocalPaths()
 
   const preferredPort = ref(cleanPort(saved.preferredPort))
   // 与 vue-i18n 共用偏好
@@ -47,17 +32,23 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
   // 固定为 true，同时把旧版曾关闭的持久配置迁移回安全默认值。
   const unlockPpb = ref(true)
   const verifyAfter = ref(saved.verifyAfter !== false)
+  /** SkyEmu 下热敏纸（刀口+纸面）；关闭后改用底部 banner，toast 仍可见 */
+  const thermalPaper = ref(saved.thermalPaper !== false)
+  /** 主栏上方卡带舞台；关闭后不占窗口顶部，识别结果仍保留 */
+  const cartridgeStage = ref(saved.cartridgeStage !== false)
+  /** Logs 打开时的卡带贴纸架；可单独关闭 */
+  const cartridgeStickers = ref(saved.cartridgeStickers !== false)
   /**
    * cfb 可执行文件路径，或包含平台 sidecar 的 bins 目录。
    * 注意：旧键 `cfbSourceDir` 曾指向源码树，绝不能直接当作可执行文件展示/持久化；
    * 若仅有旧键则留空，由 ensurePathsReady 探测真实 exe（或 resolve 纠正）。
    */
-  const cfbBinPath = ref(String(saved.cfbBinPath || '').trim())
+  const cfbBinPath = ref(String(savedPaths.cfbBinPath || '').trim())
   /**
    * 已解压的 rule 数据目录（含 profiles）。预编译 cfb 通常已内嵌 rule，此项可选展示/备用。
    * 兼容旧键 `ruleSourceDir`。
    */
-  const ruleDataDir = ref(String(saved.ruleDataDir || saved.ruleSourceDir || '').trim())
+  const ruleDataDir = ref(String(savedPaths.ruleDataDir || '').trim())
 
   /** 已解析二进制实际报告的版本（`cfb version`）；仅展示用，运行时状态，不持久化。 */
   const activeCfbVersion = ref('')
@@ -75,7 +66,7 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
     const raw = String(cfbBinPath.value || '').trim()
     if (!raw) return
     try {
-      const resolved = await invoke('resolve_cfb_binary', { cfbPath: raw })
+      const resolved = await resolveCfbBinary(raw)
       const next = String(resolved || '').trim()
       if (next && next !== raw) cfbBinPath.value = next
     } catch {
@@ -86,6 +77,7 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
 
   /**
    * 自动填充 / 纠正工具链路径：debug 探测本机已构建二进制；release 下载到 app data。
+   * 走 toolchain/cfb 适配器（与 SkyEmu 同一套获取层，执行仍是 bootstrap/spawn）。
    * 会纠正「把源码根写进可执行文件」的旧持久化值。构建脚本用的源码路径由 Rust 写 local-paths.json。
    */
   function ensurePathsReady() {
@@ -94,13 +86,17 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
     pathsReadyPromise = (async () => {
       try {
         await normalizeCfbBinPath()
-        if (cfbBinPath.value && ruleDataDir.value) return
-        const result = await invoke('bootstrap_toolchain_paths')
-        if (result?.cfbBin && !cfbBinPath.value) cfbBinPath.value = String(result.cfbBin)
+        const managedCfb = /[\\/]toolchain[\\/]cmd[\\/]/i.test(cfbBinPath.value)
+        // 自定义可执行文件由用户负责版本；应用托管路径则每次启动允许 current 指针升级。
+        if (cfbBinPath.value && !managedCfb) return
+        const result = await ensureCfbPaths()
+        if (result?.cfbBin && (!cfbBinPath.value || managedCfb)) {
+          cfbBinPath.value = String(result.cfbBin)
+        }
         if (result?.ruleDir && !ruleDataDir.value) ruleDataDir.value = String(result.ruleDir)
       } catch (err) {
         // ACL / 网络失败：保持空路径，运行时回退 sidecar。
-        console.warn('[cfbSettings] bootstrap_toolchain_paths failed:', err)
+        console.warn('[cfbSettings] ensureCfbPaths failed:', err)
         pathsReadyPromise = null
       }
     })()
@@ -125,13 +121,25 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
       chipErase: chipErase.value,
       unlockPpb: unlockPpb.value,
       verifyAfter: verifyAfter.value,
+      thermalPaper: thermalPaper.value,
+      cartridgeStage: cartridgeStage.value,
+      cartridgeStickers: cartridgeStickers.value,
+    }),
+    (value) => {
+      // 路径 / 设置分区写入统一文档；绝不写入仓库内可提交文件。
+      patchLocalConfig('settings', value)
+    },
+    { deep: true },
+  )
+
+  watch(
+    () => ({
       cfbBinPath: cfbBinPath.value,
       ruleDataDir: ruleDataDir.value,
     }),
     (value) => {
-      saveSettings(value)
+      patchLocalConfig('paths', value)
     },
-    { deep: true },
   )
 
   function setPreferredPort(port) {
@@ -172,6 +180,9 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
     chipErase,
     unlockPpb,
     verifyAfter,
+    thermalPaper,
+    cartridgeStage,
+    cartridgeStickers,
     cfbBinPath,
     ruleDataDir,
     activeCfbVersion,

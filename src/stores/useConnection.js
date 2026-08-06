@@ -24,8 +24,12 @@ export const useConnection = defineStore('connection', () => {
   const isConnecting = computed(() => detecting.value && !connected.value)
 
   /**
-   * Windows 常把同一 USB 烧录器枚举成多个 COM（同 serial）。
-   * 不去重时清空 preferred 后会卡在「请选择设备」，识别/烧录按钮一直不可用。
+   * Windows 常把同一 USB 烧录器枚举成多个 COM（同 serial）——真正的幽灵口。
+   * 但同型号克隆烧录器出厂 serial 也常相同（如都是 "6"），它们是独立物理设备，不该合并。
+   *
+   * 区分依据：同一物理设备不会同时有两个「COM 名不同且都能打开」的口。
+   * 所以同 serial 的多个端口里，凡「不同 COM 名 + 都能 open」的一律判为独立设备并保留；
+   * 只剩同 COM 名重复、或仅一个能 open 的，才按幽灵口合并（优先 open、次选较小 COM 名）。
    */
   function dedupeBurners(ports) {
     const bySerial = new Map()
@@ -36,16 +40,32 @@ export const useConnection = defineStore('connection', () => {
         noSerial.push(p)
         continue
       }
-      const prev = bySerial.get(sn)
-      if (!prev) {
-        bySerial.set(sn, p)
+      ;(bySerial.get(sn) || bySerial.set(sn, []).get(sn)).push(p)
+    }
+
+    const kept = [...noSerial]
+    for (const group of bySerial.values()) {
+      if (group.length === 1) {
+        kept.push(group[0])
         continue
       }
-      // 优先可打开；同 open 时保留较小 COM 名（COM13 < COM16），避开常见幽灵口。
-      if (p.open && !prev.open) bySerial.set(sn, p)
-      else if (p.open === prev.open && String(p.port) < String(prev.port)) bySerial.set(sn, p)
+      // 同 serial 多端口：统计「不同 COM 名且都能 open」的独立设备。
+      const distinctOpenPorts = new Set(
+        group.filter((p) => p.open).map((p) => String(p.port)),
+      )
+      if (distinctOpenPorts.size > 1) {
+        // 多个可同时打开的不同 COM = 独立物理设备，全部保留。
+        kept.push(...group)
+        continue
+      }
+      // 其余视为同一设备的幽灵口：合并为一个（优先 open、次选较小 COM 名）。
+      group.sort((a, b) => {
+        if (a.open !== b.open) return a.open ? -1 : 1
+        return String(a.port) < String(b.port) ? -1 : 1
+      })
+      kept.push(group[0])
     }
-    return [...bySerial.values(), ...noSerial]
+    return kept
   }
 
   /** 记住端口，后续 info/burn 走同一烧录器。 */

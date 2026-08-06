@@ -1,34 +1,34 @@
 #!/usr/bin/env node
-/** Build cfb from the sibling local repository and copy it into Tauri sidecars. */
+/**
+ * Build cfb from the configured local chis-burner-cmd checkout into Tauri sidecars.
+ * Path resolution: `scripts/cfb-config.mjs` only.
+ * No local tree at the configured path? use: npm run build:cfb:github
+ */
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import {
+  DEFAULT_CFB_LOCAL_REL,
+  configuredCfbSourceDir,
+  detectTriple,
+  repoRoot,
+  resolveRuleSourceDir,
+} from './cfb-config.mjs'
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const localPathsFile = join(root, 'local-paths.json')
-const localPaths = loadLocalPaths(localPathsFile)
-const sourceDir = resolve(
-  process.env.CFB_LOCAL_DIR || localPaths.cfbSourceDir || join(root, '..', 'chis-burner-cmd'),
-)
-const ruleDir = process.env.CFB_RULE_DIR || localPaths.ruleSourceDir || ''
+const root = repoRoot()
+const sourceDir = configuredCfbSourceDir(root)
+const ruleDir = resolveRuleSourceDir(root, sourceDir)
 const manifest = join(sourceDir, 'Cargo.toml')
 const outDir = join(root, 'src-tauri', 'binaries')
 const isWin = process.platform === 'win32'
 
 if (!existsSync(manifest)) {
   console.error(`Local chis-burner-cmd was not found: ${manifest}`)
-  console.error('Set CFB_LOCAL_DIR or beggar_chis/local-paths.json { "cfbSourceDir": "..." } (source tree for cargo build; not Settings bin path).')
+  console.error(
+    `Configured path comes from CFB_LOCAL_DIR / local-paths.json.cfbSourceDir / default ${DEFAULT_CFB_LOCAL_REL}.`,
+  )
+  console.error('No local source? download Release: npm run build:cfb:github')
   process.exit(1)
-}
-
-function loadLocalPaths(file) {
-  try {
-    if (!existsSync(file)) return {}
-    return JSON.parse(readFileSync(file, 'utf8')) || {}
-  } catch {
-    return {}
-  }
 }
 
 const triple = detectTriple()
@@ -64,15 +64,6 @@ mkdirSync(outDir, { recursive: true })
 const destination = join(outDir, sidecarName)
 copyFileSync(source, destination)
 console.log(`Local sidecar ready: ${destination}`)
-
-function detectTriple() {
-  if (process.env.CFB_TARGET) return process.env.CFB_TARGET
-  const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64'
-  if (process.platform === 'win32') return `${arch}-pc-windows-msvc`
-  if (process.platform === 'darwin') return `${arch}-apple-darwin`
-  if (process.platform === 'linux') return `${arch}-unknown-linux-gnu`
-  throw new Error(`Unsupported platform: ${process.platform}/${process.arch}`)
-}
 
 function cargoTargetDir(manifestPath) {
   const metadata = spawnSync(

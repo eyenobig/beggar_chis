@@ -82,17 +82,11 @@ const view = computed(() => {
         data-no-drag
         type="button"
         @click="handleCardClick"
-        class="min-w-0 text-left rounded-2xl p-4 relative overflow-hidden shadow-md transition active:scale-[0.99]"
-        :class="
-          isRom
-            ? 'bg-zinc-900 text-white'
-            : 'bg-zinc-50 border border-zinc-200 text-zinc-900 shadow-sm'
-        "
+        class="min-w-0 text-left rounded-2xl p-4 relative overflow-hidden shadow-md transition active:scale-[0.99] bg-zinc-900 text-white"
       >
         <template v-if="view.state !== 'empty'">
           <p
-            class="text-[8px] font-black uppercase tracking-widest mb-1 flex items-center gap-1.5"
-            :class="isRom ? 'text-zinc-400' : 'text-zinc-500'"
+            class="text-[8px] font-black uppercase tracking-widest mb-1 flex items-center gap-1.5 text-zinc-400"
           >
             <span
               v-if="view.state === 'pending'"
@@ -101,22 +95,21 @@ const view = computed(() => {
             {{ view.tag }}
           </p>
           <template v-if="view.name">
-            <h3 class="text-xs font-black mono truncate" :class="isRom ? 'text-zinc-100' : 'text-zinc-900'">
+            <h3 class="text-xs font-black mono truncate text-zinc-100">
               {{ view.name }}
             </h3>
           </template>
-          <p v-else class="text-xs font-black" :class="isRom ? 'text-zinc-100' : 'text-zinc-900'">查看</p>
+          <p v-else class="text-xs font-black text-zinc-100">查看</p>
         </template>
 
         <template v-else>
           <!-- 与识别后保持相同的两层结构：tag 行 + 主内容行 -->
-          <p class="text-[8px] font-black uppercase tracking-widest mb-1" :class="isRom ? 'text-zinc-600' : 'text-zinc-400'">
+          <p class="text-[8px] font-black uppercase tracking-widest mb-1 text-zinc-600">
             {{ label }}
           </p>
           <div class="flex items-center gap-2">
             <svg
-              class="w-4 h-4 shrink-0"
-              :class="isRom ? 'text-zinc-500' : 'text-zinc-300'"
+              class="w-4 h-4 shrink-0 text-zinc-500"
               fill="none"
               stroke="currentColor"
               stroke-width="1.5"
@@ -129,7 +122,7 @@ const view = computed(() => {
               <path d="M7 13v4M10 13v4M14 13v4M17 13v4" />
               <rect x="5.5" y="4.5" width="13" height="6" rx="1" />
             </svg>
-            <span class="text-xs font-bold" :class="isRom ? 'text-zinc-500' : 'text-zinc-400'">请插入卡带</span>
+            <span class="text-xs font-bold text-zinc-500">请插入卡带</span>
           </div>
         </template>
       </button>

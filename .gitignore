@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+/artifacts/
 dist-ssr
 *.local
 
@@ -35,6 +36,7 @@ SkyEmu*.zip
 .env
 .env.*
 !.env.example
+!.env.temporary.prod.example
 
 .claude/settings.local.json
 .vscode/*
@@ -48,6 +50,15 @@ SkyEmu*.zip
 *.sw?
 
 local-paths.json
+# 运行时本地状态在浏览器 localStorage（chis.local.v1），无仓库根文件；勿新增可提交的本地状态文件。
+.tauri/
 
 # Cursor / agent 本地技能缓存，勿提交
 .agents/
+.cursor/
+
+# NSIS 安装包产物（npm run build 生成，勿提交）
+*setup.exe
+
+# Vite 临时输出
+.tmp-*

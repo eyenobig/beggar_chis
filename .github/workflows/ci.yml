@@ -1,45 +1,122 @@
-name: CI
+name: Multi-platform CI
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   CFB_GITHUB_REPO: eyenobig/chis-burner-cmd
   CFB_RELEASE_TAG: ${{ vars.CFB_RELEASE_TAG || 'latest' }}
-  VITE_API_BASE_URL: ${{ secrets.API_BASE_URL }}
 
 jobs:
-  build-check:
-    runs-on: windows-latest
+  frontend:
+    name: Frontend production build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:web
+
+  desktop:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            app: tauri-app.exe
+          - name: Linux x64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            app: tauri-app
+          - name: macOS Intel
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+            app: tauri-app
+          - name: macOS Apple Silicon
+            os: macos-15
+            target: aarch64-apple-darwin
+            app: tauri-app
+
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout application
         uses: actions/checkout@v4
 
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libudev-dev pkg-config
+
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 22
           cache: npm
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Cache Rust dependencies
         uses: swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
+          key: ${{ matrix.target }}
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Download released cfb sidecar
+      - name: Download released CFB sidecar
         run: npm run build:cfb:github
         env:
-          CFB_TARGET: x86_64-pc-windows-msvc
+          CFB_TARGET: ${{ matrix.target }}
           CFB_GITHUB_TOKEN: ${{ secrets.CFB_RELEASE_TOKEN || github.token }}
 
-      - name: Compile check
-        run: npm run tauri build -- --no-bundle
+      - name: Smoke-test CFB
+        run: npm run check:platform
+        env:
+          CFB_TARGET: ${{ matrix.target }}
+
+      - name: Build Tauri desktop application
+        run: npm run tauri -- build --target ${{ matrix.target }} --no-bundle
+
+      - name: Verify Tauri output and sidecar
+        run: npm run check:platform
+        env:
+          CFB_TARGET: ${{ matrix.target }}
+          CFB_TAURI_OUTPUT: '1'
+
+      - name: Upload compatibility report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-${{ matrix.target }}
+          path: artifacts/platform-compatibility-${{ matrix.target }}.json
+          if-no-files-found: error
+
+      - name: Upload unbundled compile-check output
+        uses: actions/upload-artifact@v4
+        with:
+          name: compile-check-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/${{ matrix.app }}
+            src-tauri/target/${{ matrix.target }}/release/cfb*
+          if-no-files-found: error

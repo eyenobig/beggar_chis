@@ -2,21 +2,26 @@
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { BadgeCheck, FolderOpen, Download, LoaderCircle, Trash2 } from '@lucide/vue'
+import { BadgeCheck, LoaderCircle, Trash2 } from '@lucide/vue'
 import { invoke } from '@tauri-apps/api/core'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { clearDirectBinaryCache, cfbClient, inTauri } from '../../../services/cfb'
 import { SUPPORTED } from '../../../i18n'
 import { useSkyEmuDownload } from '../../../composables/useSkyEmuDownload'
+import { useCfbRuleDownload } from '../../../composables/useCfbRuleDownload'
+import { useToolchainVersions } from '../../../composables/useToolchainVersions'
 import { useCfbSettings } from '../../../stores/useCfbSettings'
 import { useEmulator } from '../../../stores/useEmulator'
 import { useLogStore } from '../../../stores/useLogStore'
 import { useCartridgeCache } from '../../../stores/useCartridgeCache'
 import { useToast } from '../../../stores/useToast'
+import { useDragScroll } from '../../../composables/useDragScroll'
 import SettingHint from '../../settings/SettingHint.vue'
+import ToolchainPathField from '../../settings/ToolchainPathField.vue'
 import UiSelect from '../../ui/UiSelect.vue'
 import UiSwitch from '../../ui/UiSwitch.vue'
 
+const { scrollBind } = useDragScroll()
 const { t } = useI18n()
 const settings = useCfbSettings()
 const emulator = useEmulator()
@@ -24,6 +29,8 @@ const logStore = useLogStore()
 const toast = useToast()
 const cartridgeCache = useCartridgeCache()
 const { downloading, downloadSkyEmu } = useSkyEmuDownload()
+const { downloadingCfb, downloadingRule, downloadCfb, downloadRule } = useCfbRuleDownload()
+const { cfbVersion, ruleVersion, skyEmuVersion, refreshCfbVersion } = useToolchainVersions()
 const { records: cachedCartridges } = storeToRefs(cartridgeCache)
 const { currentPlatform, skyEmuPath } = storeToRefs(emulator)
 const {
@@ -32,6 +39,9 @@ const {
   manualVoltage,
   chipErase,
   verifyAfter,
+  thermalPaper,
+  cartridgeStage,
+  cartridgeStickers,
   cfbBinPath,
   ruleDataDir,
 } = storeToRefs(settings)
@@ -54,6 +64,7 @@ const rulePathLabel = computed(() => ruleDataDir.value || t('settings.pathUnset'
 
 onMounted(() => {
   settings.ensurePathsReady()
+  refreshCfbVersion()
 })
 
 /** 选择 cfb 可执行文件（与一般 bin 引用一致）。 */
@@ -101,8 +112,18 @@ async function pickRuleDir() {
  * 只确认二进制可运行，不比对 Cargo.toml。
  */
 async function verifyToolchain() {
-  if (!inTauri || verifying.value || !cfbBinPath.value) return
+  if (verifying.value) return
+  if (!inTauri) {
+    toast.error(t('settings.pathPickDesktopOnly'))
+    return
+  }
+  if (!cfbBinPath.value) {
+    toast.error(t('settings.verifyNeedPath'))
+    logStore.addLog(t('settings.verifyNeedPath'), 'warn')
+    return
+  }
   verifying.value = true
+  toast.info(t('settings.verifying'))
   try {
     clearDirectBinaryCache()
     const binPath = await invoke('resolve_cfb_binary', { cfbPath: cfbBinPath.value })
@@ -196,7 +217,11 @@ function toggleManualVoltage() {
 </script>
 
 <template>
-  <div class="flex-1 min-h-0 overflow-auto no-scrollbar px-5 py-4 space-y-5 text-zinc-200">
+  <div
+    data-drawer-scroll
+    class="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar px-5 py-4 space-y-5 text-zinc-200 [touch-action:pan-y]"
+    v-bind="scrollBind"
+  >
     <section class="space-y-3">
       <div class="flex items-center justify-between gap-2">
         <h3 class="text-[11px] font-black uppercase tracking-widest text-zinc-400">{{ $t('settings.toolchain') }}</h3>
@@ -204,7 +229,7 @@ function toggleManualVoltage() {
           data-no-drag
           type="button"
           class="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-white/10 bg-zinc-900 px-2 text-[10px] font-bold text-zinc-300 hover:text-white disabled:opacity-40"
-          :disabled="!inTauri || verifying || !cfbBinPath"
+          :disabled="verifying"
           :title="$t('settings.verify')"
           :aria-label="$t('settings.verify')"
           @click="verifyToolchain"
@@ -215,94 +240,52 @@ function toggleManualVoltage() {
         </button>
       </div>
       <div class="space-y-3 border-y border-white/10 py-2.5">
-        <div class="space-y-1.5">
-          <div class="text-[11px] font-bold text-zinc-300">{{ $t('settings.cfbPath') }}</div>
-          <div class="flex items-center gap-2">
-            <div
-              class="min-w-0 flex-1 truncate rounded-md border border-white/10 bg-zinc-900 px-2.5 py-2 text-[10px] font-medium"
-              :class="cfbBinPath ? 'text-zinc-200' : 'text-zinc-600'"
-              :title="cfbBinPath || undefined"
-            >
-              {{ cfbPathLabel }}
-            </div>
-            <button
-              data-no-drag
-              type="button"
-              class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/10 bg-zinc-900 text-zinc-400 hover:text-white disabled:opacity-40"
-              :disabled="!inTauri"
-              :title="$t('settings.cfbPathPick')"
-              :aria-label="$t('settings.cfbPathPick')"
-              @click="pickCfbBin"
-            >
-              <FolderOpen class="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-        <div class="space-y-1.5">
-          <div class="text-[11px] font-bold text-zinc-300">{{ $t('settings.rulePath') }}</div>
-          <div class="flex items-center gap-2">
-            <div
-              class="min-w-0 flex-1 truncate rounded-md border border-white/10 bg-zinc-900 px-2.5 py-2 text-[10px] font-medium"
-              :class="ruleDataDir ? 'text-zinc-200' : 'text-zinc-600'"
-              :title="ruleDataDir || undefined"
-            >
-              {{ rulePathLabel }}
-            </div>
-            <button
-              data-no-drag
-              type="button"
-              class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/10 bg-zinc-900 text-zinc-400 hover:text-white disabled:opacity-40"
-              :disabled="!inTauri"
-              :title="$t('settings.rulePathPick')"
-              :aria-label="$t('settings.rulePathPick')"
-              @click="pickRuleDir"
-            >
-              <FolderOpen class="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
+        <ToolchainPathField
+          :title="$t('settings.cfbPath')"
+          :version="cfbVersion"
+          :path-label="cfbPathLabel"
+          :path="cfbBinPath || ''"
+          :pick-title="$t('settings.cfbPathPick')"
+          :download-title="$t('settings.cfbDownload')"
+          :downloading="downloadingCfb"
+          :disabled="!inTauri"
+          @pick="pickCfbBin"
+          @download="downloadCfb"
+        />
+        <ToolchainPathField
+          :title="$t('settings.rulePath')"
+          :version="ruleVersion"
+          :path-label="rulePathLabel"
+          :path="ruleDataDir || ''"
+          :pick-title="$t('settings.rulePathPick')"
+          :download-title="$t('settings.ruleDownload')"
+          :downloading="downloadingRule"
+          :disabled="!inTauri"
+          @pick="pickRuleDir"
+          @download="downloadRule"
+        />
       </div>
     </section>
 
     <section class="space-y-3">
       <h3 class="text-[11px] font-black uppercase tracking-widest text-zinc-400">{{ $t('settings.skyemu') }}</h3>
       <div class="space-y-2 border-y border-white/10 py-2.5">
-        <div class="flex items-center gap-1 text-[11px] font-bold text-zinc-300">
-          {{ $t('settings.skyemuPath') }}
-          <SettingHint :text="$t('settings.skyemuPathHint')" />
-        </div>
-        <div class="flex items-center gap-2">
-          <div
-            class="min-w-0 flex-1 truncate rounded-md border border-white/10 bg-zinc-900 px-2.5 py-2 text-[10px] font-medium"
-            :class="skyEmuPath ? 'text-zinc-200' : 'text-zinc-600'"
-            :title="skyEmuPath || undefined"
-          >
-            {{ skyEmuPathLabel }}
-          </div>
-          <button
-            data-no-drag
-            type="button"
-            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/10 bg-zinc-900 text-zinc-400 hover:text-white disabled:opacity-40"
-            :disabled="!inTauri"
-            :title="$t('settings.skyemuPick')"
-            :aria-label="$t('settings.skyemuPick')"
-            @click="pickSkyEmuPath"
-          >
-            <FolderOpen class="h-3.5 w-3.5" />
-          </button>
-          <button
-            data-no-drag
-            type="button"
-            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-emerald-500/40 bg-emerald-500 text-white hover:bg-emerald-400 disabled:opacity-40"
-            :disabled="!inTauri || downloading"
-            :title="$t('settings.skyemuDownload')"
-            :aria-label="$t('settings.skyemuDownload')"
-            @click="downloadSkyEmu"
-          >
-            <LoaderCircle v-if="downloading" class="h-3.5 w-3.5 animate-spin" :stroke-width="2.5" />
-            <Download v-else class="h-3.5 w-3.5" :stroke-width="2.5" />
-          </button>
-        </div>
+        <ToolchainPathField
+          :version="skyEmuVersion"
+          :path-label="skyEmuPathLabel"
+          :path="skyEmuPath || ''"
+          :pick-title="$t('settings.skyemuPick')"
+          :download-title="$t('settings.skyemuDownload')"
+          :downloading="downloading"
+          :disabled="!inTauri"
+          @pick="pickSkyEmuPath"
+          @download="downloadSkyEmu"
+        >
+          <template #title>
+            {{ $t('settings.skyemuPath') }}
+            <SettingHint :text="$t('settings.skyemuPathHint')" />
+          </template>
+        </ToolchainPathField>
       </div>
     </section>
 
@@ -377,6 +360,33 @@ function toggleManualVoltage() {
     </section>
 
     <section class="space-y-1">
+      <h3 class="mb-2 text-[11px] font-black uppercase tracking-widest text-zinc-400">{{ $t('settings.ui') }}</h3>
+      <div class="border-y border-white/10 divide-y divide-white/10">
+        <div class="flex min-h-11 items-center justify-between gap-4 py-2.5 text-xs font-semibold text-zinc-300">
+          <span class="flex min-w-0 items-center gap-1">
+            {{ $t('settings.cartridgeStage') }}
+            <SettingHint :text="$t('settings.cartridgeStageHint')" />
+          </span>
+          <UiSwitch v-model="cartridgeStage" />
+        </div>
+        <div class="flex min-h-11 items-center justify-between gap-4 py-2.5 text-xs font-semibold text-zinc-300">
+          <span class="flex min-w-0 items-center gap-1">
+            {{ $t('settings.cartridgeStickers') }}
+            <SettingHint :text="$t('settings.cartridgeStickersHint')" />
+          </span>
+          <UiSwitch v-model="cartridgeStickers" :disabled="!cartridgeStage" />
+        </div>
+        <div class="flex min-h-11 items-center justify-between gap-4 py-2.5 text-xs font-semibold text-zinc-300">
+          <span class="flex min-w-0 items-center gap-1">
+            {{ $t('settings.thermalPaper') }}
+            <SettingHint :text="$t('settings.thermalPaperHint')" />
+          </span>
+          <UiSwitch v-model="thermalPaper" />
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-1">
       <h3 class="mb-2 text-[11px] font-black uppercase tracking-widest text-zinc-400">{{ $t('settings.burn') }}</h3>
       <div class="border-y border-white/10 divide-y divide-white/10">
         <div class="flex min-h-11 items-center justify-between gap-4 py-2.5 text-xs font-semibold text-zinc-300">
@@ -387,9 +397,16 @@ function toggleManualVoltage() {
           <UiSwitch v-model="chipErase" />
         </div>
         <div class="flex min-h-11 items-center justify-between gap-4 py-2.5 text-xs font-semibold text-zinc-300">
-          <span class="flex min-w-0 items-center gap-1">
-            {{ $t('settings.verifyAfter') }}
-            <SettingHint :text="$t('settings.verifyAfterHint')" />
+          <span class="flex min-w-0 flex-col gap-0.5">
+            <span>{{ $t('settings.verifyAfter') }}</span>
+            <button
+              data-no-drag
+              type="button"
+              class="w-fit text-left text-[9px] font-bold text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
+              @click="emulator.openBookmark(emulator.BOOKMARK_IDS.help)"
+            >
+              {{ $t('settings.verifyAfterSeeHelp') }}
+            </button>
           </span>
           <UiSwitch v-model="verifyAfter" />
         </div>

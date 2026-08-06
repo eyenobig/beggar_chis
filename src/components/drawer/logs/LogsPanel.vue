@@ -1,8 +1,10 @@
 <script setup>
 import { nextTick, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useDragScroll } from '../../../composables/useDragScroll'
 import { useLogStore } from '../../../stores/useLogStore'
 
+const { scrollBind } = useDragScroll()
 const { logs } = storeToRefs(useLogStore())
 const logOutput = ref(null)
 
@@ -20,7 +22,12 @@ function logColor(type) {
 </script>
 
 <template>
-  <div ref="logOutput" class="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-5 font-mono text-xs no-scrollbar">
+  <div
+    ref="logOutput"
+    data-drawer-scroll
+    class="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-contain p-5 font-mono text-xs no-scrollbar [touch-action:pan-y]"
+    v-bind="scrollBind"
+  >
     <div v-if="logs.length === 0" class="flex flex-1 items-center justify-center text-[10px] text-zinc-700">
       暂无日志
     </div>

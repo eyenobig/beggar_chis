@@ -9,7 +9,17 @@
     "core:window:allow-close",
     "core:window:allow-minimize",
     "core:window:allow-set-size",
+    "updater:default",
+    "process:allow-restart",
     "opener:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://www.gbmake.com/*" },
+        { "url": "https://gbmake.com/*" },
+        { "url": "https://g.gbmake.com/*" }
+      ]
+    },
     {
       "identifier": "opener:allow-open-path",
       "allow": [

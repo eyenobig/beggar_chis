@@ -11,6 +11,8 @@ import TaskPanel from './TaskPanel.vue'
 const STRIP_WIDTH = 36
 const OPEN_LEFT = 760
 const CLOSED_LEFT = OPEN_LEFT - STRIP_WIDTH
+/** 比 BaseDrawer(20) 再收一截，避开第二层 rounded-r-[18px] 上下角，避免竖条「高出」抽屉 */
+const STRIP_INSET = 34
 
 const emulator = useEmulator()
 const taskStore = useTaskProgress()
@@ -37,8 +39,8 @@ function closeStrip() {
     :class="drawerVisible ? 'drawer-transition' : ''"
     :style="{
       left: drawerVisible ? OPEN_LEFT + 'px' : CLOSED_LEFT + 'px',
-      top: '20px',
-      bottom: '20px',
+      top: STRIP_INSET + 'px',
+      bottom: STRIP_INSET + 'px',
       width: drawerVisible ? STRIP_WIDTH + 'px' : '0px',
       opacity: drawerVisible ? 1 : 0,
       pointerEvents: drawerVisible ? 'auto' : 'none',

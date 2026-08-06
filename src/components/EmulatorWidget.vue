@@ -7,6 +7,7 @@ import { useWindowSync } from '../composables/useWindowSync'
 import { useCartData } from '../stores/useCartData'
 import { useTaskProgress } from '../stores/useTaskProgress'
 import { useToast } from '../stores/useToast'
+import { useCfbSettings } from '../stores/useCfbSettings'
 import { inTauri } from '../services/cfb'
 import WidgetHeader from './WidgetHeader.vue'
 import PlatformToggle from './PlatformToggle.vue'
@@ -17,43 +18,58 @@ import ToastHost from './ui/ToastHost.vue'
 import CartridgeManager from './cartridge/CartridgeManager.vue'
 import RomCartridgeSlider from './drawer/logs/rom/RomCartridgeSlider.vue'
 
-/** 吐纸区上限（与 ToastHost.SPIT_AREA_H 一致） */
-const SPIT_H = 480
-const SPIT_PAD = 16
-/** 刀口+齿孔高度，绝对吐纸在卡片下，需一并计入窗口底部预留 */
-const CUTTER_H = 14
-
 const emu = useEmulator()
-const { logsOpen, shopOpen, settingsOpen, helpOpen } = storeToRefs(emu)
+const { logsOpen, shopOpen, settingsOpen, helpOpen, romShelfCollapsed } = storeToRefs(emu)
 const { drawerOpen: tasksOpen } = storeToRefs(useTaskProgress())
 const { addLog, closeDrawers } = emu
 const cart = useCartData()
 const { flashInfo, opRunning, opKind } = storeToRefs(cart)
 const { handleDrop } = cart
 const toastStore = useToast()
+const { paperHeight: toastPaperHeight } = storeToRefs(toastStore)
+const { thermalPaper, cartridgeStage, cartridgeStickers } = storeToRefs(useCfbSettings())
 
 const root = ref(null)
 const homepageDropZone = ref(null)
 
 const BOOKMARK_W = 28
+/** 吐纸区上限（与 ToastHost.SPIT_AREA_H 一致） */
+const SPIT_H = 480
+const SPIT_PAD = 16
+/** 刀口高度；absolute 吐纸在卡片下，需计入窗口底部预留 */
+const CUTTER_H = 14
 
 const secondPageOpen = computed(
   () => logsOpen.value || shopOpen.value || settingsOpen.value || helpOpen.value,
 )
 const thirdPageOpen = computed(() => tasksOpen.value && secondPageOpen.value)
-const cartridgeStageOpen = computed(() => !!flashInfo.value)
-const romCartridgeShelfOpen = computed(() => cartridgeStageOpen.value && logsOpen.value)
+const cartridgeStageOpen = computed(() => cartridgeStage.value && !!flashInfo.value)
+const romCartridgeShelfOpen = computed(
+  () => cartridgeStickers.value && cartridgeStageOpen.value && logsOpen.value,
+)
+/** 卡带舞台预留高度（贴纸架贴在其右侧上沿，折叠后只留顶栏）。 */
+const CARTRIDGE_STAGE_H = 220
+const cartridgeTopInset = computed(() => (cartridgeStageOpen.value ? CARTRIDGE_STAGE_H : 0))
+/** 展开贴齐抽屉；折叠时信息 bar 再上移一点。 */
+const romShelfStyle = computed(() => {
+  const lift = romShelfCollapsed.value ? 10 : 0
+  return {
+    left: `${BOOKMARK_W + 320}px`,
+    top: `${cartridgeTopInset.value + 20}px`,
+    transform: `translateY(calc(-100% - ${lift}px))`,
+  }
+})
 const platformOperationLocked = computed(() =>
   opRunning.value && ['burn', 'erase', 'dump'].includes(opKind.value),
 )
-const cartridgeTopInset = computed(() => (cartridgeStageOpen.value ? 220 : 0))
 
 /**
- * 吐纸槽始终留刀口占位；有纸时按实际纸高预留（跟内容等高，不垫高）。
- * 用 root padding，不进主栏文档流。
+ * 热敏纸：absolute 吐纸，用 padding 预留高度（勿把 Toast 做成 z 高于抽屉的文档流兄弟，会挡点击）。
+ * 关闭热敏纸：Teleport banner，不占底。
  */
 const toastBottomInset = computed(() => {
-  const live = Number(toastStore.paperHeight) || 0
+  if (!thermalPaper.value) return 0
+  const live = Number(toastPaperHeight.value) || 0
   const paper = Math.min(Math.max(live, 0), SPIT_H)
   return paper + CUTTER_H + SPIT_PAD
 })
@@ -64,7 +80,7 @@ const frameWidth = computed(() => {
   return 348 + BOOKMARK_W
 })
 
-useWindowSync(root, [cartridgeTopInset, toastBottomInset, frameWidth])
+useWindowSync(root, [cartridgeTopInset, toastBottomInset, frameWidth, thermalPaper])
 
 function handleKeydown(event) {
   if (event.key !== 'Escape') return
@@ -119,8 +135,8 @@ onUnmounted(() => {
 
 <template>
   <!--
-    高度随内容：只用 padding 预留卡带 / 吐纸，不再写死 520 把 SkyEmu 下面撑出空白。
-    窗口同步读 border-box（含 padding）。
+    高度随内容：paddingTop 预留卡带，paddingBottom 预留 absolute 吐纸。
+    Toast 必须挂在左栏 320 内（勿做成更高 z 的文档流兄弟，否则挡抽屉点击）。
   -->
   <div
     ref="root"
@@ -132,7 +148,11 @@ onUnmounted(() => {
       boxSizing: 'border-box',
     }"
   >
-    <div class="absolute inset-y-0 right-0 z-0" :style="{ left: (320 + BOOKMARK_W) + 'px' }" />
+    <!-- 右侧透明拖拽区：绝不能抢抽屉点击 -->
+    <div
+      class="pointer-events-none absolute inset-y-0 right-0 z-0"
+      :style="{ left: (320 + BOOKMARK_W) + 'px' }"
+    />
 
     <div
       v-if="cartridgeStageOpen"
@@ -148,13 +168,12 @@ onUnmounted(() => {
         v-if="romCartridgeShelfOpen"
         data-no-drag
         class="absolute z-30 w-[440px] overflow-visible bg-transparent"
-        :style="{ left: (BOOKMARK_W + 320) + 'px', top: (cartridgeTopInset + 20) + 'px', transform: 'translateY(-100%)' }"
+        :style="romShelfStyle"
       >
         <RomCartridgeSlider />
       </div>
     </Transition>
 
-    <!-- 主栏随内容增高；Toast 绝对定位在卡片外下沿 -->
     <div
       class="relative z-20 overflow-visible"
       :style="{ marginLeft: BOOKMARK_W + 'px' }"
@@ -184,7 +203,8 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <ToastHost />
+        <!-- 左栏内 absolute 吐纸 / banner；外层 pointer-events 由 ToastHost 控制 -->
+        <ToastHost :thermal="thermalPaper" />
       </div>
 
       <RightDrawers />

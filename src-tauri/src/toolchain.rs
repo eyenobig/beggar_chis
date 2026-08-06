@@ -1,7 +1,16 @@
-//! 工具链管理：运行时二进制 / rule 数据路径探测、打包首次下载，以及直连模式下的
+//! 工具链管理：运行时二进制 / rule 数据路径、打包首次下载，以及直连模式下的
 //! 二进制解析与执行。设置页配置的是 **可执行文件或 bins 目录**（平台相关产物），
-//! 不是 cmd/rule 源码树。开发者构建用的源码路径写在 gitignored 的
-//! `local-paths.json`，与 Settings 工具链引用分离。
+//! 不是 cmd/rule 源码树。
+//!
+//! ## 与前端 `src/services/toolchain` 对齐
+//!
+//! SkyEmu / cfb / rule 共享同一套「获取 → 定位路径」生命周期；差异只在执行层：
+//! - **cfb**：本模块 + [`crate::toolchain_update`]（ensure / spawn）
+//! - **rule**：本模块路径探测（`profiles/`）；远程 zip 暂未启用
+//! - **SkyEmu**：前端 download + [`crate::skyemu_launch`]（DirectPlay）
+//!
+//! 源码 / GitHub 默认值见 [`crate::cfb_config`]（与 `scripts/cfb-config.mjs` 对齐）。
+//! Settings `cfbBinPath` 与构建用源码路径分离。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -14,12 +23,7 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
-use crate::download;
-
-/// 打包版默认拉取的 GitHub tag（与近期可用带资产发布对齐）。
-const TOOLCHAIN_TAG: &str = "v0.3.3";
-const CFB_REPO: &str = "eyenobig/chis-burner-cmd";
-const RULE_REPO: &str = "eyenobig/chis-burner-rule";
+use crate::cfb_config;
 
 fn run(cmd: &str, args: &[&str]) -> Result<String, String> {
     let out = Command::new(cmd)
@@ -83,25 +87,12 @@ pub fn detect_default_rule_dir() -> Option<String> {
     detect_dev_rule_data_dir()
 }
 
-/// 同级 `chis-burner-cmd` 源码根（仅供 local-paths.json / 构建脚本，不进 Settings）。
-fn detect_dev_cfb_source_dir() -> Option<PathBuf> {
-    let candidate = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()? // beggar_chis
-        .parent()? // Project
-        .join("chis-burner-cmd");
-    if candidate.join("Cargo.toml").exists() {
-        Some(candidate)
-    } else {
-        None
-    }
-}
-
 /// 开发态探测已构建 cfb **可执行文件**（绝不返回源码根目录）。
-/// 优先级：`target/<triple>/release` → `target/release` → 同路径 debug → 本 app sidecar。
+/// 优先级：配置的本地源码 `target/` → 本 app sidecar（ensure:cfb 本地编或 GitHub）。
 fn detect_dev_cfb_bin() -> Option<String> {
     let triple = current_triple();
     let bin_name = if cfg!(windows) { "cfb.exe" } else { "cfb" };
-    if let Some(source) = detect_dev_cfb_source_dir() {
+    if let Some(source) = cfb_config::resolve_local_cfb_source() {
         let candidates = [
             source.join("target").join(triple).join("release").join(bin_name),
             source.join("target").join("release").join(bin_name),
@@ -116,21 +107,9 @@ fn detect_dev_cfb_bin() -> Option<String> {
     find_bin_in_dir(&sidecar_dir, triple).map(|p| p.display().to_string())
 }
 
+/// 开发态 rule 数据目录（仅认 `cfb_config::resolve_rule_source_dir`）。
 fn detect_dev_rule_data_dir() -> Option<String> {
-    let project = Path::new(env!("CARGO_MANIFEST_DIR")).parent()?.parent()?;
-    let nested = project
-        .join("chis-burner-cmd")
-        .join("vendor")
-        .join("chis-burner-rule");
-    if nested.join("profiles").exists() {
-        return Some(nested.display().to_string());
-    }
-    let sibling = project.join("chis-burner-rule");
-    if sibling.join("profiles").exists() {
-        Some(sibling.display().to_string())
-    } else {
-        None
-    }
+    cfb_config::resolve_rule_source_dir().map(|p| p.display().to_string())
 }
 
 /// 前端 bootstrap 返回值：cfb 可执行文件（或 bins 目录）+ rule 数据目录。
@@ -143,9 +122,9 @@ pub struct ToolchainPaths {
     pub rule_dir: Option<String>,
 }
 
-/// 路径为空时由前端调用：debug 探测本机已构建二进制；release 下载平台产物到 app data。
+/// 路径为空时由前端调用：debug 探测本地源 / sidecar；release 下载到 app data。
 /// 幂等：已存在则跳过下载。返回路径给前端写入 localStorage。
-/// debug 另写 gitignored 的 `local-paths.json`（**源码**路径，供 `npm run build:cfb:local`）。
+/// debug 另写 gitignored 的 `local-paths.json`（**源码**路径，供 `ensure:cfb` 本地编）。
 #[tauri::command]
 pub async fn bootstrap_toolchain_paths(app: AppHandle) -> Result<ToolchainPaths, String> {
     if cfg!(debug_assertions) {
@@ -159,24 +138,28 @@ pub async fn bootstrap_toolchain_paths(app: AppHandle) -> Result<ToolchainPaths,
 }
 
 /// 开发态把 **源码** 路径写入仓库根 `local-paths.json`（构建脚本用，与 Settings bin 引用无关）。
+/// 使用 `paths` 分区（与前端 localConfig 同风格）；仍兼容读扁平键。
 fn write_build_local_paths_json() {
-    let Some(cfb) = detect_dev_cfb_source_dir() else {
+    let Some(cfb) = cfb_config::resolve_local_cfb_source() else {
         return;
     };
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent();
-    let Some(root) = root else { return };
+    let Some(root) = cfb_config::repo_root() else {
+        return;
+    };
     let file = root.join("local-paths.json");
-    let mut map = serde_json::Map::new();
-    map.insert(
+    let mut paths = serde_json::Map::new();
+    paths.insert(
         "cfbSourceDir".into(),
         serde_json::Value::String(cfb.display().to_string().replace('\\', "/")),
     );
-    if let Some(rule) = detect_dev_rule_data_dir() {
-        map.insert(
+    if let Some(rule) = cfb_config::resolve_rule_source_dir() {
+        paths.insert(
             "ruleSourceDir".into(),
-            serde_json::Value::String(rule.replace('\\', "/")),
+            serde_json::Value::String(rule.display().to_string().replace('\\', "/")),
         );
     }
+    let mut map = serde_json::Map::new();
+    map.insert("paths".into(), serde_json::Value::Object(paths));
     let Ok(text) = serde_json::to_string_pretty(&serde_json::Value::Object(map)) else {
         return;
     };
@@ -199,98 +182,17 @@ async fn ensure_release_toolchain(app: &AppHandle) -> Result<ToolchainPaths, Str
         .app_data_dir()
         .map_err(|e| format!("无法解析 app data 目录: {e}"))?
         .join("toolchain");
-    let cmd_dir = base.join("cmd");
     let rule_dir = base.join("rule");
-    std::fs::create_dir_all(&cmd_dir).map_err(|e| format!("创建 cmd 目录失败: {e}"))?;
-    std::fs::create_dir_all(&rule_dir).map_err(|e| format!("创建 rule 目录失败: {e}"))?;
-
     let triple = current_triple();
-    let asset_name = if cfg!(windows) {
-        format!("cfb-{triple}.exe")
-    } else {
-        format!("cfb-{triple}")
-    };
-    let bin_path = cmd_dir.join(&asset_name);
-    if !bin_path.exists() {
-        let url = format!(
-            "https://github.com/{CFB_REPO}/releases/download/{TOOLCHAIN_TAG}/{asset_name}"
-        );
-        download::download_file_silent(&url, &bin_path.to_string_lossy())
-            .await
-            .map_err(|e| format!("下载 cfb 失败: {e}"))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&bin_path)
-                .map_err(|e| format!("读取权限失败: {e}"))?
-                .permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&bin_path, perms)
-                .map_err(|e| format!("设置可执行权限失败: {e}"))?;
-        }
-    }
+    let bin_path = crate::toolchain_update::ensure_latest_cfb(app, triple).await?;
 
-    if !rule_dir.join("profiles").exists() {
-        let zip_path = base.join("rule.zip");
-        let url = format!(
-            "https://github.com/{RULE_REPO}/archive/refs/tags/{TOOLCHAIN_TAG}.zip"
-        );
-        download::download_file_silent(&url, &zip_path.to_string_lossy())
-            .await
-            .map_err(|e| format!("下载 rule 失败: {e}"))?;
-        let extract_tmp = base.join("rule-extract");
-        if extract_tmp.exists() {
-            let _ = std::fs::remove_dir_all(&extract_tmp);
-        }
-        let zip_s = zip_path.to_string_lossy().to_string();
-        let tmp_s = extract_tmp.to_string_lossy().to_string();
-        tokio::task::spawn_blocking(move || download::extract_zip_sync(&zip_s, &tmp_s))
-            .await
-            .map_err(|e| format!("解压任务失败: {e}"))??;
-        let nested = find_rule_root(&extract_tmp)
-            .ok_or_else(|| "解压后未找到 rule（缺少 profiles 目录）".to_string())?;
-        if rule_dir.exists() {
-            let _ = std::fs::remove_dir_all(&rule_dir);
-        }
-        std::fs::rename(&nested, &rule_dir).or_else(|_| copy_dir_recursive(&nested, &rule_dir))?;
-        let _ = std::fs::remove_dir_all(&extract_tmp);
-        let _ = std::fs::remove_file(&zip_path);
-    }
-
-    // Settings 存具体可执行文件路径（平台相关），与一般 bin 引用一致。
     Ok(ToolchainPaths {
         cfb_bin: Some(bin_path.display().to_string()),
-        rule_dir: Some(rule_dir.display().to_string()),
+        rule_dir: rule_dir
+            .join("profiles")
+            .is_dir()
+            .then(|| rule_dir.display().to_string()),
     })
-}
-
-fn find_rule_root(dir: &Path) -> Option<PathBuf> {
-    if dir.join("profiles").exists() {
-        return Some(dir.to_path_buf());
-    }
-    let entries = std::fs::read_dir(dir).ok()?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() && path.join("profiles").exists() {
-            return Some(path);
-        }
-    }
-    None
-}
-
-fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(dst).map_err(|e| format!("创建目录失败: {e}"))?;
-    for entry in std::fs::read_dir(src).map_err(|e| format!("读取目录失败: {e}"))? {
-        let entry = entry.map_err(|e| format!("读取目录项失败: {e}"))?;
-        let from = entry.path();
-        let to = dst.join(entry.file_name());
-        if from.is_dir() {
-            copy_dir_recursive(&from, &to)?;
-        } else {
-            std::fs::copy(&from, &to).map_err(|e| format!("拷贝失败: {e}"))?;
-        }
-    }
-    Ok(())
 }
 
 fn current_triple() -> &'static str {
@@ -589,8 +491,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn detects_sibling_chis_burner_cmd_source() {
-        let dir = detect_dev_cfb_source_dir().expect("chis-burner-cmd should exist beside beggar_chis");
+    fn detects_configured_chis_burner_cmd_source() {
+        let Some(dir) = cfb_config::resolve_local_cfb_source() else {
+            // CI / 仅克隆本仓时配置路径可能无 Cargo.toml；跳过。
+            return;
+        };
         assert!(
             dir.join("Cargo.toml").exists(),
             "detected cfb source missing Cargo.toml: {}",
@@ -619,7 +524,7 @@ mod tests {
             !path.is_dir(),
             "detect_dev_cfb_bin must not return a directory: {bin}"
         );
-        if let Some(source) = detect_dev_cfb_source_dir() {
+        if let Some(source) = cfb_config::resolve_local_cfb_source() {
             assert_ne!(
                 path,
                 source.as_path(),
@@ -630,7 +535,7 @@ mod tests {
 
     #[test]
     fn resolve_source_dir_to_built_exe_when_present() {
-        let Some(source) = detect_dev_cfb_source_dir() else {
+        let Some(source) = cfb_config::resolve_local_cfb_source() else {
             return;
         };
         let Ok(resolved) = resolve_cfb_binary(source.display().to_string()) else {
@@ -644,7 +549,9 @@ mod tests {
 
     #[test]
     fn detects_rule_profiles() {
-        let dir = detect_dev_rule_data_dir().expect("chis-burner-rule should exist (vendor or sibling)");
+        let Some(dir) = detect_dev_rule_data_dir() else {
+            return;
+        };
         assert!(
             Path::new(&dir).join("profiles").exists(),
             "detected rule dir missing profiles: {dir}"

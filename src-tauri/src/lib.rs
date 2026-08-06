@@ -2,6 +2,8 @@
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_shell::init()) // 允许前端以 sidecar 方式驱动 cfb
         .plugin(tauri_plugin_dialog::init()) // ROM、安装目录选择
             .manage(toolchain::CfbChildren::default()) // 直连 bin 模式下 cfb_spawn 启动的子进程表
@@ -40,6 +42,8 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
+mod cfb_config;
 mod download;
 mod skyemu_launch;
 mod toolchain;
+mod toolchain_update;

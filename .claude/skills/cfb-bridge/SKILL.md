@@ -1,86 +1,120 @@
 ---
 name: cfb-bridge
-description: beggar_chis（Tauri+Vue 桌面端）如何驱动烧录器。所有卡带读写（detect/info/burn/erase/dump/select/voltage）一律调用外部 cfb 命令行（chis-burner-cmd），监听它的 --json NDJSON 事件流并反馈到 UI——不要在本项目里自己实现串口/烧录协议。做任何与烧录、串口、读卡、写卡、进度展示相关的功能前必读。
+description: >-
+  beggar_chis（Tauri+Vue）如何驱动烧录器：一律通过外部 cfb（chis-burner-cmd）二进制 + --json NDJSON，
+  不在本仓重写串口/烧录协议。含 sidecar/直连路径、配置键（CFB_* / local-paths）、ensure:cfb、
+  命令与事件映射。做烧录、串口、读卡、写卡、进度、工具链路径、cfb 桥接相关功能前必读。
+  源码/Release 只认 scripts/cfb-config.mjs 与 src-tauri/src/cfb_config.rs 中的配置。
 ---
 
 # 用 cfb 驱动烧录器（监听 + 反馈）
 
-本项目（`beggar_chis`，Tauri 2 + Vue 3 + vue-i18n）**只做 GUI**。所有与烧录器/卡带的交互
-**统一委托给外部命令行 `cfb`**（Git 子模块 `chis-burner-cmd/`，仓库 https://github.com/eyenobig/chis-burner-cmd.git，Rust，跨平台 Win/macOS/Linux）。
+本仓（`beggar_chis`）**只做 GUI**。卡带 I/O 全部委托给外部命令行 **`cfb`**
+（独立仓库 [chis-burner-cmd](https://github.com/eyenobig/chis-burner-cmd)，**不是** git submodule）。
 
-> 单一事实来源原则：串口枚举、协议时序、GBA/MBC 烧录引擎都在 cfb 里，且跨平台。
-> **本项目不要重写这些**——只负责：拼命令 → 起进程 → 逐行监听 NDJSON → 反馈到界面。
+> 串口枚举、协议、GBA/MBC 引擎只在 cfb。本仓：拼命令 → 起进程 → 解析 NDJSON → 更新 UI。
 
-## 为什么这样做
+## 配置（只认这些）
 
-- cfb 一份代码三平台（靠 `serialport` crate），桌面端不必碰各平台串口差异。
-- cfb 已有稳定的 **NDJSON 事件契约**（见 `chis-burner-cmd/.claude/skills/cfb-output/SKILL.md`），
-  逐行 `JSON.parse` 即可流式驱动 UI（进度条、日志、结果）。
+**真相源：** `scripts/cfb-config.mjs` ↔ `src-tauri/src/cfb_config.rs`（默认值必须两边一致）。
 
-## 调用方式
+### 构建 / `ensure:cfb`（源码 vs Release）
 
-所有命令都加 `--json`，得到**一行一个事件**的 NDJSON（stdout）。诊断在 stderr。
+| 优先级 | 键 / 默认 | 含义 |
+|--------|-----------|------|
+| 1 | `CFB_LOCAL_DIR` | 本地 cmd **源码**绝对/相对路径 |
+| 2 | `local-paths.json` → `paths.cfbSourceDir`（兼容扁平 `cfbSourceDir`） | 同上（gitignored；模板 `local-paths.example.json`） |
+| 3 | **默认** `../chis-burner-cmd` | 相对本仓根的开发默认（常量 `DEFAULT_CFB_LOCAL_REL`） |
+| — | 上述路径无 `Cargo.toml` | → GitHub Release |
 
-| UI 动作 | cfb 命令 |
-|---------|----------|
-| 刷新设备列表 | `cfb detect --json` |
-| 选择并记住烧录器 | `cfb select --port <P> --json` |
-| 读卡带信息 | `cfb info [--mbc] --json` |
-| 写入 ROM | `cfb burn --rom <file> [--mbc] --json` |
-| 清空 ROM | `cfb erase [--mbc] --json` |
-| 导出 ROM | `cfb dump --out <file> [--mbc] [--len N] --json` |
-| 记住电压(仅 MBC) | `cfb voltage 5v --json` |
+| 键 | 默认 | 含义 |
+|----|------|------|
+| `CFB_GITHUB_REPO` | `eyenobig/chis-burner-cmd` | Release 仓库 |
+| `CFB_RELEASE_TAG` | `latest` | Release 标签 |
+| `CFB_GITHUB_TOKEN` / `GITHUB_TOKEN` | （空） | API 鉴权 |
+| `CFB_TARGET` | 本机 triple | 覆盖 sidecar 目标三元组 |
+| `CFB_RULE_DIR` | （空） | 本地编 rule 数据目录 |
+| `local-paths.json` → `paths.ruleSourceDir`（兼容扁平） | （空） | 同上 |
+| rule 默认 | `{cfbSource}/vendor/chis-burner-rule` | 仅当该目录含 `profiles/` |
 
-GBA 用默认（3.3V）；GB/GBC 加 `--mbc`（cfb 自动上 5V）。`--lang zh-CN|en` 让 cfb 的文案跟随
-应用语言（与 vue-i18n 当前语言保持一致）。
+**不要**再猜其它相对路径（例如独立的 `../chis-burner-rule`）。
 
-## 事件类型（按 `type` 分发，反馈到 UI）
+`local-paths.json` **只放构建用源码路径**（`paths` 分区）。运行时 bin / 设置 / 卡带缓存走前端 `src/services/localConfig.js`（localStorage `chis.local.v1`，同分区名 `paths` / `settings` / `cache` / `locale`），勿混写进仓库根文件（debug 下 Rust 会重写该文件）。
 
-逐行解析，按 `event.type` 路由（字段细节以 cfb-output 契约为准）：
+### 运行时（可执行文件，不是源码）
 
-- `port` / `summary` → detect/select 的设备列表
-- `info` → 卡带信息面板（present/kind/id/capacity/buffer_write_bytes/sector_size/sector_count/game_name/rom_title/game_code/revision/rom_checksum/rtc）。GBA 默认；GB/GBC 加 `--mbc`。
-- `progress` `{done,total}` → 进度条
-- `log` `{message}` → 日志面板
-- `result` `{command,ok,bytes,mismatch_bytes,seconds}` → 完成提示（成功/失败）
-- `voltage` `{voltage}` → 电压偏好显示
-- `selected` `{port}` → 记住的端口
-- `error` `{command,message}` → 错误提示
+| 优先级 | 来源 |
+|--------|------|
+| 1 | Settings `cfbBinPath`（绝对路径 exe 或 bins 目录）→ `resolve_cfb_binary` / 直连 |
+| 2 | Tauri sidecar `binaries/cfb-*` |
+| 3 | 打包态空路径 → `bootstrap_toolchain_paths` 下到 app-data `toolchain/` |
 
-**只解析 stdout 的 JSON 行**；stderr 当作诊断文本进日志面板，不要当数据解析。
+Settings **绝不是**源码树。持久化在 `localConfig.paths`（非 `local-paths.json`）。
 
-## Tauri 2 实现要点
+## Sidecar：`ensure:cfb`
 
-用 `tauri-plugin-shell` 起进程并按行监听（shell 插件会按行缓冲，正好对应 NDJSON）：
+`scripts/ensure-cfb.mjs`（`beforeDevCommand`）：
 
-```js
-import { Command } from '@tauri-apps/plugin-shell'
+1. `resolveCfbBuildSource()`（仅上表配置）
+2. 本地有 `Cargo.toml` → 缺/旧则跑 `scripts/build-cfb.mjs`
+3. 否则 → `build:cfb:github` / `scripts/download-cfb-release.mjs`
+4. 版本已匹配 → `skip build`
 
-async function runCfb(args, { onEvent, onLog }) {
-  const cmd = Command.create('cfb', [...args, '--json'])   // 或 Command.sidecar('binaries/cfb', ...)
-  cmd.stdout.on('data', line => {
-    const s = line.trim()
-    if (!s) return
-    let ev; try { ev = JSON.parse(s) } catch { return }     // 容错：忽略非 JSON 行
-    onEvent(ev)                                              // 按 ev.type 反馈到 UI
-  })
-  cmd.stderr.on('data', onLog)
-  const child = await cmd.spawn()
-  return child
-}
-```
+本地源只靠配置（`CFB_LOCAL_DIR` / `local-paths.json` / 默认相对路径），无单独的 `build:cfb:local` npm 入口。
 
-UI 侧按 `ev.type` 更新响应式状态（进度条接 `progress`，结果接 `result`，列表接 `port`/`summary`）。
+## 工具链资产抽象（与 SkyEmu / rule 对齐）
 
-落地清单：
-1. 装 `@tauri-apps/plugin-shell` 并在 `src-tauri` 注册插件、在 `capabilities/default.json` 放行
-   执行 `cfb`（或把 cfb 作为 **sidecar** 打包：`tauri.conf.json` 的 `bundle.externalBin`）。
-2. TS 侧维护一份与 cfb-output 契约对应的事件类型（`type` 判别联合），契约更新时同步。
-3. 进度/结果通过响应式状态或 Tauri event 推给 Vue 组件（如 `RomPanel.vue`）。
-4. 跨平台：定位/打包对应平台的 cfb 二进制；命令与解析逻辑三平台一致。
+SkyEmu、cfb、rule 的 **获取/路径** 共用 `src/services/toolchain/`（GitHub resolve、download+进度、locate）；**执行** 仍分叉（SkyEmu DirectPlay / cfb spawn / rule profiles）。详见 [toolchain-assets](../../.agents/skills/toolchain-assets/SKILL.md)。
+
+- 前端：`services/toolchain/components/cfb.js` → `ensureCfbPaths` / `resolveCfbBinary`
+- Rust：`toolchain.rs` + `toolchain_update.rs`（打包 ensure）
+- 构建脚本：仍只认 `cfb-config.mjs`（本 skill 上表）
+
+## 调用约定
+
+一律加 `--json`（一行一事件 NDJSON，stdout）。诊断在 stderr，勿当 JSON 解析。
+语言：`--lang` 与 vue-i18n 对齐（`useCfbSettings.withGlobalArgs`）。
+
+| UI / `cfbClient` | cfb 命令 |
+|------------------|----------|
+| `detect` | `detect --json` |
+| `selectPort` | `select --port <P> --json` |
+| `disconnect` | `disconnect --json` |
+| `setVoltage` | `voltage <3v3\|5v\|off>` 或 `voltage --clear` |
+| `readRomFile` | `rom-info --file <path> --json` |
+| `version` | `version --json` |
+| `readCartridge` | `info [--mbc] [--port] --json` |
+| `readRtc` | `rtc [--mbc] [--port] --json` |
+| `burnRom` / `erase` / `dumpRom` | `burn` / `erase` / `dump`（stream） |
+| `saveDump` / `saveWrite` / `saveVerify` / `saveErase` | `save-*`（stream） |
+
+GBA 默认；GB/GBC 加 `--mbc`。长任务用 `streamCfb`，短任务用 `executeCfb`。
+
+前端入口：`src/services/cfb/`（`client.js` 命令、`transport.js` 进程/NDJSON）。
+
+## 事件（按 `type` 分发）
+
+字段契约以 cmd 仓为准：`docs/client-protocol.md` + `src/event.rs`；摘要 skill：
+`chis-burner-cmd/.claude/skills/cfb-output/SKILL.md`（若本机有该仓）。
+
+常见：`port` / `summary` / `selected` / `info` / `progress` / `log` / `result` /
+`voltage` / `version` / `error` / `rtc_data` / `save_info`。
+
+**只解析 stdout JSON 行**；stderr → 日志面板文本。
+
+## Agent 工作流
+
+1. 改烧录 UI / 进度 / 设备列表 → 读本 skill + `client.js` / 相关 store；**不要**在本仓写串口协议。
+2. 新操作 → 先在 cmd 加命令与事件，再在 `client.js` 加命名方法，store 只消费 `type`。
+3. 路径 /「找不到 cfb」→ 查 Settings `cfbBinPath`、sidecar、`ensure:cfb` 日志；改默认只动 `cfb-config`。
+4. 启动 app → 另读 [dev-launch](../../.agents/skills/dev-launch/SKILL.md)。
+5. 对外 URL → [outbound-links](../../.agents/skills/outbound-links/SKILL.md)。
+6. 改 SkyEmu/cfb/rule 下载或路径抽象 → [toolchain-assets](../../.agents/skills/toolchain-assets/SKILL.md)。
 
 ## 不要做
 
-- 不要在 JS/Rust 里重写串口枚举、VID/PID 识别、烧录/擦除/校验、bank 切换、电压控制——这些都在 cfb。
-- 不要解析 cfb 的人类可读输出（不带 `--json` 的那种）；只解析 `--json` 的 NDJSON。
-- 契约字段以 `chis-burner-cmd/.claude/skills/cfb-output/SKILL.md` 为准，不要各自臆造。
+- 不要在 JS/Rust 重写串口/VID-PID/烧录引擎。
+- 不要解析非 `--json` 人类可读输出。
+- 不要把源码根写进 Settings 当可执行文件。
+- 不要在脚本/Rust 里另写一套相对路径探测；只扩展 `cfb-config`。
+- 不要把「必须同级 checkout」写成生产硬依赖（无本地源则走 GitHub）。

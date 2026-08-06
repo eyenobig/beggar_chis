@@ -2,17 +2,15 @@ import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { gameCodeOf, romTitleOf } from '../components/drawer/logs/rom/romFields'
 import { flashRomMatchesPlatform } from '../services/flashRom'
+import { getLocalCache, patchLocalConfig } from '../services/localConfig'
 
-const STORAGE_KEY = 'chis.cartridges.v2'
+/** 缓存有效期：超过则视为未命中，重新查 Payload。
+ *  防止 Payload 数据重建（ROM id 变化）后，旧缓存的 payload id 指向错误 ROM。 */
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 function loadRecords() {
-  if (typeof localStorage === 'undefined') return []
-  try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-    return Array.isArray(value) ? value : []
-  } catch {
-    return []
-  }
+  const carts = getLocalCache().cartridges
+  return Array.isArray(carts) ? carts : []
 }
 
 function cartridgeKey(info) {
@@ -27,15 +25,17 @@ export const useCartridgeCache = defineStore('cartridge-cache', () => {
   const activeCartridge = computed(() => records.value.find((item) => item.payload === activePayload.value) || null)
 
   watch(records, (value) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
+    patchLocalConfig('cache', { cartridges: value })
   }, { deep: true })
 
   function activateCached(info) {
     const detectionKey = cartridgeKey(info)
+    const now = Date.now()
     const record = records.value.find((item) =>
       item.detectionKey === detectionKey
       && item.cartridgeImage
-      && flashRomMatchesPlatform(item, info),
+      && flashRomMatchesPlatform(item, info)
+      && (!item.cachedAt || now - item.cachedAt < CACHE_TTL_MS),
     )
     activePayload.value = record?.payload || ''
     return record || null
@@ -72,10 +72,7 @@ export const useCartridgeCache = defineStore('cartridge-cache', () => {
   function clearAll() {
     records.value = []
     activePayload.value = ''
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(STORAGE_KEY)
-      localStorage.removeItem('chis.cartridges.v1')
-    }
+    patchLocalConfig('cache', { cartridges: [] })
   }
 
   return { records, activePayload, activeCartridge, activateCached, remember, clearActive, clearAll }

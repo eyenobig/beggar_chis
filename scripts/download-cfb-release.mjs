@@ -1,17 +1,15 @@
 #!/usr/bin/env node
-/** Download a prebuilt cfb sidecar from a chis-burner-cmd GitHub Release. */
+/** Download a prebuilt cfb sidecar from the configured chis-burner-cmd GitHub Release. */
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
+import { detectTriple, githubConfig, repoRoot } from './cfb-config.mjs'
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const repository = process.env.CFB_GITHUB_REPO || 'eyenobig/chis-burner-cmd'
-const releaseTag = process.env.CFB_RELEASE_TAG || 'latest'
-const target = process.env.CFB_TARGET || detectTriple()
+const root = repoRoot()
+const { repository, releaseTag, token } = githubConfig()
+const target = detectTriple()
 const assetName = process.platform === 'win32' || target.includes('windows')
   ? `cfb-${target}.exe`
   : `cfb-${target}`
-const token = process.env.CFB_GITHUB_TOKEN || process.env.GITHUB_TOKEN || ''
 
 const apiUrl = releaseTag === 'latest'
   ? `https://api.github.com/repos/${repository}/releases/latest`
@@ -49,11 +47,3 @@ mkdirSync(outDir, { recursive: true })
 writeFileSync(destination, Buffer.from(await assetResponse.arrayBuffer()))
 if (!target.includes('windows')) chmodSync(destination, 0o755)
 console.log(`GitHub sidecar ready: ${destination}`)
-
-function detectTriple() {
-  const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64'
-  if (process.platform === 'win32') return `${arch}-pc-windows-msvc`
-  if (process.platform === 'darwin') return `${arch}-apple-darwin`
-  if (process.platform === 'linux') return `${arch}-unknown-linux-gnu`
-  throw new Error(`Unsupported platform: ${process.platform}/${process.arch}`)
-}

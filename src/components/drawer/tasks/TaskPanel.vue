@@ -4,9 +4,9 @@ import { storeToRefs } from 'pinia'
 import { useTaskProgress } from '../../../stores/useTaskProgress'
 
 /** 第三层：单列竖条，随机顺序点亮；进度回落/新操作时必须可清空 */
-const ROWS = 40
-/** 容器四边 inset 与段间距共用，避免上下/左右/段间视觉不均 */
-const GAP = '3px'
+const ROWS = 36
+/** 容器四边 inset 与段间距共用；略收紧以适配更矮的竖条 */
+const GAP = '2px'
 const LIT = '#40c463'
 const ERROR = '#f87171'
 const EMPTY = '#27272a'

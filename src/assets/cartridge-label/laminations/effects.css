@@ -1,0 +1,144 @@
+/* gbmake cartridge sticker laminations (static preview variants) */
+
+.cs-gloss,
+.cs-gloss-base {
+  position: absolute;
+  mix-blend-mode: screen;
+}
+
+.cs-gloss-base {
+  inset: 0;
+  background: linear-gradient(
+    125deg,
+    rgba(255, 255, 255, 0.16),
+    rgba(255, 255, 255, 0) 38%,
+    rgba(255, 255, 255, 0) 62%,
+    rgba(255, 255, 255, 0.08)
+  );
+  opacity: 0.9;
+}
+
+.cs-gloss {
+  inset: -50%;
+  background-size: 200% 200%;
+  background-repeat: no-repeat;
+  opacity: 0.85;
+  transform: translate(var(--cs-tx, 0), var(--cs-ty, 0));
+  transition: transform 0.1s ease-out;
+}
+
+.cs-holo {
+  position: absolute;
+  inset: -50%;
+  background-size: 200% 200%;
+  background-repeat: repeat;
+  mix-blend-mode: color-dodge;
+  opacity: 0.8;
+  transform: translate(var(--cs-tx, 0), var(--cs-ty, 0));
+  transition: transform 0.1s ease-out;
+}
+
+.cs-matte {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(244, 244, 246, 0.28);
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.5) 0.5px, transparent 0.6px),
+    radial-gradient(rgba(0, 0, 0, 0.04) 0.5px, transparent 0.6px);
+  background-size: 3px 3px, 4px 4px;
+  background-position: 0 0, 1px 2px;
+  mix-blend-mode: soft-light;
+  opacity: 0.95;
+}
+
+.cs-mask-layer {
+  position: absolute;
+  inset: 0;
+  -webkit-mask-size: 160px 160px;
+  mask-size: 160px 160px;
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+}
+
+.cs-shard-holo {
+  position: absolute;
+  inset: -150%;
+  background-size: 150% 150%;
+  background-repeat: no-repeat;
+  mix-blend-mode: color-dodge;
+  opacity: 0.9;
+  transform: translate(var(--tx, 0), var(--ty, 0));
+  transition: transform 0.1s ease-out;
+}
+
+/* Static capture / preview (Lamination tab thumbnails) */
+
+.cs-static .cs-gloss-base {
+  background: radial-gradient(
+    120% 90% at 28% 18%,
+    rgba(255, 255, 255, 0.35) 0px,
+    rgba(255, 255, 255, 0.05) 42%,
+    rgba(0, 0, 0, 0.14) 100%
+  );
+  mix-blend-mode: soft-light;
+  opacity: 1;
+}
+
+.cs-static .cs-gloss {
+  inset: -25%;
+  transform: none;
+  opacity: 1;
+  background: linear-gradient(
+    128deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.55) 47%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(255, 255, 255, 0.55) 53%,
+    transparent 62%
+  );
+}
+
+.cs-static .cs-holo {
+  inset: -25%;
+  background: linear-gradient(
+      135deg,
+      rgba(255, 40, 40, 0.85),
+      rgba(255, 180, 40, 0.85) 16%,
+      rgba(40, 200, 40, 0.85) 33%,
+      rgba(40, 200, 220, 0.85) 50%,
+      rgba(60, 60, 230, 0.85) 66%,
+      rgba(220, 40, 220, 0.85) 83%,
+      rgba(255, 40, 40, 0.85)
+    )
+    0% 0% / 160% 160% repeat;
+  mix-blend-mode: normal;
+  opacity: 0.9;
+  transform: none;
+}
+
+.cs-static .cs-matte {
+  opacity: 1;
+}
+
+.cs-static .cs-mask-layer {
+  -webkit-mask-size: 168px 168px;
+  mask-size: 168px 168px;
+}
+
+.cs-static .cs-shard-holo {
+  inset: -25%;
+  background: linear-gradient(
+      135deg,
+      rgba(255, 40, 40, 0.9),
+      rgba(255, 180, 40, 0.9) 16%,
+      rgba(40, 200, 40, 0.9) 33%,
+      rgba(40, 200, 220, 0.9) 50%,
+      rgba(60, 60, 230, 0.9) 66%,
+      rgba(220, 40, 220, 0.9) 83%,
+      rgba(255, 40, 40, 0.9)
+    )
+    0% 0% / 160% 160% repeat;
+  mix-blend-mode: normal;
+  opacity: 0.95;
+  transform: none;
+}

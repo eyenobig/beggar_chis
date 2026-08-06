@@ -1,10 +1,12 @@
 <!-- Logs / Progress / ROM 右抽屉。用 BaseDrawer 基类。 -->
 <script setup>
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { X } from '@lucide/vue'
 import { useEmulator } from '../../../stores/useEmulator'
 import { useLogStore } from '../../../stores/useLogStore'
+import { useCartData } from '../../../stores/useCartData'
+import { useCfbSettings } from '../../../stores/useCfbSettings'
 import BaseDrawer from '../BaseDrawer.vue'
 import LogsPanel from './LogsPanel.vue'
 import RomPanel from './RomPanel.vue'
@@ -12,9 +14,16 @@ import RomPanel from './RomPanel.vue'
 const emu = useEmulator()
 const { logsOpen, activeTab } = storeToRefs(emu)
 const { closeDrawers, openBookmark } = emu
+const { flashInfo } = storeToRefs(useCartData())
+const { cartridgeStage, cartridgeStickers } = storeToRefs(useCfbSettings())
 
 const logStore = useLogStore()
 const { hasUnread, logs } = storeToRefs(logStore)
+
+/** 贴纸架在抽屉上方时仅取消右上圆角贴齐；抽屉 top/bottom 不变，高度保持原样。 */
+const shelfAboveDrawer = computed(() =>
+  cartridgeStickers.value && cartridgeStage.value && !!flashInfo.value && logsOpen.value,
+)
 
 // 已在 Logs 页时，新日志不累积未读红点
 watch(logs, () => {
@@ -33,9 +42,12 @@ function tabClass(name) {
 </script>
 
 <template>
-  <BaseDrawer :open="logsOpen" :width="440">
+  <BaseDrawer :open="logsOpen" :width="440" :flush-top="shelfAboveDrawer">
     <div class="flex min-h-0 flex-1 flex-col">
-      <div class="flex shrink-0 items-center justify-between border-b border-white/10 bg-zinc-900/50 px-5 py-3">
+      <div
+        data-drawer-drag
+        class="flex shrink-0 cursor-grab items-center justify-between border-b border-white/10 bg-zinc-900/50 px-5 py-3 active:cursor-grabbing"
+      >
         <div class="flex gap-0.5 rounded-lg bg-zinc-800/60 p-0.5">
           <button :class="tabClass('rom')" @click="switchTab('rom')">ROM</button>
           <button

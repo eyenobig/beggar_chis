@@ -8,11 +8,24 @@ const ANSI_PATTERN = /\u001B\[[0-?]*[ -/]*[@-~]/g
 /** 进度行尾耗时：`· 1.2s` / `| 1.2s` / 多种中点字符 */
 const ELAPSED_TAIL = /\s*[|·•･・]\s*(\d+(?:\.\d+)?)s\s*$/u
 /**
- * cfb / UI 阶段进度：`擦除|写入|校验|编程|读取|导出 N%`
- * 「编程」并入写入；「读取」并入导出（ROM dump）。
+ * cfb / UI 阶段进度：中文 `擦除|写入|… N%` 或英文 `erase|write|… N%`
+ * 「编程/program」并入写入；「读取/read」并入导出。
  * 允许行首杂质（编码前缀等），只要含该模式即视为进度行。
  */
-const PHASE_PROGRESS = /(擦除|写入|校验|编程|读取|导出)\s+(\d+)\s*%/
+const PHASE_PROGRESS_CN = /(擦除|写入|校验|编程|读取|导出)\s+(\d+)\s*%/
+const PHASE_PROGRESS_EN = /\b(erase|write|verify|program(?:ming)?|dump|read(?:ing)?)\b\s+(\d+)\s*%/i
+
+const EN_PHASE_TO_CN = Object.freeze({
+  erase: '擦除',
+  write: '写入',
+  verify: '校验',
+  program: '写入',
+  programming: '写入',
+  dump: '导出',
+  read: '导出',
+  reading: '导出',
+})
+
 let nextLogId = 0
 
 function normalizeMessage(value) {
@@ -46,18 +59,31 @@ export function stripLogElapsed(message) {
 }
 
 /**
- * 解析阶段进度 log。命中则返回统一文案（不含耗时列）。
+ * 解析阶段进度 log。命中则返回统一中文文案（不含耗时列）。
  * @returns {{ phase: string, pct: number, message: string, elapsed: string|null } | null}
  */
 export function parsePhaseProgress(message) {
   const raw = String(message || '')
   const body = stripLogElapsed(raw)
-  const m = PHASE_PROGRESS.exec(body)
-  if (!m) return null
-  let phase = m[1]
+  let phase = null
+  let pct = null
+
+  const cn = PHASE_PROGRESS_CN.exec(body)
+  if (cn) {
+    phase = cn[1]
+    pct = Number(cn[2])
+  } else {
+    const en = PHASE_PROGRESS_EN.exec(body)
+    if (en) {
+      phase = EN_PHASE_TO_CN[en[1].toLowerCase()] || null
+      pct = Number(en[2])
+    }
+  }
+  if (!phase || !Number.isFinite(pct)) return null
+
   if (phase === '编程') phase = '写入'
   else if (phase === '读取') phase = '导出'
-  const pct = Number(m[2])
+
   const elapsedMatch = raw.match(ELAPSED_TAIL)
   return {
     phase,
@@ -72,6 +98,9 @@ function isProgressBoundary(message) {
   return (
     /^(擦除|写入|校验|烧录|读取|导出).*(完成|失败|已中断)\b/.test(message)
     || /^(擦除卡带|烧录\s|开始(读取|导出|擦除|写入|校验|烧录))/.test(message)
+    || /\b(erase|write|verify|burn|dump)\b.*(complete|fail|abort|done|finished)\b/i.test(message)
+    || /整片擦除完毕/.test(message)
+    || /开始写入/.test(message)
   )
 }
 

@@ -2,8 +2,7 @@ import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useLogStore } from './useLogStore'
 import { useTaskProgress } from './useTaskProgress'
-
-const SKYEMU_PATH_KEY = 'chis.skyemu.path.v1'
+import { getLocalPaths, patchLocalConfig } from '../services/localConfig'
 
 /** 左侧书签 ↔ 抽屉页 1:1 的 id（强关联） */
 export const BOOKMARK_IDS = Object.freeze({
@@ -18,12 +17,7 @@ const LOGS_TABS = new Set([BOOKMARK_IDS.logs, BOOKMARK_IDS.rom])
 const UTIL_TABS = new Set([BOOKMARK_IDS.help, BOOKMARK_IDS.settings, BOOKMARK_IDS.shop])
 
 function loadSkyEmuPath() {
-  if (typeof localStorage === 'undefined') return ''
-  try {
-    return String(localStorage.getItem(SKYEMU_PATH_KEY) || '').trim()
-  } catch {
-    return ''
-  }
+  return String(getLocalPaths().skyEmuPath || '').trim()
 }
 
 export const useEmulator = defineStore('emulator', () => {
@@ -33,16 +27,20 @@ export const useEmulator = defineStore('emulator', () => {
   const lastLogsTab = ref(BOOKMARK_IDS.logs)
   const lastUtilTab = ref(BOOKMARK_IDS.help)
   const skyEmuPath = ref(loadSkyEmuPath())
+  /** 贴纸架顶栏是否已折叠（仅留信息 bar） */
+  const romShelfCollapsed = ref(true)
+  /** 右侧抽屉垂直拖拽偏移（正值下移）；各抽屉共用 */
+  const drawerOffsetY = ref(0)
 
   const logStore = useLogStore()
   const taskProgress = useTaskProgress()
   const logs = logStore.logs
   const uiSwitchLocked = computed(() => taskProgress.romOperationRunning)
+  /** 软拒提示节流，避免连点刷同一条 warn */
+  let lastRejectLogAt = 0
 
   watch(skyEmuPath, (path) => {
-    if (typeof localStorage === 'undefined') return
-    if (path) localStorage.setItem(SKYEMU_PATH_KEY, path)
-    else localStorage.removeItem(SKYEMU_PATH_KEY)
+    patchLocalConfig('paths', { skyEmuPath: path || '' })
   })
 
   const logsOpen = computed({
@@ -93,14 +91,23 @@ export const useEmulator = defineStore('emulator', () => {
 
   function rejectUiSwitchWhileRomRunning() {
     if (!uiSwitchLocked.value) return false
-    addLog('ROM 操作进行中，请等待完成后再切换页面或机型。', 'warn')
+    const now = Date.now()
+    // 同一轮操作里只提示一次，避免连点刷屏
+    if (now - lastRejectLogAt > 2500) {
+      lastRejectLogAt = now
+      addLog('ROM 操作进行中，请等待完成后再切换页面或机型。', 'warn')
+    }
     return true
   }
 
   function openBookmark(id) {
     if (!Object.values(BOOKMARK_IDS).includes(id)) return false
     if (activeBookmark.value === id) return true
-    if (rejectUiSwitchWhileRomRunning()) return false
+    // 烧录/擦除中允许 Logs ↔ ROM（纯 UI，不跑 cfb）；帮助/设置/商店仍锁
+    if (uiSwitchLocked.value && !LOGS_TABS.has(id)) {
+      rejectUiSwitchWhileRomRunning()
+      return false
+    }
     activeBookmark.value = id
     if (LOGS_TABS.has(id)) lastLogsTab.value = id
     if (UTIL_TABS.has(id)) lastUtilTab.value = id
@@ -159,6 +166,8 @@ export const useEmulator = defineStore('emulator', () => {
     settingsOpen,
     helpOpen,
     skyEmuPath,
+    romShelfCollapsed,
+    drawerOffsetY,
     logs,
     isBookmarkActive,
     openBookmark,

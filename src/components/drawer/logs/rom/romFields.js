@@ -148,7 +148,7 @@ export function kindLabel(kind) {
 
 /**
  * FlashGBX 风格字段行：Game Name / ROM Title / Code+Rev。
- * Cartridge Type / Batteryless SRAM 不展示（cmd 仍可能下发字段，仅 UI 隐藏）。
+ * Cartridge Type 不展示（cmd 仍可能下发字段，仅 UI 隐藏）。
  * @param {{ gameName: string, romTitle: string, codeRev: string, kind?: string, hasGame?: boolean, emptyReason?: string | null } | null} d
  * @param {(key: string) => string} t i18n t('rom.field.*')
  * @returns {{ label: string, value: string, mono?: boolean }[]}
