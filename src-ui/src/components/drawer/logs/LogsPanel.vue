@@ -1,9 +1,11 @@
 <script setup>
 import { nextTick, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { useDragScroll } from '../../../composables/useDragScroll'
 import { useLogStore } from '../../../stores/useLogStore'
 
+const { t } = useI18n()
 const { scrollBind } = useDragScroll()
 const { logs } = storeToRefs(useLogStore())
 const logOutput = ref(null)
@@ -29,7 +31,7 @@ function logColor(type) {
     v-bind="scrollBind"
   >
     <div v-if="logs.length === 0" class="flex flex-1 items-center justify-center text-[10px] text-zinc-700">
-      暂无日志
+      {{ t('logs.empty') }}
     </div>
     <div v-for="log in logs" :key="log.id" class="flex items-baseline gap-3 leading-snug">
       <span class="w-[4.5rem] shrink-0 text-zinc-700">[{{ log.timeStr }}]</span>

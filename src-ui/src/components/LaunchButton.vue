@@ -53,7 +53,7 @@ function onClick() {
         :stroke-width="2.5"
       />
       <span class="text-[10px] font-black uppercase tracking-[0.2em]">
-        {{ downloading ? '下载中…' : canLaunch ? '启动' : '下载Skyemu' }}
+        {{ downloading ? $t('launch.downloading') : canLaunch ? $t('launch.start') : $t('launch.downloadSkyEmu') }}
       </span>
     </button>
   </div>

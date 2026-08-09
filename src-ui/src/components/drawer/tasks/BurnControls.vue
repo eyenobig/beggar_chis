@@ -2,9 +2,11 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { Download, Flame, Square, Trash2 } from '@lucide/vue'
 import { useCartData } from '../../../stores/useCartData'
 
+const { t } = useI18n()
 const cart = useCartData()
 const { romFile, flashInfo, opRunning, opKind, opResult } = storeToRefs(cart)
 
@@ -28,8 +30,8 @@ const resultText = computed(() => {
   if (!showResult.value) return ''
   const result = opResult.value
   if (!result) return ''
-  if (!result.ok) return result.error || '操作失败'
-  const details = ['操作完成']
+  if (!result.ok) return result.error || t('rom.ops.opFail')
+  const details = [t('rom.ops.opDone')]
   if (result.bytes) details.push(formatSize(result.bytes))
   if (result.seconds != null) details.push(`${Math.round(result.seconds)}s`)
   if (result.mismatch_bytes != null) details.push(`mismatch ${result.mismatch_bytes}`)
@@ -66,13 +68,13 @@ function dismissResult() {
         v-else
         class="text-[8px] font-black uppercase tracking-wider text-zinc-500"
       >
-        烧录操作
+        {{ t('rom.ops.burnSection') }}
       </div>
       <span
         class="min-w-0 truncate text-[8px] font-bold text-zinc-500"
         :title="romFile?.path || romFile?.name || ''"
       >
-        {{ romFile?.name || '未选择 ROM' }}
+        {{ romFile?.name || t('rom.ops.noRom') }}
       </span>
     </div>
 
@@ -85,7 +87,7 @@ function dismissResult() {
         @click="cart.abortOp()"
       >
         <Square class="h-2.5 w-2.5 fill-current" />
-        中断
+        {{ t('rom.ops.abort') }}
       </button>
       <button
         v-else
@@ -96,7 +98,7 @@ function dismissResult() {
         @click="cart.burn()"
       >
         <Flame class="h-3 w-3 text-orange-500" />
-        烧录
+        {{ t('rom.ops.burn') }}
       </button>
       <button
         data-no-drag
@@ -104,10 +106,10 @@ function dismissResult() {
         class="inline-flex h-7 items-center justify-center gap-0.5 rounded-md bg-white text-[9px] font-black text-zinc-950 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-30"
         :disabled="opRunning || !flashInfo"
         @click="cart.dump()"
-        title="导出 ROM 到文件"
+        :title="t('rom.ops.exportRomTitle')"
       >
         <Download class="h-3 w-3 text-sky-400" />
-        导出
+        {{ t('rom.ops.export') }}
       </button>
       <button
         data-no-drag
@@ -117,7 +119,7 @@ function dismissResult() {
         @click="cart.erase()"
       >
         <Trash2 class="h-3 w-3 text-red-400" />
-        擦除
+        {{ t('rom.ops.erase') }}
       </button>
     </div>
   </section>

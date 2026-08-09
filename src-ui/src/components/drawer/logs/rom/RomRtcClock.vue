@@ -13,6 +13,7 @@ const rtcClock = computed(() => formatRtcClock(rtcInfo.value))
 const visible = computed(() => cartInfo.value?.rtc === true || !!rtcClock.value)
 
 async function onRefresh() {
+  if (cart.opRunning) return
   await cart.readRtc()
 }
 </script>

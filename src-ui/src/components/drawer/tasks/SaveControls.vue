@@ -2,10 +2,12 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { CheckCircle2, Download, Square, Trash2, Upload } from '@lucide/vue'
 import { useCartData } from '../../../stores/useCartData'
 import UiSelect from '../../ui/UiSelect.vue'
 
+const { t } = useI18n()
 const cart = useCartData()
 const { saveFile, saveType, flashInfo, opRunning, opKind, opResult, confirm, preferMbc } = storeToRefs(cart)
 
@@ -52,16 +54,16 @@ const resultText = computed(() => {
   const r = opResult.value
   if (!r) return ''
   if (opKind.value === 'saveVerify') {
-    if (!r.ok) return r.error || '校验失败'
+    if (!r.ok) return r.error || t('rom.ops.verifyFailShort')
     const mismatch = Number(r.mismatch_bytes) || 0
-    if (mismatch > 0) return `校验不符 · ${mismatch} 字节`
-    return '校验通过'
+    if (mismatch > 0) return t('rom.ops.verifyMismatchShort', { n: mismatch })
+    return t('rom.ops.verifyOkShort')
   }
-  if (!r.ok) return r.error || '操作失败'
-  const details = ['操作完成']
+  if (!r.ok) return r.error || t('rom.ops.opFail')
+  const details = [t('rom.ops.opDone')]
   if (r.bytes) details.push(formatSize(r.bytes))
   if (r.seconds != null) details.push(`${Math.round(r.seconds)}s`)
-  if (r.mismatch_bytes != null && r.mismatch_bytes > 0) details.push(`不符 ${r.mismatch_bytes}`)
+  if (r.mismatch_bytes != null && r.mismatch_bytes > 0) details.push(t('rom.ops.mismatchBytes', { n: r.mismatch_bytes }))
   return details.join(' · ')
 })
 
@@ -89,14 +91,14 @@ function dismissResult() { showResult.value = false }
         {{ resultText }}
       </button>
       <div v-else-if="isSaveOp && opKind === 'saveVerify'" class="text-[8px] font-black uppercase tracking-wider text-amber-400">
-        验证中…
+        {{ t('rom.ops.verifying') }}
       </div>
-      <div v-else class="text-[8px] font-black uppercase tracking-wider text-zinc-500">存档操作</div>
+      <div v-else class="text-[8px] font-black uppercase tracking-wider text-zinc-500">{{ t('rom.ops.saveSection') }}</div>
       <div class="flex min-w-0 items-center gap-1">
         <div
           class="w-[7.5rem] shrink-0"
           data-no-drag
-          title="存档类型"
+          :title="t('rom.ops.saveType')"
           @mousedown.stop
           @pointerdown.stop
         >
@@ -111,13 +113,13 @@ function dismissResult() { showResult.value = false }
           data-no-drag
           type="button"
           class="min-w-0 truncate text-[8px] font-bold text-zinc-500 hover:text-zinc-300 disabled:opacity-40"
-          :title="saveFile?.path || '点击选择存档'"
+          :title="saveFile?.path || t('rom.ops.pickSave')"
           :disabled="opRunning"
           @click.stop.prevent="cart.pickSaveFile()"
           @mousedown.stop
           @pointerdown.stop
         >
-          {{ saveFile?.name || '点击选择存档' }}
+          {{ saveFile?.name || t('rom.ops.pickSave') }}
         </button>
       </div>
     </div>
@@ -130,14 +132,14 @@ function dismissResult() { showResult.value = false }
         @click="cart.doConfirmed()"
       >
         <component :is="confirm === 'saveErase' ? Trash2 : Upload" class="h-3 w-3" />
-        {{ confirm === 'saveErase' ? '确认擦除' : '确认烧录' }}
+        {{ confirm === 'saveErase' ? t('rom.ops.confirmErase') : t('rom.ops.confirmBurn') }}
       </button>
       <button
         data-no-drag type="button"
         class="inline-flex h-7 items-center justify-center gap-0.5 rounded-md bg-white text-[9px] font-black text-zinc-950 hover:bg-zinc-200"
         @click="cart.cancelConfirm()"
       >
-        取消
+        {{ t('rom.ops.cancel') }}
       </button>
     </div>
 
@@ -149,7 +151,7 @@ function dismissResult() { showResult.value = false }
         @click="cart.abortOp()"
       >
         <Square class="h-2.5 w-2.5 fill-current" />
-        中断
+        {{ t('rom.ops.abort') }}
       </button>
     </div>
 
@@ -163,7 +165,7 @@ function dismissResult() { showResult.value = false }
           @click="cart.saveDump()"
         >
           <Download class="h-3 w-3 text-sky-400" />
-          导出
+          {{ t('rom.ops.export') }}
         </button>
         <button
           data-no-drag type="button"
@@ -172,7 +174,7 @@ function dismissResult() { showResult.value = false }
           @click="cart.requestConfirm('saveErase')"
         >
           <Trash2 class="h-3 w-3 text-red-400" />
-          擦除
+          {{ t('rom.ops.erase') }}
         </button>
       </div>
       <div class="grid grid-cols-2 gap-1">
@@ -180,21 +182,21 @@ function dismissResult() { showResult.value = false }
           data-no-drag type="button"
           class="inline-flex h-7 items-center justify-center gap-0.5 rounded-md bg-white text-[9px] font-black text-zinc-950 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-30"
           :disabled="!canVerify"
-          :title="canVerify ? '比对本地存档与卡带' : '请先选择存档文件'"
+          :title="canVerify ? t('rom.ops.verifyHint') : t('rom.ops.needSave')"
           @click="cart.saveVerify()"
         >
           <CheckCircle2 class="h-3 w-3 text-emerald-500" />
-          验证
+          {{ t('rom.ops.verify') }}
         </button>
         <button
           data-no-drag type="button"
           class="inline-flex h-7 items-center justify-center gap-0.5 rounded-md bg-white text-[9px] font-black text-zinc-950 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-30"
           :disabled="!canWrite"
-          :title="canWrite ? '写入存档到卡带' : '请先选择存档文件'"
+          :title="canWrite ? t('rom.ops.writeHint') : t('rom.ops.needSave')"
           @click="cart.requestConfirm('saveWrite')"
         >
           <Upload class="h-3 w-3 text-orange-500" />
-          烧录
+          {{ t('rom.ops.burn') }}
         </button>
       </div>
     </div>

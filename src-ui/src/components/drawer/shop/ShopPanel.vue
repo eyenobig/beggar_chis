@@ -1,5 +1,6 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ExternalLink, LoaderCircle, RefreshCw, ShoppingBag } from '@lucide/vue'
 import { useDragScroll } from '../../../composables/useDragScroll'
 import { useToast } from '../../../stores/useToast'
@@ -11,6 +12,7 @@ import {
 import { resolveGbmakeHref } from '../../../services/lexicalRichText'
 import UiLexical from '../../ui/UiLexical.vue'
 
+const { t } = useI18n()
 const { scrollBind } = useDragScroll()
 const toast = useToast()
 const lists = ref([])
@@ -55,13 +57,13 @@ async function visit(url) {
   try {
     await openFlasherStoreUrl(url)
   } catch (cause) {
-    toast.error(`无法打开商店：${cause?.message || cause}`)
+    toast.error(t('toast.shopOpenFail', { err: cause?.message || cause }))
   }
 }
 
 async function onRichNavigate(safeUrl) {
   if (!safeUrl) {
-    toast.error('无效的商店链接')
+    toast.error(t('toast.shopInvalidLink'))
     return
   }
   await visit(safeUrl)

@@ -15,6 +15,7 @@ const disabled = computed(
 )
 
 async function onIdentify() {
+  if (disabled.value) return
   await cart.readCart()
 }
 </script>

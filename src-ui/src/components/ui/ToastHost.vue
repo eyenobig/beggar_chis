@@ -6,6 +6,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { useToast } from '../../stores/useToast'
 
 const props = defineProps({
@@ -13,6 +14,7 @@ const props = defineProps({
   thermal: { type: Boolean, default: true },
 })
 
+const { t } = useI18n()
 const toast = useToast()
 const { toasts } = storeToRefs(toast)
 
@@ -524,10 +526,10 @@ function dismissBanner(id) {
     >
       <div
         class="toast-cutter relative z-50 shrink-0 cursor-pointer"
-        title="点击撕下热敏纸"
+        :title="t('toast.tearHint')"
         role="button"
         tabindex="-1"
-        aria-label="点击撕下热敏纸"
+        :aria-label="t('toast.tearHint')"
         @pointerdown.stop
         @click.stop.prevent="tearOff"
       >
@@ -551,8 +553,8 @@ function dismissBanner(id) {
             :style="receiptStyle"
             role="button"
             tabindex="0"
-            title="点击撕下热敏纸"
-            aria-label="点击撕下热敏纸"
+            :title="t('toast.tearHint')"
+            :aria-label="t('toast.tearHint')"
             @pointerdown.stop
             @click.stop.prevent="tearOff"
             @keydown.enter.prevent="tearOff"

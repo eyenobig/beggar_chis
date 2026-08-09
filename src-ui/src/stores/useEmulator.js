@@ -3,6 +3,11 @@ import { defineStore } from 'pinia'
 import { useLogStore } from './useLogStore'
 import { useTaskProgress } from './useTaskProgress'
 import { getLocalPaths, patchLocalConfig } from '../services/localConfig'
+import { i18n } from '../i18n'
+
+function t(key, params) {
+  return i18n.global.t(key, params)
+}
 
 /** 左侧书签 ↔ 抽屉页 1:1 的 id（强关联） */
 export const BOOKMARK_IDS = Object.freeze({
@@ -95,7 +100,7 @@ export const useEmulator = defineStore('emulator', () => {
     // 同一轮操作里只提示一次，避免连点刷屏
     if (now - lastRejectLogAt > 2500) {
       lastRejectLogAt = now
-      addLog('ROM 操作进行中，请等待完成后再切换页面或机型。', 'warn')
+      addLog(t('logs.uiSwitchLocked'), 'warn')
     }
     return true
   }
@@ -151,7 +156,7 @@ export const useEmulator = defineStore('emulator', () => {
     if (currentPlatform.value === pid) return true
     if (rejectUiSwitchWhileRomRunning()) return false
     currentPlatform.value = pid
-    addLog(`Core switched to ${pid.toUpperCase()}.`)
+    addLog(t('logs.coreSwitched', { platform: pid.toUpperCase() }))
     return true
   }
 

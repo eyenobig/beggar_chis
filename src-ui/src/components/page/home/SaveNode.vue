@@ -5,10 +5,12 @@
 <script setup>
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { useCartData } from '../../../stores/useCartData'
 import { useEmulator } from '../../../stores/useEmulator'
 import { useToast } from '../../../stores/useToast'
 
+const { t } = useI18n()
 const cart = useCartData()
 const emu = useEmulator()
 const toast = useToast()
@@ -23,7 +25,7 @@ const hasSaveFile = computed(() => !!saveFile.value)
 const saveSizeText = computed(() => {
   if (saveInfo.value?.size) return formatSize(saveInfo.value.size)
   if (cartInfo.value?.save_size_bytes) return formatSize(cartInfo.value.save_size_bytes)
-  return '未知大小'
+  return t('home.unknownSize')
 })
 
 function formatSize(bytes) {
@@ -38,7 +40,7 @@ async function onPickSave(event) {
   event?.preventDefault?.()
   event?.stopPropagation?.()
   if (opRunning.value) {
-    toast.error('请等待当前操作完成后再选择存档')
+    toast.error(t('home.waitOp'))
     return
   }
   await cart.pickSaveFile()
@@ -52,13 +54,13 @@ async function onPickSave(event) {
 <template>
   <section>
     <div class="mb-2 px-1">
-      <span class="text-[9px] font-black uppercase tracking-widest text-zinc-900">Save Data</span>
+      <span class="text-[9px] font-black uppercase tracking-widest text-zinc-900">{{ $t('home.saveData') }}</span>
     </div>
 
     <!-- 始终展示两栏：上传存档不依赖 hasCart；卡片壳与 ROM Payload 默认样式一致 -->
     <div class="grid grid-cols-2 items-stretch gap-2">
       <div class="rounded-2xl bg-zinc-900 p-4 text-white shadow-md">
-        <p class="mb-1 text-[8px] font-black uppercase tracking-widest text-zinc-400">当前存档</p>
+        <p class="mb-1 text-[8px] font-black uppercase tracking-widest text-zinc-400">{{ $t('home.currentSave') }}</p>
         <p v-if="hasCart" class="mono text-xs font-black text-zinc-100">{{ saveSizeText }}</p>
         <div v-else class="flex items-center gap-2">
           <svg
@@ -76,14 +78,14 @@ async function onPickSave(event) {
             <path d="M7 13v4M10 13v4M14 13v4M17 13v4" />
             <rect x="5.5" y="4.5" width="13" height="6" rx="1" />
           </svg>
-          <span class="text-xs font-bold text-zinc-500">待插入卡带</span>
+          <span class="text-xs font-bold text-zinc-500">{{ $t('home.awaitCart') }}</span>
         </div>
       </div>
       <button
         data-no-drag
         type="button"
         class="rounded-2xl bg-zinc-900 p-4 text-left text-white shadow-md transition active:scale-[0.99] hover:bg-zinc-800"
-        :title="hasSaveFile ? '点击更换存档' : '点击选择 .sav / .srm'"
+        :title="hasSaveFile ? $t('home.replaceSaveTitle') : $t('home.pickSaveTitle')"
         @click.stop.prevent="onPickSave"
         @mousedown.stop
         @pointerdown.stop
@@ -93,14 +95,14 @@ async function onPickSave(event) {
             v-if="hasSaveFile"
             class="h-1.5 w-1.5 shrink-0 rounded-full bg-yellow-400"
           />
-          {{ hasSaveFile ? 'SAVE · 待写入' : '上传存档' }}
+          {{ hasSaveFile ? $t('home.pendingSave') : $t('home.uploadSave') }}
         </p>
         <p
           v-if="hasSaveFile"
           class="pointer-events-none mono truncate text-xs font-black text-zinc-100"
           :title="saveFile.path"
         >{{ saveFile.name }}</p>
-        <p v-else class="pointer-events-none text-xs font-bold text-zinc-500">点击或拖入 .sav / .srm</p>
+        <p v-else class="pointer-events-none text-xs font-bold text-zinc-500">{{ $t('home.pickSaveHint') }}</p>
       </button>
     </div>
   </section>

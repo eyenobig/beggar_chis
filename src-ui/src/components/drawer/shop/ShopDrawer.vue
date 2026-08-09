@@ -2,6 +2,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { ExternalLink, RefreshCw, X } from '@lucide/vue'
 import { useEmulator } from '../../../stores/useEmulator'
 import { useToast } from '../../../stores/useToast'
@@ -9,6 +10,7 @@ import { GBMAKE_HOME_URL, openFlasherStoreUrl } from '../../../services/flasherS
 import BaseDrawer from '../BaseDrawer.vue'
 import ShopPanel from './ShopPanel.vue'
 
+const { t } = useI18n()
 const emu = useEmulator()
 const toast = useToast()
 const { shopOpen } = storeToRefs(emu)
@@ -21,7 +23,7 @@ async function openGbmakeHome() {
   try {
     await openFlasherStoreUrl(GBMAKE_HOME_URL)
   } catch (cause) {
-    toast.error(`无法打开商店：${cause?.message || cause}`)
+    toast.error(t('toast.shopOpenFail', { err: cause?.message || cause }))
   }
 }
 

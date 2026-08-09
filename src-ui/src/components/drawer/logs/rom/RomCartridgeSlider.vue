@@ -1,6 +1,7 @@
 ﻿<script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus, Check } from '@lucide/vue'
 import { useCartData } from '../../../../stores/useCartData'
@@ -10,6 +11,7 @@ import { findFlashRomGroup, approvedStickersOf } from '../../../../services/flas
 import { buildGbmakeStickerUrl, resolveStickerMode } from '../../../../services/gbmakeStickerUrl'
 import { gameCodeOf, romTitleOf } from './romFields'
 
+const { t } = useI18n()
 const cart = useCartData()
 const cache = useCartridgeCache()
 const emu = useEmulator()
@@ -210,7 +212,7 @@ watch(headerTitle, () => {
   >
     <!-- 顶部：切 ROM + 标题 + 国旗/序号 + 折叠 -->
     <div class="flex shrink-0 items-center gap-1 leading-none">
-      <button data-no-drag type="button" class="shelf-control" aria-label="上一个 ROM" :disabled="matches.length < 2" @click="prevRom">
+      <button data-no-drag type="button" class="shelf-control" :aria-label="t('rom.shelf.prev')" :disabled="matches.length < 2" @click="prevRom">
         <ChevronLeft class="h-4 w-4" :stroke-width="2.5" />
       </button>
 
@@ -243,7 +245,7 @@ watch(headerTitle, () => {
         </span>
       </div>
 
-      <button data-no-drag type="button" class="shelf-control" aria-label="下一个 ROM" :disabled="matches.length < 2" @click="nextRom">
+      <button data-no-drag type="button" class="shelf-control" :aria-label="t('rom.shelf.next')" :disabled="matches.length < 2" @click="nextRom">
         <ChevronRight class="h-4 w-4" :stroke-width="2.5" />
       </button>
 
@@ -251,8 +253,8 @@ watch(headerTitle, () => {
         data-no-drag
         type="button"
         class="shelf-control ml-1"
-        :title="shelfCollapsed ? '展开贴纸' : '下缩隐藏贴纸'"
-        :aria-label="shelfCollapsed ? '展开贴纸' : '下缩隐藏贴纸'"
+        :title="shelfCollapsed ? t('rom.shelf.expand') : t('rom.shelf.collapse')"
+        :aria-label="shelfCollapsed ? t('rom.shelf.expand') : t('rom.shelf.collapse')"
         :aria-expanded="!shelfCollapsed"
         @click="toggleShelfCollapsed"
       >
@@ -303,8 +305,8 @@ watch(headerTitle, () => {
               class="sticker-edit-card inline-flex items-center justify-center rounded-md border border-dashed border-zinc-500 bg-zinc-900/50 text-zinc-100 transition hover:border-zinc-300 hover:bg-zinc-900/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               :style="editCardStyle"
               :disabled="!selectedRom?.id"
-              :title="selectedRom ? `在 GBMake 编辑「${selectedRom.title || selectedRom.id}」贴纸` : '在 GBMake 编辑贴纸'"
-              aria-label="在 GBMake 编辑贴纸"
+              :title="selectedRom ? t('rom.shelf.editNamed', { title: selectedRom.title || selectedRom.id }) : t('rom.shelf.edit')"
+              :aria-label="t('rom.shelf.edit')"
               @click="openGbmakeEditor"
             >
               <Plus class="sticker-edit-card__icon h-7 w-7 shrink-0" :stroke-width="2.5" aria-hidden="true" />
@@ -312,10 +314,10 @@ watch(headerTitle, () => {
           </div>
 
           <div v-if="!loading && currentStickers.length === 0" class="flex min-h-[48px] items-center justify-center text-[9px] text-zinc-600">
-            暂无已通过贴纸
+            {{ t('rom.shelf.noStickers') }}
           </div>
           <div v-if="loading" class="flex min-h-[48px] items-center justify-center text-[9px] text-zinc-500">
-            加载中…
+            {{ t('rom.shelf.loading') }}
           </div>
         </div>
 

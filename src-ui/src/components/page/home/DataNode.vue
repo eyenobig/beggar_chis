@@ -3,13 +3,15 @@
 <script setup>
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { useCartData } from '../../../stores/useCartData'
 import { useEmulator } from '../../../stores/useEmulator'
 import { gameCodeOf, romTitleOf } from '../../drawer/logs/rom/romFields'
 
 const props = defineProps({ kind: { type: String, required: true } }) // 'rom' | 'save'
+const { t } = useI18n()
 const cart = useCartData()
-const { romFile, saveFile, cartInfo, cartReading } = storeToRefs(cart)
+const { romFile, saveFile, cartInfo, cartReading, opRunning } = storeToRefs(cart)
 const emu = useEmulator()
 const { logsOpen, activeTab } = storeToRefs(emu)
 
@@ -30,22 +32,29 @@ async function onIdentify(event) {
   event?.preventDefault?.()
   event?.stopPropagation?.()
   ignoreCardClickUntil = Date.now() + 800
+  if (opRunning.value || cartReading.value) return
   emu.toggleLogs(true, 'rom')
-  if (cartReading.value) return
   await cart.readCart()
 }
 
+const identifyBusy = computed(() => opRunning.value || cartReading.value)
+
 const isRom = computed(() => props.kind === 'rom')
 const dropped = computed(() => (isRom.value ? romFile.value : saveFile.value))
-const label = computed(() => (isRom.value ? 'ROM Payload' : 'Save Data'))
-const hint = computed(() => (isRom.value ? '拖入 .gba / .gb / .gbc' : '拖入 .sav / .srm'))
+const label = computed(() => (isRom.value ? t('home.romPayload') : t('home.saveData')))
 
 // 展示：待写入(拖入文件) > 当前卡带(连上有信息) > 空
 const view = computed(() => {
   if (dropped.value) {
+    let tag
+    if (isRom.value) {
+      tag = dropped.value.mbc ? t('home.pendingGbcRom') : t('home.pendingGbaRom')
+    } else {
+      tag = t('home.pendingSave')
+    }
     return {
       state: 'pending',
-      tag: isRom.value ? (dropped.value.mbc ? 'GB/GBC ROM · 待写入' : 'GBA ROM · 待写入') : 'SAVE · 待写入',
+      tag,
       name: dropped.value.name,
       sub: dropped.value.path,
     }
@@ -57,11 +66,16 @@ const view = computed(() => {
     const title = romTitleOf(c)
     const code = gameCodeOf(c)
     const hasGame = !!(title || code)
-    const kindTag = c.kind === 'gba' ? 'GBA' : c.kind === 'gb_mbc' ? 'GB/GBC' : (c.kind || '卡带')
+    const kindTag =
+      c.kind === 'gba'
+        ? t('home.kindGba')
+        : c.kind === 'gb_mbc'
+          ? t('home.kindGbc')
+          : (c.kind || t('home.kindCart'))
     return {
       state: 'current',
-      tag: '当前卡带 · ' + kindTag,
-      name: hasGame ? title : (mb ? `${mb}MB Flash` : '已识别 Flash'),
+      tag: t('home.currentCart', { kind: kindTag }),
+      name: hasGame ? title : (mb ? t('home.flashMb', { n: mb }) : t('home.flashRecognized')),
       sub: hasGame
         ? ((code || '—') + (mb ? ' · ' + mb + 'MB' : ''))
         : (mb ? mb + 'MB' : null),
@@ -99,7 +113,7 @@ const view = computed(() => {
               {{ view.name }}
             </h3>
           </template>
-          <p v-else class="text-xs font-black text-zinc-100">查看</p>
+          <p v-else class="text-xs font-black text-zinc-100">{{ $t('home.view') }}</p>
         </template>
 
         <template v-else>
@@ -122,7 +136,7 @@ const view = computed(() => {
               <path d="M7 13v4M10 13v4M14 13v4M17 13v4" />
               <rect x="5.5" y="4.5" width="13" height="6" rx="1" />
             </svg>
-            <span class="text-xs font-bold text-zinc-500">请插入卡带</span>
+            <span class="text-xs font-bold text-zinc-500">{{ $t('home.insertCart') }}</span>
           </div>
         </template>
       </button>
@@ -133,8 +147,8 @@ const view = computed(() => {
         data-no-drag
         type="button"
         class="group relative z-30 flex w-14 shrink-0 items-center justify-center self-stretch rounded-2xl bg-zinc-800 text-zinc-400 shadow-md transition active:scale-[0.99] hover:bg-zinc-900 hover:text-white"
-        :class="cartReading ? 'opacity-40' : ''"
-        :aria-disabled="cartReading ? 'true' : 'false'"
+        :class="identifyBusy ? 'opacity-40' : ''"
+        :aria-disabled="identifyBusy ? 'true' : 'false'"
         :aria-label="$t('rom.identify')"
         @click.stop.prevent="onIdentify"
         @mousedown.stop

@@ -1,4 +1,9 @@
 /** 将 cfb info / rom-info 结果整理为 UI 字段（不含 RTC）。 */
+import { i18n } from '../../../../i18n'
+
+function t(key, params) {
+  return i18n.global.t(key, params)
+}
 
 /**
  * ROM 头标题。优先 `rom_title`（头内 ASCII）；`game_name` 可能是数据库友好名，勿混用。
@@ -115,15 +120,18 @@ export function buildRomFields(info) {
     headerOk = !!cs.ok
     const stored = `0x${Number(cs.stored).toString(16).toUpperCase().padStart(2, '0')}`
     headerChecksum = cs.ok
-      ? `Valid (${stored})`
-      : `Invalid (${stored}/0x${Number(cs.computed).toString(16).toUpperCase().padStart(2, '0')})`
+      ? t('rom.checksumValid', { stored })
+      : t('rom.checksumInvalid', {
+          stored,
+          computed: `0x${Number(cs.computed).toString(16).toUpperCase().padStart(2, '0')}`,
+        })
   }
 
   let emptyReason = null
   if (!hasGame) {
     emptyReason = info.kind === 'unknown'
-      ? '空白卡带 / 未识别 ROM 头'
-      : '未读到游戏头（可切换平台后重试识别）'
+      ? t('rom.emptyBlank')
+      : t('rom.emptyNoHeader')
   }
 
   return {

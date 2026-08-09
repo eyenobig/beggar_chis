@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { useEmulator } from '../stores/useEmulator'
 import { useWindowSync } from '../composables/useWindowSync'
@@ -19,6 +20,7 @@ import CartridgeManager from './cartridge/CartridgeManager.vue'
 import RomCartridgeSlider from './drawer/logs/rom/RomCartridgeSlider.vue'
 
 const emu = useEmulator()
+const { t } = useI18n()
 const { logsOpen, shopOpen, settingsOpen, helpOpen, romShelfCollapsed } = storeToRefs(emu)
 const { drawerOpen: tasksOpen } = storeToRefs(useTaskProgress())
 const { addLog, closeDrawers } = emu
@@ -111,7 +113,7 @@ function isOverHomepage(position) {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
-  addLog('System initialized. Awaiting connection.')
+  addLog(t('logs.systemInit'))
   if (inTauri) {
     try {
       unlistenDrop = await getCurrentWebview().onDragDropEvent((e) => {
@@ -198,7 +200,7 @@ onUnmounted(() => {
               v-if="dragging"
               class="pointer-events-none absolute inset-0 z-30 m-3 flex items-center justify-center rounded-2xl border-2 border-dashed border-zinc-900/60 bg-white/70 backdrop-blur-[1px]"
             >
-              <span class="text-xs font-black text-zinc-700">拖入 ROM / 存档</span>
+              <span class="text-xs font-black text-zinc-700">{{ $t('home.dropOverlay') }}</span>
             </div>
           </div>
         </div>

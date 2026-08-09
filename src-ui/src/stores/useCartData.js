@@ -149,10 +149,11 @@ function createPhaseProgressLog(logStore) {
 }
 
 function phaseKeyFromLabel(label) {
-  if (label === '擦除') return 'erase'
-  if (label === '写入') return 'write'
-  if (label === '校验') return 'verify'
-  if (label === '导出') return 'dump'
+  const s = String(label || '').toLowerCase()
+  if (s === 'erase' || s === '擦除') return 'erase'
+  if (s === 'write' || s === '写入' || s === '编程') return 'write'
+  if (s === 'verify' || s === '校验') return 'verify'
+  if (s === 'dump' || s === '导出' || s === '读取' || s === 'read' || s === 'reading') return 'dump'
   return ''
 }
 
@@ -183,7 +184,7 @@ export const useCartData = defineStore('cart', () => {
     } catch (e) {
       return {
         ok: false,
-        error: `未找到可执行的 cfb 二进制。${String(e?.message || e)}`,
+        error: t('logs.cfbMissing', { err: String(e?.message || e) }),
       }
     }
   }
@@ -263,12 +264,12 @@ export const useCartData = defineStore('cart', () => {
     } catch {
       /* 进程可能已退出 */
     }
-    logStore.addLog('操作已中断', 'warn')
+    logStore.addLog(t('logs.opAborted'), 'warn')
   }
 
   async function pickRomFile() {
     if (!inTauri) {
-      toast.error('请在桌面客户端中选择 ROM')
+      toast.error(t('toast.desktopOnlyRom'))
       return null
     }
     try {
@@ -282,7 +283,7 @@ export const useCartData = defineStore('cart', () => {
       setDropped(path)
       return path
     } catch (e) {
-      const msg = String(e?.message || e || '选择 ROM 失败')
+      const msg = String(e?.message || e || t('logs.pickRomFail'))
       toast.error(msg)
       logStore.addLog(msg, 'error')
       return null
@@ -291,13 +292,13 @@ export const useCartData = defineStore('cart', () => {
 
   async function pickSaveFile() {
     if (!inTauri) {
-      toast.error('请在桌面客户端中选择存档')
+      toast.error(t('toast.desktopOnlySave'))
       return null
     }
     try {
       const selected = await openDialog({
         multiple: false,
-        title: '选择存档文件',
+        title: t('home.pickSaveTitle'),
         filters: [{ name: 'Save', extensions: ['sav', 'srm'] }],
       })
       if (!selected) return null
@@ -305,12 +306,12 @@ export const useCartData = defineStore('cart', () => {
       if (!path) return null
       const kind = setDropped(path)
       if (kind !== 'save') {
-        toast.error('请选择 .sav 或 .srm 存档文件')
+        toast.error(t('toast.pickSaveExt'))
         return null
       }
       return path
     } catch (e) {
-      const msg = String(e?.message || e || '选择存档失败')
+      const msg = String(e?.message || e || t('logs.pickSaveFail'))
       toast.error(msg)
       logStore.addLog(msg, 'error')
       return null
@@ -390,6 +391,14 @@ export const useCartData = defineStore('cart', () => {
    * @param {{ silent?: boolean }} [opts] silent=true 时不写 log 面板（重连/自动刷新用）
    */
   async function readCart(opts = {}) {
+    // 烧录/擦除/导出/存档操作占用串口时禁止识别；完成后 finally 里 silent 读卡会在 opRunning=false 之后
+    if (opRunning.value) {
+      if (!opts.silent) {
+        toast.info(t('rom.op.identifyBusy'))
+        logStore.addLog(t('rom.op.identifyBusy'), 'warn')
+      }
+      return
+    }
     if (_readInFlight) return _readInFlight
     _readInFlight = _readCartImpl(opts).finally(() => {
       _readInFlight = null
@@ -507,7 +516,7 @@ export const useCartData = defineStore('cart', () => {
         const name = romTitleOf(hit.info) || hit.info.kind || '?'
         if (!silent) {
           logStore.addLog(
-            `识别卡带 · ${name} · ${fmtSize(hit.info.capacity_bytes) || '?'}`,
+            t('logs.identifyCart', { name, size: fmtSize(hit.info.capacity_bytes) || '?' }),
             'success',
           )
         }
@@ -586,7 +595,7 @@ export const useCartData = defineStore('cart', () => {
     _opAborted = false
     // 烧录时展开 ROM 页 + 第三层进度条
     emu.toggleLogs(true, 'rom')
-    const taskId = taskProgress.startTask({ kind: 'burn', title: '\u70e7\u5f55\u5361\u5e26', detail: f.name })
+    const taskId = taskProgress.startTask({ kind: 'burn', title: t('logs.taskBurn'), detail: f.name })
     // 烧录成功启动：清空进度条，避免沿用上一次操作的残条/%
     taskProgress.resetProgress(taskId)
     taskProgress.drawerOpen = true
@@ -600,7 +609,7 @@ export const useCartData = defineStore('cart', () => {
       return `${m}m${String(s).padStart(2, '0')}s`
     }
     // 起始行保留；擦除/写入/校验进度各自一行原地更新；完成/失败另起一行
-    logStore.addLog(`烧录 ${f.name}`, 'warn')
+    logStore.clearLiveProgress(); logStore.addLog(t('logs.burnName', { name: f.name }), 'warn')
     const phaseProg = createPhaseProgressLog(logStore)
     /** 'erase' | 'write' | 'verify' | '' — 扇区擦除→字节写入时重置进度条 */
     let burnPhase = ''
@@ -623,11 +632,10 @@ export const useCartData = defineStore('cart', () => {
               nextPhase = ev.total < 4096 ? 'erase' : 'write'
             }
             applyBurnPhase(nextPhase)
-            const label = nextPhase === 'erase' ? '擦除' : nextPhase === 'verify' ? '校验' : '写入'
             const pct = Math.round((ev.done / ev.total) * 100)
             // 不传 elapsed：右侧耗时列由上方 tickTimer 每 250ms 统一刷新，
             // 避免本处与 tickTimer 两个来源交替写造成时间列闪烁/跳变。
-            phaseProg.upsert(label, pct)
+            phaseProg.upsert(nextPhase, pct)
           }
           progress.value = { done: ev.done, total: ev.total }
           taskProgress.updateProgress(taskId, ev.done, ev.total)
@@ -652,7 +660,7 @@ export const useCartData = defineStore('cart', () => {
           // 不作为用户可见 log（避免「开始写入…」废话刷屏），只切 phase。
           if (/开始写入|写入中|开始编程/.test(msg)) {
             // GBA 整片擦除没有细粒度 progress；进入写入即代表擦除完成。
-            if (burnPhase === 'erase') phaseProg.upsert('擦除', 100, { force: true })
+            if (burnPhase === 'erase') phaseProg.upsert('erase', 100, { force: true })
             applyBurnPhase('write')
             return
           }
@@ -670,14 +678,14 @@ export const useCartData = defineStore('cart', () => {
         }
       }, (child) => { _opChild = child })
       if (_opAborted) {
-        opResult.value = { ok: false, error: '已中断', aborted: true }
+        opResult.value = { ok: false, error: t('logs.aborted'), aborted: true }
       } else if (error && !opResult.value) {
         opResult.value = { ok: false, error }
         logStore.addLog(error, 'error')
       }
     } catch (e) {
       if (_opAborted) {
-        opResult.value = { ok: false, error: '已中断', aborted: true }
+        opResult.value = { ok: false, error: t('logs.aborted'), aborted: true }
       } else {
         const msg = String(e?.message || e)
         opResult.value = { ok: false, error: msg }
@@ -688,7 +696,7 @@ export const useCartData = defineStore('cart', () => {
       _opChild = null
       opRunning.value = false
       if (!opResult.value) {
-        opResult.value = { ok: false, error: _opAborted ? '已中断' : '操作未返回结果', aborted: _opAborted }
+        opResult.value = { ok: false, error: _opAborted ? t('logs.aborted') : t('logs.opNoResult'), aborted: _opAborted }
         if (!_opAborted) logStore.addLog(opResult.value.error, 'error')
       }
       const timePart = opResult.value?.seconds != null && opResult.value.seconds > 0
@@ -698,12 +706,12 @@ export const useCartData = defineStore('cart', () => {
         taskProgress.completeTask(taskId, f.name)
         const r = opResult.value
         const sizePart = r.bytes ? `${(r.bytes / 1024 / 1024).toFixed(1)}MB` : ''
-        const doneId = logStore.addLog(['烧录完成', sizePart].filter(Boolean).join(' '), 'success')
+        const doneId = logStore.addLog(sizePart ? t('logs.burnOkSize', { size: sizePart }) : t('rom.op.burnOk'), 'success')
         logStore.setLogElapsed(doneId, timePart)
         toast.success(t('rom.op.burnOk'))
       } else if (opResult.value && !opResult.value.ok) {
         taskProgress.failTask(taskId, opResult.value.error)
-        const failLabel = _opAborted ? '烧录已中断' : '烧录失败'
+        const failLabel = _opAborted ? t('rom.op.burnAbort') : t('rom.op.burnFail')
         const failId = logStore.addLog(failLabel, _opAborted ? 'warn' : 'error')
         logStore.setLogElapsed(failId, timePart)
         if (_opAborted) toast.info(t('rom.op.burnAbort'))
@@ -723,7 +731,7 @@ export const useCartData = defineStore('cart', () => {
     await burn()
     const after = cartInfo.value?.rom_title || cartInfo.value?.game_name || null
     const ok = !!opResult.value?.ok && !!after
-    if (ok) logStore.addLog(`Identify changed ${before || '-'} -> ${after}`, 'success')
+    if (ok) logStore.addLog(t('logs.identifyChanged', { before: before || '-', after }), 'success')
     return { ok, before, after, error: opResult.value?.ok ? undefined : (opResult.value?.error || 'Burn failed') }
   }
 
@@ -745,7 +753,7 @@ export const useCartData = defineStore('cart', () => {
     _opAborted = false
     // 擦除时展开 ROM 页 + 第三层进度条（与烧录一致，否则 drawer3 不可见）
     emu.toggleLogs(true, 'rom')
-    const taskId = taskProgress.startTask({ kind: 'erase', title: '\u64e6\u9664\u5361\u5e26' })
+    const taskId = taskProgress.startTask({ kind: 'erase', title: t('logs.taskErase') })
     // 擦除成功启动：清空进度条
     taskProgress.resetProgress(taskId)
     taskProgress.drawerOpen = true
@@ -753,7 +761,7 @@ export const useCartData = defineStore('cart', () => {
     const eraseStartedAt = Date.now()
     const fmtEraseElapsed = () => `${((Date.now() - eraseStartedAt) / 1000).toFixed(1)}s`
     // 起始行保留；进度「擦除 N%」单行原地更新；完成/失败另起一行
-    logStore.addLog('擦除卡带', 'warn')
+    logStore.clearLiveProgress(); logStore.addLog(t('logs.eraseCart'), 'warn')
     const phaseProg = createPhaseProgressLog(logStore)
     const tickTimer = setInterval(() => phaseProg.setElapsed(fmtEraseElapsed()), 250)
     try {
@@ -764,9 +772,9 @@ export const useCartData = defineStore('cart', () => {
           if (ev.total > 0) {
             const pct = Math.round((ev.done / ev.total) * 100)
             // 不传 elapsed：右侧耗时列统一由 tickTimer 刷新，避免双源交替闪烁。
-            phaseProg.upsert('擦除', pct)
+            phaseProg.upsert('erase', pct)
           } else {
-            phaseProg.upsert('擦除', null)
+            phaseProg.upsert('erase', null)
           }
         } else if (ev.type === 'log') {
           opLogs.value.push(ev.message)
@@ -783,14 +791,14 @@ export const useCartData = defineStore('cart', () => {
         }
       }, (child) => { _opChild = child })
       if (_opAborted) {
-        opResult.value = { ok: false, error: '已中断', aborted: true }
+        opResult.value = { ok: false, error: t('logs.aborted'), aborted: true }
       } else if (error && !opResult.value) {
         opResult.value = { ok: false, error }
         logStore.addLog(error, 'error')
       }
     } catch (e) {
       if (_opAborted) {
-        opResult.value = { ok: false, error: '已中断', aborted: true }
+        opResult.value = { ok: false, error: t('logs.aborted'), aborted: true }
       } else {
         const msg = String(e?.message || e)
         opResult.value = { ok: false, error: msg }
@@ -801,7 +809,7 @@ export const useCartData = defineStore('cart', () => {
       _opChild = null
       opRunning.value = false
       if (!opResult.value) {
-        opResult.value = { ok: false, error: _opAborted ? '已中断' : '操作未返回结果', aborted: _opAborted }
+        opResult.value = { ok: false, error: _opAborted ? t('logs.aborted') : t('logs.opNoResult'), aborted: _opAborted }
         if (!_opAborted) logStore.addLog(opResult.value.error, 'error')
       }
       const timePart = opResult.value?.seconds != null && opResult.value.seconds > 0
@@ -809,12 +817,12 @@ export const useCartData = defineStore('cart', () => {
         : fmtEraseElapsed()
       if (opResult.value?.ok) {
         taskProgress.completeTask(taskId)
-        const doneId = logStore.addLog('擦除完成', 'success')
+        const doneId = logStore.addLog(t('rom.op.eraseOk'), 'success')
         logStore.setLogElapsed(doneId, timePart)
         toast.success(t('rom.op.eraseOk'))
       } else if (opResult.value && !opResult.value.ok) {
         taskProgress.failTask(taskId, opResult.value.error)
-        const failId = logStore.addLog(_opAborted ? '擦除已中断' : '擦除失败', _opAborted ? 'warn' : 'error')
+        const failId = logStore.addLog(_opAborted ? t('rom.op.eraseAbort') : t('rom.op.eraseFail'), _opAborted ? 'warn' : 'error')
         logStore.setLogElapsed(failId, timePart)
         if (_opAborted) toast.info(t('rom.op.eraseAbort'))
         else toast.error(t('rom.op.eraseFail'))
@@ -834,7 +842,7 @@ export const useCartData = defineStore('cart', () => {
       if (!selected) return null
       return Array.isArray(selected) ? (selected[0] || null) : selected
     } catch (error) {
-      const message = `无法选择导出文件夹：${String(error?.message || error)}`
+      const message = t('logs.exportDirFail', { err: String(error?.message || error) })
       toast.error(message)
       logStore.addLog(message, 'error')
       return null
@@ -843,7 +851,7 @@ export const useCartData = defineStore('cart', () => {
 
   async function dump() {
     if (opRunning.value) return
-    const exportDir = await chooseExportDirectory('选择 ROM 导出文件夹')
+    const exportDir = await chooseExportDirectory(t('logs.exportRomPick'))
     if (!exportDir) return
 
     opRunning.value = true
@@ -852,8 +860,8 @@ export const useCartData = defineStore('cart', () => {
     progress.value = { done: 0, total: 0 }
     opLogs.value = []
     _opAborted = false
-    const taskId = taskProgress.startTask({ kind: 'dump', title: '导出 ROM', detail: cartInfo.value?.rom_title || cartInfo.value?.game_name || '' })
-    logStore.addLog('开始导出 ROM', 'warn')
+    const taskId = taskProgress.startTask({ kind: 'dump', title: t('logs.taskDump'), detail: cartInfo.value?.rom_title || cartInfo.value?.game_name || '' })
+    logStore.clearLiveProgress(); logStore.addLog(t('logs.exportRomStart'), 'warn')
     const phaseProg = createPhaseProgressLog(logStore)
     try {
       const title = (cartInfo.value?.rom_title || cartInfo.value?.game_name || 'dump')
@@ -866,7 +874,7 @@ export const useCartData = defineStore('cart', () => {
           taskProgress.updateProgress(taskId, ev.done, ev.total)
           if (ev.total > 0) {
             const pct = Math.round((ev.done / ev.total) * 100)
-            phaseProg.upsert('导出', pct)
+            phaseProg.upsert('dump', pct)
           }
         } else if (ev.type === 'log') {
           opLogs.value.push(ev.message)
@@ -883,14 +891,14 @@ export const useCartData = defineStore('cart', () => {
         }
       }, (child) => { _opChild = child })
       if (_opAborted) {
-        opResult.value = { ok: false, error: '已中断', aborted: true }
+        opResult.value = { ok: false, error: t('logs.aborted'), aborted: true }
       } else if (error && !opResult.value) {
         opResult.value = { ok: false, error }
         logStore.addLog(error, 'error')
       }
     } catch (e) {
       if (_opAborted) {
-        opResult.value = { ok: false, error: '已中断', aborted: true }
+        opResult.value = { ok: false, error: t('logs.aborted'), aborted: true }
       } else {
         const msg = String(e?.message || e)
         opResult.value = { ok: false, error: msg }
@@ -900,15 +908,15 @@ export const useCartData = defineStore('cart', () => {
       _opChild = null
       opRunning.value = false
       if (!opResult.value) {
-        opResult.value = { ok: false, error: _opAborted ? '已中断' : '操作未返回结果', aborted: _opAborted }
+        opResult.value = { ok: false, error: _opAborted ? t('logs.aborted') : t('logs.opNoResult'), aborted: _opAborted }
         if (!_opAborted) logStore.addLog(opResult.value.error, 'error')
       }
       if (opResult.value?.ok) {
         taskProgress.completeTask(taskId)
-        logStore.addLog('导出 ROM 完成', 'success')
+        logStore.addLog(t('logs.exportRomOk'), 'success')
       } else if (opResult.value && !opResult.value.ok) {
         taskProgress.failTask(taskId, opResult.value.error)
-        if (_opAborted) logStore.addLog('导出已中断', 'warn')
+        if (_opAborted) logStore.addLog(t('logs.exportRomAbort'), 'warn')
       }
     }
   }
@@ -916,7 +924,7 @@ export const useCartData = defineStore('cart', () => {
   /** 读取存档到文件（cfb save-dump，只读）。镜像 dump()，仅换命令/扩展名/文案。 */
   async function saveDump() {
     if (opRunning.value) return
-    const exportDir = await chooseExportDirectory('选择存档导出文件夹')
+    const exportDir = await chooseExportDirectory(t('logs.exportSavePick'))
     if (!exportDir) return
     opRunning.value = true
     opKind.value = 'saveDump'
@@ -925,8 +933,8 @@ export const useCartData = defineStore('cart', () => {
     opLogs.value = []
     saveInfo.value = null
     _opAborted = false
-    const taskId = taskProgress.startTask({ kind: 'saveDump', title: '读取存档', detail: cartInfo.value?.rom_title || '' })
-    logStore.addLog('开始读取存档', 'warn')
+    const taskId = taskProgress.startTask({ kind: 'saveDump', title: t('logs.taskSaveDump'), detail: cartInfo.value?.rom_title || '' })
+    logStore.clearLiveProgress(); logStore.addLog(t('logs.saveDumpStart'), 'warn')
     try {
       const title = (cartInfo.value?.rom_title || cartInfo.value?.game_name || 'save')
         .replace(/[^a-zA-Z0-9_\-]/g, '_')
@@ -936,7 +944,7 @@ export const useCartData = defineStore('cart', () => {
         const dKb = (done / 1024).toFixed(0)
         const tKb = (total / 1024).toFixed(0)
         const pct = total ? Math.round((done / total) * 100) : 0
-        return `读取存档 ${dKb} / ${tKb} KB (${pct}%)`
+        return t('logs.saveDumpProgress', { done: dKb, total: tKb, pct })
       }
       const { error } = await cfbClient.saveDump({ outputPath: outPath, mbc: mbcArgs(), type: saveType.value }, (ev) => {
         if (ev.type === 'progress') {
@@ -956,22 +964,22 @@ export const useCartData = defineStore('cart', () => {
         else if (ev.type === 'result') opResult.value = { ...ev, outPath }
         else if (ev.type === 'error') { opResult.value = { ok: false, error: ev.message }; logStore.addLog(ev.message, 'error') }
       }, (child) => { _opChild = child })
-      if (_opAborted) opResult.value = { ok: false, error: '已中断', aborted: true }
+      if (_opAborted) opResult.value = { ok: false, error: t('logs.aborted'), aborted: true }
       else if (error && !opResult.value) { opResult.value = { ok: false, error }; logStore.addLog(error, 'error') }
     } catch (e) {
-      if (_opAborted) opResult.value = { ok: false, error: '已中断', aborted: true }
+      if (_opAborted) opResult.value = { ok: false, error: t('logs.aborted'), aborted: true }
       else { const msg = String(e?.message || e); opResult.value = { ok: false, error: msg }; logStore.addLog(msg, 'error') }
     } finally {
       _opChild = null
       opRunning.value = false
       if (!opResult.value) {
-        opResult.value = { ok: false, error: _opAborted ? '已中断' : '操作未返回结果', aborted: _opAborted }
+        opResult.value = { ok: false, error: _opAborted ? t('logs.aborted') : t('logs.opNoResult'), aborted: _opAborted }
         if (!_opAborted) logStore.addLog(opResult.value.error, 'error')
       }
-      if (opResult.value?.ok) { taskProgress.completeTask(taskId); logStore.addLog('存档读取完成', 'success') }
+      if (opResult.value?.ok) { taskProgress.completeTask(taskId); logStore.addLog(t('logs.saveDumpOk'), 'success') }
       else if (opResult.value && !opResult.value.ok) {
         taskProgress.failTask(taskId, opResult.value.error)
-        if (!opResult.value.aborted) toast.error(opResult.value.error || '存档读取失败')
+        if (!opResult.value.aborted) toast.error(opResult.value.error || t('toast.saveDumpFail'))
       }
     }
   }
@@ -1002,15 +1010,15 @@ export const useCartData = defineStore('cart', () => {
     opLogs.value = []
     saveInfo.value = null
     _opAborted = false
-    const taskId = taskProgress.startTask({ kind: 'saveWrite', title: '写入存档', detail: f.name || '' })
-    logStore.addLog(`开始写入存档 ${f.name}`, 'warn')
+    const taskId = taskProgress.startTask({ kind: 'saveWrite', title: t('logs.taskSaveWrite'), detail: f.name || '' })
+    logStore.clearLiveProgress(); logStore.addLog(t('logs.saveWriteStart', { name: f.name }), 'warn')
     try {
       let progId = null
       const fmt = (done, total) => {
         const dKb = (done / 1024).toFixed(0)
         const tKb = (total / 1024).toFixed(0)
         const pct = total ? Math.round((done / total) * 100) : 0
-        return `写入存档 ${dKb} / ${tKb} KB (${pct}%)`
+        return t('logs.saveWriteProgress', { done: dKb, total: tKb, pct })
       }
       const { error } = await cfbClient.saveWrite({ savePath: f.path, mbc: mbcArgs(), type: saveType.value }, (ev) => {
         if (ev.type === 'progress') {
@@ -1030,22 +1038,22 @@ export const useCartData = defineStore('cart', () => {
         else if (ev.type === 'result') opResult.value = { ...ev }
         else if (ev.type === 'error') { opResult.value = { ok: false, error: ev.message }; logStore.addLog(ev.message, 'error') }
       }, (child) => { _opChild = child })
-      if (_opAborted) opResult.value = { ok: false, error: '已中断', aborted: true }
+      if (_opAborted) opResult.value = { ok: false, error: t('logs.aborted'), aborted: true }
       else if (error && !opResult.value) { opResult.value = { ok: false, error }; logStore.addLog(error, 'error') }
     } catch (e) {
-      if (_opAborted) opResult.value = { ok: false, error: '已中断', aborted: true }
+      if (_opAborted) opResult.value = { ok: false, error: t('logs.aborted'), aborted: true }
       else { const msg = String(e?.message || e); opResult.value = { ok: false, error: msg }; logStore.addLog(msg, 'error') }
     } finally {
       _opChild = null
       opRunning.value = false
       if (!opResult.value) {
-        opResult.value = { ok: false, error: _opAborted ? '已中断' : '操作未返回结果', aborted: _opAborted }
+        opResult.value = { ok: false, error: _opAborted ? t('logs.aborted') : t('logs.opNoResult'), aborted: _opAborted }
         if (!_opAborted) logStore.addLog(opResult.value.error, 'error')
       }
-      if (opResult.value?.ok) { taskProgress.completeTask(taskId); logStore.addLog('存档写入完成', 'success') }
+      if (opResult.value?.ok) { taskProgress.completeTask(taskId); logStore.addLog(t('logs.saveWriteOk'), 'success') }
       else if (opResult.value && !opResult.value.ok) {
         taskProgress.failTask(taskId, opResult.value.error)
-        if (!opResult.value.aborted) toast.error(opResult.value.error || '存档写入失败')
+        if (!opResult.value.aborted) toast.error(opResult.value.error || t('toast.saveWriteFail'))
       }
     }
   }
@@ -1082,7 +1090,7 @@ export const useCartData = defineStore('cart', () => {
     opLogs.value = []
     saveInfo.value = null
     _opAborted = false
-    const taskId = taskProgress.startTask({ kind: 'saveVerify', title: t('rom.op.verifyTitle'), detail: f.name || '' })
+    const taskId = taskProgress.startTask({ kind: 'saveVerify', title: t('logs.taskSaveVerify'), detail: f.name || '' })
     logStore.addLog(t('rom.op.verifyStart', { name: f.name }), 'warn')
     toast.info(t('rom.op.verifyStart', { name: f.name }))
     try {
@@ -1091,7 +1099,7 @@ export const useCartData = defineStore('cart', () => {
         const dKb = (done / 1024).toFixed(0)
         const tKb = (total / 1024).toFixed(0)
         const pct = total ? Math.round((done / total) * 100) : 0
-        return `${t('rom.op.verifyTitle')} ${dKb} / ${tKb} KB (${pct}%)`
+        return t('logs.saveVerifyProgress', { done: dKb, total: tKb, pct })
       }
       const { error } = await cfbClient.saveVerify({ savePath: f.path, mbc: mbcArgs(), type: saveType.value }, (ev) => {
         if (ev.type === 'progress') {
@@ -1153,15 +1161,15 @@ export const useCartData = defineStore('cart', () => {
     opLogs.value = []
     saveInfo.value = null
     _opAborted = false
-    const taskId = taskProgress.startTask({ kind: 'saveErase', title: '擦除存档', detail: cartInfo.value?.rom_title || '' })
-    logStore.addLog('开始擦除存档', 'warn')
+    const taskId = taskProgress.startTask({ kind: 'saveErase', title: t('logs.taskSaveErase'), detail: cartInfo.value?.rom_title || '' })
+    logStore.clearLiveProgress(); logStore.addLog(t('logs.saveEraseStart'), 'warn')
     try {
       let progId = null
       const fmt = (done, total) => {
         const dKb = (done / 1024).toFixed(0)
         const tKb = (total / 1024).toFixed(0)
         const pct = total ? Math.round((done / total) * 100) : 0
-        return `擦除存档 ${dKb} / ${tKb} KB (${pct}%)`
+        return t('logs.saveEraseProgress', { done: dKb, total: tKb, pct })
       }
       const isEeprom = saveType.value === 'eeprom4k' || saveType.value === 'eeprom64k'
       const len = isEeprom ? undefined : (cartInfo.value?.save_size_bytes || undefined)
@@ -1183,22 +1191,22 @@ export const useCartData = defineStore('cart', () => {
         else if (ev.type === 'result') opResult.value = { ...ev }
         else if (ev.type === 'error') { opResult.value = { ok: false, error: ev.message }; logStore.addLog(ev.message, 'error') }
       }, (child) => { _opChild = child })
-      if (_opAborted) opResult.value = { ok: false, error: '已中断', aborted: true }
+      if (_opAborted) opResult.value = { ok: false, error: t('logs.aborted'), aborted: true }
       else if (error && !opResult.value) { opResult.value = { ok: false, error }; logStore.addLog(error, 'error') }
     } catch (e) {
-      if (_opAborted) opResult.value = { ok: false, error: '已中断', aborted: true }
+      if (_opAborted) opResult.value = { ok: false, error: t('logs.aborted'), aborted: true }
       else { const msg = String(e?.message || e); opResult.value = { ok: false, error: msg }; logStore.addLog(msg, 'error') }
     } finally {
       _opChild = null
       opRunning.value = false
       if (!opResult.value) {
-        opResult.value = { ok: false, error: _opAborted ? '已中断' : '操作未返回结果', aborted: _opAborted }
+        opResult.value = { ok: false, error: _opAborted ? t('logs.aborted') : t('logs.opNoResult'), aborted: _opAborted }
         if (!_opAborted) logStore.addLog(opResult.value.error, 'error')
       }
-      if (opResult.value?.ok) { taskProgress.completeTask(taskId); logStore.addLog('存档擦除完成', 'success') }
+      if (opResult.value?.ok) { taskProgress.completeTask(taskId); logStore.addLog(t('logs.saveEraseOk'), 'success') }
       else if (opResult.value && !opResult.value.ok) {
         taskProgress.failTask(taskId, opResult.value.error)
-        if (!opResult.value.aborted) toast.error(opResult.value.error || '存档擦除失败')
+        if (!opResult.value.aborted) toast.error(opResult.value.error || t('toast.saveEraseFail'))
       }
     }
   }
@@ -1226,7 +1234,7 @@ export const useCartData = defineStore('cart', () => {
       if (v) {
         // 防抖：避免窗口尺寸狂抖 / 端口赋值造成的连读
         _connectReadTimer = setTimeout(() => {
-          if (conn.isConnected) readCart({ silent: true })
+          if (conn.isConnected && !opRunning.value) readCart({ silent: true })
         }, 250)
       } else {
         cartInfo.value = null
@@ -1243,7 +1251,7 @@ export const useCartData = defineStore('cart', () => {
       clearTimeout(_platformReadTimer)
       _platformReadTimer = setTimeout(() => {
         if (_suppressPlatformRead) return
-        if (conn.isConnected && !cartReading.value) readCart({ silent: true })
+        if (conn.isConnected && !cartReading.value && !opRunning.value) readCart({ silent: true })
       }, 250)
     },
   )

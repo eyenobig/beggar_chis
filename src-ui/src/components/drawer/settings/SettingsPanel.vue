@@ -156,7 +156,7 @@ async function verifyToolchain() {
 
 async function pickSkyEmuPath() {
   if (!inTauri) {
-    toast.error('请在桌面客户端中设置 SkyEmu 路径')
+    toast.error(t('settings.skyemuPathDesktopOnly'))
     return
   }
   const selected = await openDialog({
@@ -169,13 +169,13 @@ async function pickSkyEmuPath() {
   const path = typeof selected === 'string' ? selected : selected[0]
   if (!path) return
   emulator.setSkyEmuPath(path)
-  toast.success('SkyEmu 路径已更新')
-  logStore.addLog(`SkyEmu 路径: ${path}`, 'success')
+  toast.success(t('settings.skyemuPathUpdated'))
+  logStore.addLog(t('logs.skyemuPath', { path }), 'success')
 }
 
 function clearCartridgeCache() {
   cartridgeCache.clearAll()
-  const msg = '卡带缓存已清除'
+  const msg = t('settings.cartCacheCleared')
   toast.success(msg)
   logStore.addLog(msg, 'success')
 }
@@ -183,7 +183,7 @@ function clearCartridgeCache() {
 async function applyVoltage(next, updateState) {
   if (saving.value || !isGbFamily.value) return
   if (!inTauri) {
-    toast.error('请在桌面客户端中切换电压')
+    toast.error(t('settings.voltageDesktopOnly'))
     return
   }
   saving.value = true
@@ -191,11 +191,11 @@ async function applyVoltage(next, updateState) {
     const result = await cfbClient.setVoltage(next)
     if (result.error) throw new Error(result.error)
     updateState()
-    const msg = `GB/GBC 电压已设为 ${voltageLabel.value}`
+    const msg = t('settings.voltageSet', { v: voltageLabel.value })
     toast.success(msg)
     logStore.addLog(msg, 'success')
   } catch (error) {
-    const msg = `电压切换失败: ${String(error)}`
+    const msg = t('settings.voltageFail', { err: String(error) })
     toast.error(msg)
     logStore.addLog(msg, 'error')
   } finally {

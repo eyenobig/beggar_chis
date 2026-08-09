@@ -53,12 +53,12 @@ export function useSkyEmuDownload() {
       return
     }
     if (!inTauri) {
-      toast.error('请在桌面客户端中启动 SkyEmu')
+      toast.error(t('launch.desktopOnly'))
       return
     }
 
     if (cart.opRunning) {
-      toast.error('请先等待烧录/导出任务完成后再启动模拟器')
+      toast.error(t('launch.waitOp'))
       return
     }
 
@@ -69,7 +69,7 @@ export function useSkyEmuDownload() {
       }
       const serialPort = conn.selectedPort || 'AUTO'
       if (!conn.selectedPort) {
-        toast.error('未检测到烧录器，请先连接后再启动')
+        toast.error(t('launch.noBurner'))
         return
       }
 
@@ -92,12 +92,12 @@ export function useSkyEmuDownload() {
         romSize,
       })
 
-      const msg = `启动 SkyEmu DirectPlay · ${serialPort} · ${romPath}`
-      toast.success('已启动 SkyEmu（DirectPlay 读卡带）')
+      const msg = t('launch.directPlayLog', { port: serialPort, rom: romPath })
+      toast.success(t('launch.started'))
       emu.addLog(msg, 'success')
-      emu.addLog('串口已交给 SkyEmu；关闭模拟器后请在本应用重新连接烧录器', 'warn')
+      emu.addLog(t('launch.serialHandedOff'), 'warn')
     } catch (error) {
-      const msg = String(error?.message || error || '启动失败')
+      const msg = String(error?.message || error || t('launch.fail'))
       toast.error(msg)
       emu.addLog(msg, 'error')
     }
@@ -106,7 +106,7 @@ export function useSkyEmuDownload() {
   async function downloadSkyEmu() {
     if (downloading.value) return
     if (!inTauri) {
-      toast.error('请在桌面客户端中下载 SkyEmu')
+      toast.error(t('launch.downloadDesktopOnly'))
       return
     }
 
@@ -115,7 +115,7 @@ export function useSkyEmuDownload() {
       let destDir = await resolveAssetDestDir(skyEmuPath.value)
       if (!destDir) {
         destDir = await pickAssetDestDir({
-          title: '选择 SkyEmu 保存路径',
+          title: t('launch.pickDest'),
           defaultPath: await resolveAssetDestDir(skyEmuPath.value),
         })
         if (!destDir) return
@@ -123,7 +123,7 @@ export function useSkyEmuDownload() {
       }
 
       await runToolchainDownloadTask({
-        title: '下载 SkyEmu',
+        title: t('launch.downloadSkyEmu'),
         detail: destDir,
         addLog: (msg, level) => emu.addLog(msg, level),
         onOpenProgress: openSettingsWithProgress,
@@ -161,7 +161,7 @@ export function useSkyEmuDownload() {
     launchSkyEmu,
     pickDestDir: () =>
       pickAssetDestDir({
-        title: '选择 SkyEmu 保存路径',
+        title: t('launch.pickDest'),
         defaultPath: skyEmuPath.value || undefined,
       }),
   }

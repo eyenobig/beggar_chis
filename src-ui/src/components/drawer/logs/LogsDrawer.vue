@@ -2,6 +2,7 @@
 <script setup>
 import { computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { X } from '@lucide/vue'
 import { useEmulator } from '../../../stores/useEmulator'
 import { useLogStore } from '../../../stores/useLogStore'
@@ -11,6 +12,7 @@ import BaseDrawer from '../BaseDrawer.vue'
 import LogsPanel from './LogsPanel.vue'
 import RomPanel from './RomPanel.vue'
 
+const { t } = useI18n()
 const emu = useEmulator()
 const { logsOpen, activeTab } = storeToRefs(emu)
 const { closeDrawers, openBookmark } = emu
@@ -48,13 +50,13 @@ function tabClass(name) {
         class="flex shrink-0 items-center justify-between border-b border-white/10 bg-zinc-900/50 px-5 py-3"
       >
         <div class="flex gap-0.5 rounded-lg bg-zinc-800/60 p-0.5">
-          <button :class="tabClass('rom')" @click="switchTab('rom')">ROM</button>
+          <button :class="tabClass('rom')" @click="switchTab('rom')">{{ t('bookmark.rom') }}</button>
           <button
             :class="tabClass('logs')"
             class="relative"
             @click="switchTab('logs')"
           >
-            Logs
+            {{ t('bookmark.logs') }}
             <span
               v-if="hasUnread && activeTab !== 'logs'"
               class="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-red-500"
@@ -63,7 +65,7 @@ function tabClass(name) {
           </button>
         </div>
         <button
-          aria-label="Close"
+          :aria-label="t('logs.close')"
           class="p-1 text-zinc-500 transition-colors hover:text-white"
           @click="closeDrawers()"
         >

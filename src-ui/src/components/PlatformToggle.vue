@@ -1,15 +1,18 @@
 <script setup>
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { useEmulator } from '../stores/useEmulator'
 
 const props = defineProps({ operationLocked: Boolean })
+const { t } = useI18n()
 const emu = useEmulator()
 const { currentPlatform, uiSwitchLocked } = storeToRefs(emu)
 const { setPlatform } = emu
 
 const isMbc = computed(() => currentPlatform.value === 'gbc')
 const platformLocked = computed(() => uiSwitchLocked.value || props.operationLocked)
+const lockedTitle = computed(() => (platformLocked.value ? t('home.platformLocked') : undefined))
 const gbaChars = [
   { char: 'G', color: '#312E81' },
   { char: 'B', color: '#3730A3' },
@@ -37,7 +40,7 @@ const indicatorStyle = computed(() => ({
         :class="isMbc ? 'text-[#1d1d1f]' : 'text-zinc-400'"
         :disabled="platformLocked"
         :aria-disabled="platformLocked"
-        :title="platformLocked ? 'ROM 操作进行中' : undefined"
+        :title="lockedTitle"
         @click="setPlatform('gbc')"
       >
         GB&amp;GBC
@@ -49,7 +52,7 @@ const indicatorStyle = computed(() => ({
         :class="isMbc ? 'text-zinc-400' : ''"
         :disabled="platformLocked"
         :aria-disabled="platformLocked"
-        :title="platformLocked ? 'ROM 操作进行中' : undefined"
+        :title="lockedTitle"
         @click="setPlatform('gba')"
       >
         <template v-if="!isMbc">
