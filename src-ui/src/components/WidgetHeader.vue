@@ -11,7 +11,6 @@ const { t } = useI18n()
 const conn = useConnection()
 const { isConnected, isConnecting, dialogOpen, selectedPort, needsSelection } = storeToRefs(conn)
 const { openDialog } = conn
-// 不自动连接：默认未连接，由用户在弹窗里点「连接」
 
 const dotClass = computed(() => {
   if (isConnected.value)  return 'w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)] animate-pulse transition-colors'

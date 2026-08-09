@@ -13,18 +13,18 @@ on:
 
 env:
   CFB_GITHUB_REPO: eyenobig/chis-burner-cmd
-  CFB_RELEASE_TAG: ${{ inputs.cfb_tag || vars.CFB_RELEASE_TAG || 'v0.3.4' }}
+  CFB_RELEASE_TAG: ${{ inputs.cfb_tag || vars.CFB_RELEASE_TAG || 'v0.3.5' }}
   VITE_API_BASE_URL: ${{ secrets.API_BASE_URL }}
 
 jobs:
-  # 门禁：tag 触发时，校验 tag 指向的提交在固定分支 main 上，否则拦下整条流水线
+  # 门禁：tag 触发时，校验 tag 指向的提交在固定分支 master 上，否则拦下整条流水线
   # （省掉 4 平台的无效构建）。workflow_dispatch 手动触发没有 tag，直接放行。
   # 与 chis-burner-cmd 的 build.yml 门禁保持一致。
   gate:
     if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     env:
-      RELEASE_BRANCH: main   # 固定发版分支，想改成别的在这里改
+      RELEASE_BRANCH: master   # 固定发版分支，想改成别的在这里改
     steps:
       - uses: actions/checkout@v4
       - name: Require tag on ${{ env.RELEASE_BRANCH }}
@@ -34,7 +34,7 @@ jobs:
           if git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
             echo "OK: tag '$GITHUB_REF_NAME' (commit $GITHUB_SHA) is on '$RELEASE_BRANCH'."
           else
-            echo "::error::Tag '$GITHUB_REF_NAME' 不在 '$RELEASE_BRANCH' 分支上，已拒绝构建。请把 main 快进到该提交，或在 main 上重新打 tag。"
+            echo "::error::Tag '$GITHUB_REF_NAME' 不在 '$RELEASE_BRANCH' 分支上，已拒绝构建。请把 master 快进到该提交，或在 master 上重新打 tag。"
             exit 1
           fi
 
@@ -90,6 +90,28 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
+      # 空密码密钥：必须把 PASSWORD 写成存在的空环境变量，否则 tauri 会交互式要密码并在 CI 失败。
+      - name: Normalize signing password env
+        shell: bash
+        run: |
+          # secrets 未配置时也写成空串，保证变量存在
+          printf 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD=%s\n' "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD-}" >> "$GITHUB_ENV"
+        env:
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Unlock signing key (smoke)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'chis-sign-test' > sign-smoke.txt
+          if ! npx tauri signer sign sign-smoke.txt; then
+            echo '::error::无法用当前 Secret 解锁 updater 私钥。请把本地 .tauri/chis-flasher.key 全文重新贴进 TAURI_SIGNING_PRIVATE_KEY；空密码密钥请把 TAURI_SIGNING_PRIVATE_KEY_PASSWORD 设为空（或删掉该 Secret）。'
+            exit 1
+          fi
+          rm -f sign-smoke.txt sign-smoke.txt.sig
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+
       - name: Download released cfb sidecar
         run: npm run build:cfb:github
         env:
@@ -106,12 +128,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: tauri-app ${{ github.ref_name }}
-          releaseBody: Download the installer for your platform below.
+          releaseName: Chis Flasher ${{ github.ref_name }}
+          releaseBody: Windows x64 installer (NSIS). Draft until verified.
           releaseDraft: true
           prerelease: false
-          uploadUpdaterJson: true
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
           args: ${{ matrix.args }}

@@ -142,6 +142,12 @@ export const useConnection = defineStore('connection', () => {
     } finally {
       detecting.value = false
     }
+    // detect 只负责选口；连接态与 autoConnect 对齐，避免「已选 COM 却显示未连接」。
+    if (autoConnect.value && selectedPort.value) {
+      connected.value = true
+    } else if (!selectedPort.value) {
+      connected.value = false
+    }
     return burners.value.length > 0 && !!selectedPort.value
   }
 
@@ -163,6 +169,18 @@ export const useConnection = defineStore('connection', () => {
       connected.value = true
     }
     return ok
+  }
+
+  /** 外部在确认硬件可用后同步 UI 连接态（如识别卡带成功）。 */
+  function markConnected(port) {
+    if (port) {
+      selectedPort.value = port
+      settings.setPreferredPort(port)
+    }
+    if (!selectedPort.value) return false
+    autoConnect.value = true
+    connected.value = true
+    return true
   }
 
   async function connect() {
@@ -244,6 +262,7 @@ export const useConnection = defineStore('connection', () => {
     detect,
     selectPort,
     pickDevice,
+    markConnected,
     connect,
     disconnect,
     handleDeviceChange,

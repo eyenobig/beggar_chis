@@ -63,9 +63,11 @@ async function clientBurn(path) {
 }
 
 onMounted(() => {
-  // 尽早触发开发态/打包态路径 bootstrap，设置页打开前就填好。
-  useCfbSettings().ensurePathsReady()
-  useConnection().startWatching()
+  // 先等 cfb 路径就绪再 detect，避免启动竞态：路径未好 → detect 空结果 → 一直显示未连接。
+  ;(async () => {
+    await useCfbSettings().ensurePathsReady()
+    await useConnection().startWatching()
+  })()
   useAppUpdater().init()
 
   if (inTauri) {

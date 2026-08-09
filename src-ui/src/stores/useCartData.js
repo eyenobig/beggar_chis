@@ -476,7 +476,7 @@ export const useCartData = defineStore('cart', () => {
         await conn.detect()
         if (seq !== _readSeq) return
         if (conn.selectedPort) {
-          conn.connected = true
+          conn.markConnected(conn.selectedPort)
           await sleep(200)
           hit = await tryBothModes()
           if (seq !== _readSeq || !hit) return
@@ -486,11 +486,8 @@ export const useCartData = defineStore('cart', () => {
       if (good) {
         cartInfo.value = { ...hit.info, present: true }
         cartError.value = ''
-        // 同步实际用到的 COM，避免 UI 仍钉着已消失的旧口。
-        if (hit.info.port) {
-          cfbSettings.setPreferredPort(hit.info.port)
-          conn.selectedPort = hit.info.port
-        }
+        // 同步实际用到的 COM，避免 UI 仍钉着已消失的旧口；并纠正「已通硬件却显示未连接」。
+        conn.markConnected(hit.info.port || conn.selectedPort)
         // 识别成功后切到对应平台选项卡（GB/GBC ↔ GBA）。
         // 用 setPlatform（勿仅 $patch）：保证 PlatformToggle 响应式更新；
         // _suppressPlatformRead 避免 platform watch 立刻二次 readCart。
