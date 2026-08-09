@@ -30,7 +30,8 @@ pub fn run() {
             toolchain::cfb_kill_process
         ])
         .setup(|_app| {
-            // 自动打开 devtools，便于查看 JS console（临时调试：release 也开）
+            // 仅 debug 构建自动开 DevTools；release / 安装包默认关闭。
+            #[cfg(debug_assertions)]
             {
                 use tauri::Manager;
                 if let Some(w) = _app.get_webview_window("main") {
