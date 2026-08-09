@@ -35,7 +35,8 @@ if (helpRun.status !== 0) {
   fail(`CFB help smoke test failed: ${helpRun.output}`)
 }
 
-// An invalid type is rejected before serial-port discovery and prints the supported set.
+// An invalid type is rejected before serial-port discovery and prints a short supported set.
+// Full type list (incl. eeprom4k/64k) lives in `help`; merge both so either surface counts.
 const invalidTypeRun = run(sidecarPath, [
   'save-dump',
   '--out',
@@ -46,7 +47,8 @@ const invalidTypeRun = run(sidecarPath, [
 if (invalidTypeRun.status === 0) {
   fail('CFB unexpectedly accepted an invalid save type')
 }
-const missingTypes = requiredSaveTypes.filter((type) => !invalidTypeRun.output.includes(type))
+const typeSurface = `${helpRun.output}\n${invalidTypeRun.output}`
+const missingTypes = requiredSaveTypes.filter((type) => !typeSurface.includes(type))
 if (missingTypes.length) {
   fail(`CFB save type list is incomplete; missing: ${missingTypes.join(', ')}`)
 }

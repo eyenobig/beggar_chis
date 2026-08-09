@@ -13,7 +13,7 @@ on:
 
 env:
   CFB_GITHUB_REPO: eyenobig/chis-burner-cmd
-  CFB_RELEASE_TAG: ${{ inputs.cfb_tag || vars.CFB_RELEASE_TAG || 'latest' }}
+  CFB_RELEASE_TAG: ${{ inputs.cfb_tag || vars.CFB_RELEASE_TAG || 'v0.3.4' }}
   VITE_API_BASE_URL: ${{ secrets.API_BASE_URL }}
 
 jobs:
