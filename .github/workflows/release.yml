@@ -47,17 +47,9 @@ jobs:
       contents: write
     strategy:
       fail-fast: false
+      # 暂时只打 Windows x64；恢复多平台时把 macOS/Linux 行加回 matrix。
       matrix:
         include:
-          - platform: macos-15
-            args: --target aarch64-apple-darwin
-            rust_target: aarch64-apple-darwin
-          - platform: macos-15-intel
-            args: --target x86_64-apple-darwin
-            rust_target: x86_64-apple-darwin
-          - platform: ubuntu-22.04
-            args: ''
-            rust_target: x86_64-unknown-linux-gnu
           - platform: windows-latest
             args: ''
             rust_target: x86_64-pc-windows-msvc

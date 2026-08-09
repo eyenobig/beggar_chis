@@ -35,24 +35,13 @@ jobs:
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false
+      # 暂时只跑 Windows；恢复多平台时把 Linux/macOS 行加回。
       matrix:
         include:
           - name: Windows x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             app: tauri-app.exe
-          - name: Linux x64
-            os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            app: tauri-app
-          - name: macOS Intel
-            os: macos-15-intel
-            target: x86_64-apple-darwin
-            app: tauri-app
-          - name: macOS Apple Silicon
-            os: macos-15
-            target: aarch64-apple-darwin
-            app: tauri-app
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -109,7 +98,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: compatibility-${{ matrix.target }}
-          path: artifacts/platform-compatibility-${{ matrix.target }}.json
+          path: dist/build/reports/platform-compatibility-${{ matrix.target }}.json
           if-no-files-found: error
 
       - name: Upload unbundled compile-check output

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Chis Flasher",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "identifier": "com.z.chis-flasher",
   "build": {
     "beforeDevCommand": "npm run ensure:cfb && npm run vite:single",
@@ -25,7 +25,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' tauri: asset:; img-src 'self' data: https: blob: tauri: asset:; connect-src 'self' https://payload.gbmake.com https://g.gbmake.com https://admin.gbmake.com https://assets.gbmake.com http://localhost:* https://localhost:* ws://localhost:* ipc: http://ipc tauri:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:"
+      "csp": "default-src 'self' tauri: asset: http://asset.localhost https://asset.localhost; img-src 'self' data: https: blob: tauri: asset: http://asset.localhost https://asset.localhost; connect-src 'self' https://payload.gbmake.com https://g.gbmake.com https://admin.gbmake.com https://assets.gbmake.com https://api.github.com https://github.com http://localhost:* https://localhost:* ws://localhost:* ipc: http://ipc.localhost https://ipc.localhost http://ipc.localhost/* https://ipc.localhost/* tauri:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
@@ -41,7 +41,26 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "template": "nsis/installer.nsi",
+        "displayLanguageSelector": true,
+        "languages": [
+          "SimpChinese",
+          "English",
+          "TradChinese",
+          "Japanese",
+          "Korean",
+          "French",
+          "German",
+          "Spanish",
+          "PortugueseBR"
+        ]
+      }
+    }
   },
   "plugins": {
     "updater": {

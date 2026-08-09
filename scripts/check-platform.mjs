@@ -85,7 +85,7 @@ if (process.env.CFB_TAURI_OUTPUT === '1') {
   }
 }
 
-const artifactDir = join(root, 'artifacts')
+const artifactDir = join(root, 'dist', 'build', 'reports')
 mkdirSync(artifactDir, { recursive: true })
 const reportPath = join(artifactDir, `platform-compatibility-${target}.json`)
 writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`)

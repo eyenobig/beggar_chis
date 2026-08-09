@@ -184,7 +184,32 @@ async fn ensure_release_toolchain(app: &AppHandle) -> Result<ToolchainPaths, Str
         .join("toolchain");
     let rule_dir = base.join("rule");
     let triple = current_triple();
-    let bin_path = crate::toolchain_update::ensure_latest_cfb(app, triple).await?;
+
+    // 1) 最高优先级：安装器在安装时让用户选的路径，写入 $INSTDIR\paths.json（与主 exe 同级）。
+    //    读到且文件存在 → 直接用，跳过 GitHub 下载与历史记录。
+    //    rule 路径无条件采用用户选择（安装时 rule 目录可能为空，profiles 尚未放入）。
+    if let Some(installed) = read_installer_paths() {
+        if let Some(cfb) = &installed.cfb_bin {
+            if Path::new(cfb).is_file() {
+                return Ok(ToolchainPaths {
+                    cfb_bin: Some(cfb.clone()),
+                    rule_dir: installed.rule_dir.clone(),
+                });
+            }
+        }
+    }
+
+    // 2) GitHub 最新版（SHA 校验、原子切换 current.json）；拉不到回退打包 sidecar。
+    let bin_path = match crate::toolchain_update::ensure_latest_cfb(app, triple).await {
+        Ok(path) => path,
+        Err(err) => match bundled_sidecar(app, triple) {
+            Some(path) => {
+                eprintln!("[toolchain] GitHub cfb 拉取失败({err})，回退打包 sidecar: {}", path.display());
+                path
+            }
+            None => return Err(err),
+        },
+    };
 
     Ok(ToolchainPaths {
         cfb_bin: Some(bin_path.display().to_string()),
@@ -193,6 +218,58 @@ async fn ensure_release_toolchain(app: &AppHandle) -> Result<ToolchainPaths, Str
             .is_dir()
             .then(|| rule_dir.display().to_string()),
     })
+}
+
+/// 安装器（自定义 NSIS 模板）写入的 `paths.json`：与主 exe 同级，含用户在安装向导选的
+/// cfb/rule 路径。schema: `{ "cfbBinPath": "...", "ruleDataDir": "..." }`。
+#[derive(serde::Deserialize)]
+struct InstallerPaths {
+    #[serde(rename = "cfbBinPath", default)]
+    cfb_bin: Option<String>,
+    #[serde(rename = "ruleDataDir", default)]
+    rule_dir: Option<String>,
+}
+
+fn read_installer_paths() -> Option<InstallerPaths> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let file = dir.join("paths.json");
+    let text = std::fs::read_to_string(&file).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// 解析打包进安装包的 cfb sidecar（tauri.conf.json `externalBin: binaries/cfb`）。
+/// NSIS 把 sidecar 重命名为 `cfb.exe`（Windows）/ `cfb`（其它）放进 $INSTDIR，
+/// 故优先找重命名后的短名，再找 `cfb-{triple}` 形式。
+fn bundled_sidecar(app: &AppHandle, triple: &str) -> Option<PathBuf> {
+    let mut names: Vec<String> = if cfg!(windows) {
+        vec!["cfb.exe".into(), format!("cfb-{triple}.exe"), "cfb".into()]
+    } else {
+        vec!["cfb".into(), format!("cfb-{triple}"), "cfb.exe".into()]
+    };
+    let _ = &mut names;
+    let mut candidates = Vec::new();
+    if let Ok(res) = app.path().resource_dir() {
+        for n in &names {
+            candidates.push(res.join(n));
+        }
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            for n in &names {
+                candidates.push(dir.join(n));
+            }
+        }
+    }
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// 安装目录（主 exe 的父目录 = NSIS $INSTDIR）。供前端判断路径是否安装器写入。
+#[tauri::command]
+pub fn install_dir() -> Option<String> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|p| p.display().to_string()))
 }
 
 fn current_triple() -> &'static str {

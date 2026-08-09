@@ -106,6 +106,13 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [vue(), chisVerifyPlugin()],
     clearScreen: false,
+    root: resolve(__dirname, "src-ui"),
+    build: {
+      // root 指向 src-ui 后，默认 outDir 会变成 src-ui/dist，
+      // 但 tauri.conf.json 的 frontendDist 期望产物在仓库根的 dist/，这里显式对齐。
+      outDir: resolve(__dirname, "dist"),
+      emptyOutDir: true,
+    },
     server: {
       port: 1420,
       strictPort: true,

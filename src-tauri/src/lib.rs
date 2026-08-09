@@ -6,6 +6,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_shell::init()) // 允许前端以 sidecar 方式驱动 cfb
         .plugin(tauri_plugin_dialog::init()) // ROM、安装目录选择
+        .plugin(tauri_plugin_http::init()) // WebView CORS 旁路：payload / storefront API
             .manage(toolchain::CfbChildren::default()) // 直连 bin 模式下 cfb_spawn 启动的子进程表
         .invoke_handler(tauri::generate_handler![
             download::download_file,
@@ -22,14 +23,14 @@ pub fn run() {
             toolchain::detect_default_rule_dir,
             toolchain::bootstrap_toolchain_paths,
             toolchain::sync_local_paths_json,
+            toolchain::install_dir,
             toolchain::resolve_cfb_binary,
             toolchain::cfb_exec,
             toolchain::cfb_spawn,
             toolchain::cfb_kill_process
         ])
         .setup(|_app| {
-            // dev 模式自动打开 devtools，便于查看 JS console.log
-            #[cfg(debug_assertions)]
+            // 自动打开 devtools，便于查看 JS console（临时调试：release 也开）
             {
                 use tauri::Manager;
                 if let Some(w) = _app.get_webview_window("main") {

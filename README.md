@@ -26,11 +26,14 @@ npm run dev
 
 ## Docs & skills
 
-- Env / API: [`.env.example`](.env.example), `src/config/api.js`
-- cfb config / bridge: [`.claude/skills/cfb-bridge`](.claude/skills/cfb-bridge/SKILL.md)（`scripts/cfb-config.mjs`）
-- Dev launch (port 1420, ensure:cfb): [`.agents/skills/dev-launch`](.agents/skills/dev-launch/SKILL.md)
-- Outbound URLs: [`.agents/skills/outbound-links`](.agents/skills/outbound-links/SKILL.md)
-- CI / multi-platform: [docs/multi-platform-build.md](docs/multi-platform-build.md)
-- App / sidecar updates: [docs/update-architecture.md](docs/update-architecture.md)
+本地 agent skills 在 `.agents/skills/`（gitignore，不上传）。仓库内可提交的桥接说明在 `.claude/skills/cfb-bridge/`。
+
+- Env / API: [`.env.example`](.env.example), `src-ui/src/config/api.js`
+- cfb 桥接: [`.claude/skills/cfb-bridge`](.claude/skills/cfb-bridge/SKILL.md)（`scripts/cfb-config.mjs`）
+- 生产打包 / 签名: `.agents/skills/prod-packaging`（`npm run build:prod-api`）
+- client↔cfb 集成: `.agents/skills/client-cmd-integration`
+- Dev launch: `.agents/skills/dev-launch`
+- 发版四件套: `.agents/skills/release-parts-overview` / `update-part-app`
+- 安全构建审计: `.agents/skills/security-build-test`
 
 IDE: [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-analyzer.rust-analyzer)

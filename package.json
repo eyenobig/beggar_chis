@@ -1,7 +1,7 @@
 {
   "name": "chis-flasher",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "license": "GPL-3.0-only",
   "type": "module",
   "compatibility": {
@@ -14,7 +14,8 @@
     "vite": "vite",
     "vite:single": "node scripts/vite-singleton.mjs",
     "build:web": "vite build",
-    "build": "tauri build; node scripts/copy-bundle.mjs",
+    "build:prod-api": "node scripts/build-prod-api.mjs",
+    "build": "tauri build && node scripts/copy-bundle.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "build:cfb:github": "node scripts/download-cfb-release.mjs",
@@ -25,6 +26,7 @@
   "dependencies": {
     "@lucide/vue": "^1.25.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-opener": "^2.5.4",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.5",

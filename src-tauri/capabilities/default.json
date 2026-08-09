@@ -9,9 +9,24 @@
     "core:window:allow-close",
     "core:window:allow-minimize",
     "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-outer-position",
+    "core:window:allow-outer-size",
+    "core:window:allow-current-monitor",
     "updater:default",
     "process:allow-restart",
     "opener:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://payload.gbmake.com/*" },
+        { "url": "https://g.gbmake.com/*" },
+        { "url": "https://admin.gbmake.com/*" },
+        { "url": "https://assets.gbmake.com/*" },
+        { "url": "https://api.github.com/*" },
+        { "url": "https://github.com/*" }
+      ]
+    },
     {
       "identifier": "opener:allow-open-url",
       "allow": [

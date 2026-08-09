@@ -1,6 +1,6 @@
 [package]
 name = "tauri-app"
-version = "0.2.0"
+version = "0.2.2"
 description = "A Tauri App"
 authors = ["you"]
 license = "GPL-3.0-only"
@@ -21,7 +21,7 @@ crate-type = ["rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-opener = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
@@ -33,6 +33,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 futures-util = "0.3"
 tokio = { version = "1", features = ["fs", "io-util"] }
 sha2 = "0.11.0"
+tauri-plugin-http = { version = "2", features = ["rustls-tls", "unsafe-headers"] }
 
 [profile.dev]
 incremental = false

@@ -9,7 +9,6 @@ lerna-debug.log*
 
 node_modules
 dist
-/artifacts/
 dist-ssr
 *.local
 
@@ -57,8 +56,12 @@ local-paths.json
 .agents/
 .cursor/
 
+# 图标生成残留备份，勿提交
+src-tauri/icons.bak*/
+
 # NSIS 安装包产物（npm run build 生成，勿提交）
 *setup.exe
+*.exe.sig
 
 # Vite 临时输出
 .tmp-*
