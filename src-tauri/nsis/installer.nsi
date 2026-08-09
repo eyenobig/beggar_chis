@@ -10,11 +10,11 @@ ManifestDPIAware true
 ; https://github.com/tauri-apps/tauri/pull/10106
 ManifestDPIAwareness PerMonitorV2
 
-!if "lzma" == "none"
+!if "{{compression}}" == "none"
   SetCompress off
 !else
   ; Set the compression algorithm. We default to LZMA.
-  SetCompressor /SOLID "lzma"
+  SetCompressor /SOLID "{{compression}}"
 !endif
 
 !include MUI2.nsh
@@ -30,41 +30,44 @@ ${StrCase}
 ${StrRep}
 ${StrLoc}
 
+{{#if installer_hooks}}
+!include "{{installer_hooks}}"
+{{/if}}
 
 !define WEBVIEW2APPGUID "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 
-!define MANUFACTURER "z"
-!define PRODUCTNAME "Chis Flasher"
-!define VERSION "0.2.1"
-!define VERSIONWITHBUILD "0.2.1.0"
-!define HOMEPAGE ""
-!define INSTALLMODE "currentUser"
-!define LICENSE ""
-!define INSTALLERICON "Z:\Project\beggar_chis\src-tauri\icons\icon.ico"
-!define SIDEBARIMAGE ""
-!define HEADERIMAGE ""
-!define UNINSTALLERICON "${INSTALLERICON}"
-!define UNINSTALLERHEADERIMAGE ""
-!define MAINBINARYNAME "tauri-app"
-!define MAINBINARYSRCPATH "Z:\Project\beggar_chis\src-tauri\target\release\tauri-app.exe"
-!define BUNDLEID "com.z.chis-flasher"
-!define COPYRIGHT ""
-!define OUTFILE "nsis-output.exe"
-!define ARCH "x64"
-!define ADDITIONALPLUGINSPATH "C:\Users\www\AppData\Local\tauri\NSIS\Plugins\x86-unicode\additional"
-!define ALLOWDOWNGRADES "true"
-!define DISPLAYLANGUAGESELECTOR "false"
-!define INSTALLWEBVIEW2MODE "downloadBootstrapper"
-!define WEBVIEW2INSTALLERARGS "/silent"
-!define WEBVIEW2BOOTSTRAPPERPATH ""
-!define WEBVIEW2INSTALLERPATH ""
-!define MINIMUMWEBVIEW2VERSION ""
+!define MANUFACTURER "{{manufacturer}}"
+!define PRODUCTNAME "{{product_name}}"
+!define VERSION "{{version}}"
+!define VERSIONWITHBUILD "{{version_with_build}}"
+!define HOMEPAGE "{{homepage}}"
+!define INSTALLMODE "{{install_mode}}"
+!define LICENSE "{{license}}"
+!define INSTALLERICON "{{installer_icon}}"
+!define SIDEBARIMAGE "{{sidebar_image}}"
+!define HEADERIMAGE "{{header_image}}"
+!define UNINSTALLERICON "{{uninstaller_icon}}"
+!define UNINSTALLERHEADERIMAGE "{{uninstaller_header_image}}"
+!define MAINBINARYNAME "{{main_binary_name}}"
+!define MAINBINARYSRCPATH "{{main_binary_path}}"
+!define BUNDLEID "{{bundle_id}}"
+!define COPYRIGHT "{{copyright}}"
+!define OUTFILE "{{out_file}}"
+!define ARCH "{{arch}}"
+!define ADDITIONALPLUGINSPATH "{{additional_plugins_path}}"
+!define ALLOWDOWNGRADES "{{allow_downgrades}}"
+!define DISPLAYLANGUAGESELECTOR "{{display_language_selector}}"
+!define INSTALLWEBVIEW2MODE "{{install_webview2_mode}}"
+!define WEBVIEW2INSTALLERARGS "{{webview2_installer_args}}"
+!define WEBVIEW2BOOTSTRAPPERPATH "{{webview2_bootstrapper_path}}"
+!define WEBVIEW2INSTALLERPATH "{{webview2_installer_path}}"
+!define MINIMUMWEBVIEW2VERSION "{{minimum_webview2_version}}"
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCTNAME}"
 !define MANUKEY "Software\${MANUFACTURER}"
 !define MANUPRODUCTKEY "${MANUKEY}\${PRODUCTNAME}"
-!define UNINSTALLERSIGNCOMMAND ""
-!define ESTIMATEDSIZE "18551"
-!define STARTMENUFOLDER ""
+!define UNINSTALLERSIGNCOMMAND "{{uninstaller_sign_cmd}}"
+!define ESTIMATEDSIZE "{{estimated_size}}"
+!define STARTMENUFOLDER "{{start_menu_folder}}"
 
 Var PassiveMode
 Var UpdateMode
@@ -770,12 +773,20 @@ Section Install
   File "${MAINBINARYSRCPATH}"
 
   ; Copy resources
+  {{#each resources_dirs}}
+  CreateDirectory "$INSTDIR\\{{this}}"
+  {{/each}}
+  {{#each resources}}
+  File /a "/oname={{this.[1]}}" "{{no-escape @key}}"
+  {{/each}}
 
   ; Copy external binaries —— sidecar 放进 $INSTDIR\cmd\（与 paths.json 默认 cfb 目录一致）
   CreateDirectory "$INSTDIR\cmd"
   CreateDirectory "$INSTDIR\rule"
   SetOutPath "$INSTDIR\cmd"
-    File /a "/oname=cfb.exe" "Z:\Project\beggar_chis\src-tauri\binaries\cfb-x86_64-pc-windows-msvc.exe"
+  {{#each binaries}}
+  File /a "/oname={{this}}" "{{no-escape @key}}"
+  {{/each}}
   SetOutPath "$INSTDIR"
 
   ; —— 写入安装时选择的工具链路径，供运行时 app 读取（最高优先级）——
@@ -804,8 +815,19 @@ Section Install
   paths_json_done:
 
   ; Create file associations
+  {{#each file_associations as |association| ~}}
+  {{#each association.ext as |ext| ~}}
+  !insertmacro APP_ASSOCIATE "{{ext}}" "{{or association.name ext}}" "{{association-description association.description ext}}" "$INSTDIR\${MAINBINARYNAME}.exe,0" "Open with ${PRODUCTNAME}" "$INSTDIR\${MAINBINARYNAME}.exe $\"%1$\""
+  {{/each}}
+  {{/each}}
 
   ; Register deep links
+  {{#each deep_link_protocols as |protocol| ~}}
+  WriteRegStr SHCTX "Software\Classes\\{{protocol}}" "URL Protocol" ""
+  WriteRegStr SHCTX "Software\Classes\\{{protocol}}" "" "URL:${BUNDLEID} protocol"
+  WriteRegStr SHCTX "Software\Classes\\{{protocol}}\DefaultIcon" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\",0"
+  WriteRegStr SHCTX "Software\Classes\\{{protocol}}\shell\open\command" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" $\"%1$\""
+  {{/each}}
 
   ; Create uninstaller
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -918,16 +940,35 @@ Section Uninstall
   Delete "$INSTDIR\${MAINBINARYNAME}.exe"
 
   ; Delete resources
+  {{#each resources}}
+  Delete /REBOOTOK "$INSTDIR\\{{this.[1]}}"
+  {{/each}}
+  {{#each resources_dirs}}
+  RMDir /REBOOTOK "$INSTDIR\\{{this}}"
+  {{/each}}
 
   ; Delete external binaries —— sidecar 在 $INSTDIR\cmd\；清掉 cmd/rule 两个子文件夹
-    Delete "$INSTDIR\cmd\cfb.exe"
-    RMDir "$INSTDIR\cmd"
-    RMDir "$INSTDIR\rule"
+  {{#each binaries}}
+  Delete "$INSTDIR\cmd\{{this}}"
+  {{/each}}
+  RMDir "$INSTDIR\cmd"
+  RMDir "$INSTDIR\rule"
+  Delete "$INSTDIR\paths.json"
 
   ; Delete app associations
+  {{#each file_associations as |association| ~}}
+  {{#each association.ext as |ext| ~}}
+  !insertmacro APP_UNASSOCIATE "{{ext}}" "{{or association.name ext}}"
+  {{/each}}
+  {{/each}}
 
   ; Delete deep links
-
+  {{#each deep_link_protocols as |protocol| ~}}
+  ReadRegStr $R7 SHCTX "Software\Classes\\{{protocol}}\shell\open\command" ""
+  ${If} $R7 == "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" $\"%1$\""
+    DeleteRegKey SHCTX "Software\Classes\\{{protocol}}"
+  ${EndIf}
+  {{/each}}
 
   ; Delete uninstaller
   Delete "$INSTDIR\uninstall.exe"
