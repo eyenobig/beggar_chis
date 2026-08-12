@@ -246,6 +246,7 @@
   "toast": {
     "tearHint": "Нажмите, чтобы оторвать чек",
     "desktopOnlyRom": "Выберите ROM в настольном приложении",
+    "romPlatformMismatch": "ROM {rom} нельзя использовать на текущей платформе ({platform}). Переключитесь на {rom} или выберите ROM {platform}.",
     "desktopOnlySave": "Выберите сохранение в настольном приложении",
     "pickSaveExt": "Выберите файл .sav или .srm",
     "saveDumpFail": "Не удалось прочитать сохранение",
@@ -257,6 +258,8 @@
   "logs": {
     "empty": "Нет журнала",
     "close": "Закрыть",
+    "clear": "Очистить журнал",
+    "totalTime": "Итого {time}",
     "phase": {
       "erase": "Стереть",
       "write": "Запись",

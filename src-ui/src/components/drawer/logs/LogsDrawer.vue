@@ -3,7 +3,7 @@
 import { computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { X } from '@lucide/vue'
+import { X, Trash2 } from '@lucide/vue'
 import { useEmulator } from '../../../stores/useEmulator'
 import { useLogStore } from '../../../stores/useLogStore'
 import { useCartData } from '../../../stores/useCartData'
@@ -64,13 +64,22 @@ function tabClass(name) {
             />
           </button>
         </div>
-        <button
-          :aria-label="t('logs.close')"
-          class="p-1 text-zinc-500 transition-colors hover:text-white"
-          @click="closeDrawers()"
-        >
-          <X class="h-3.5 w-3.5" :stroke-width="2.5" />
-        </button>
+        <div class="flex items-center gap-1">
+          <button
+            :aria-label="t('logs.clear')"
+            class="p-1 text-zinc-500 transition-colors hover:text-white"
+            @click="logStore.clearLogs()"
+          >
+            <Trash2 class="h-3.5 w-3.5" :stroke-width="2.5" />
+          </button>
+          <button
+            :aria-label="t('logs.close')"
+            class="p-1 text-zinc-500 transition-colors hover:text-white"
+            @click="closeDrawers()"
+          >
+            <X class="h-3.5 w-3.5" :stroke-width="2.5" />
+          </button>
+        </div>
       </div>
 
       <LogsPanel v-show="activeTab === 'logs'" />

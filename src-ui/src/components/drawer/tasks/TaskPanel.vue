@@ -3,11 +3,17 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useTaskProgress } from '../../../stores/useTaskProgress'
 
-/** 第三层：单列竖条，随机顺序点亮；进度回落/新操作时必须可清空 */
+/** 第三层：单列竖条，随机顺序点亮；三色区分擦除 / 烧录 / 验证 */
 const ROWS = 36
 /** 容器四边 inset 与段间距共用；略收紧以适配更矮的竖条 */
 const GAP = '2px'
-const LIT = '#40c463'
+const PHASE_COLOR = Object.freeze({
+  erase: '#f97316',
+  write: '#40c463',
+  verify: '#38bdf8',
+  dump: '#a78bfa',
+})
+const DEFAULT_LIT = '#40c463'
 const ERROR = '#f87171'
 const EMPTY = '#27272a'
 
@@ -22,6 +28,24 @@ const pctLabel = computed(() => {
   const pct = Math.round(Math.min(1, Math.max(0, t.done / t.total)) * 100)
   if (t.status === 'success') return '100'
   return String(pct)
+})
+
+const pctClass = computed(() => {
+  const t = current.value
+  if (t?.status === 'error') return 'text-red-400'
+  if (t?.phase === 'erase') return 'text-orange-400'
+  if (t?.phase === 'verify') return 'text-sky-400'
+  if (t?.phase === 'dump') return 'text-violet-400'
+  return 'text-emerald-400'
+})
+
+const pctMutedClass = computed(() => {
+  const t = current.value
+  if (t?.status === 'error') return 'text-red-400/80'
+  if (t?.phase === 'erase') return 'text-orange-400/80'
+  if (t?.phase === 'verify') return 'text-sky-400/80'
+  if (t?.phase === 'dump') return 'text-violet-400/80'
+  return 'text-emerald-400/80'
 })
 
 const order = ref([])
@@ -56,9 +80,10 @@ function stopPulse() {
   }
 }
 
-/** 精确同步点亮数量（可增可减），烧录擦除→写入阶段切换时必须能回落。 */
+/** 精确同步点亮数量（可增可减）；数量未变则不重建 mask，避免无谓闪烁。 */
 function setLitCount(count) {
   const target = Math.max(0, Math.min(ROWS, count))
+  if (target === litCount()) return
   const next = Array.from({ length: ROWS }, () => false)
   let n = 0
   for (const i of order.value) {
@@ -136,6 +161,7 @@ watch(
   () => {
     const t = current.value
     if (!t) return null
+    // phase 只影响格子颜色（cellBg 直接读），不参与点亮同步，避免同 phase 反复 set 触发闪烁
     return [t.status, t.done, t.total]
   },
   () => syncFromTask(current.value),
@@ -146,7 +172,8 @@ onUnmounted(stopPulse)
 function cellBg(i) {
   if (!litMask.value[i]) return EMPTY
   if (current.value?.status === 'error') return ERROR
-  return LIT
+  const phase = current.value?.phase
+  return PHASE_COLOR[phase] || DEFAULT_LIT
 }
 </script>
 
@@ -177,11 +204,11 @@ function cellBg(i) {
     >
       <span
         class="font-mono text-[9px] font-bold leading-none tracking-tight"
-        :class="current?.status === 'error' ? 'text-red-400' : 'text-emerald-400'"
+        :class="pctClass"
       >{{ pctLabel }}</span>
       <span
         class="mt-0.5 font-mono text-[7px] font-bold leading-none"
-        :class="current?.status === 'error' ? 'text-red-400/80' : 'text-emerald-400/80'"
+        :class="pctMutedClass"
       >%</span>
     </div>
   </div>

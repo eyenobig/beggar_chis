@@ -246,6 +246,7 @@
   "toast": {
     "tearHint": "クリックで感熱紙を破る",
     "desktopOnlyRom": "デスクトップアプリで ROM を選んでください",
+    "romPlatformMismatch": "{rom} ROM は現在のプラットフォーム（{platform}）では使えません。先に {rom} に切り替えるか、{platform} ROM を選んでください。",
     "desktopOnlySave": "デスクトップアプリでセーブを選んでください",
     "pickSaveExt": ".sav または .srm を選んでください",
     "saveDumpFail": "セーブの読み出しに失敗",
@@ -257,6 +258,8 @@
   "logs": {
     "empty": "ログはありません",
     "close": "閉じる",
+    "clear": "ログをクリア",
+    "totalTime": "合計 {time}",
     "phase": {
       "erase": "消去",
       "write": "書込",

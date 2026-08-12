@@ -246,6 +246,7 @@
   "toast": {
     "tearHint": "Cliquer pour arracher le ticket",
     "desktopOnlyRom": "Choisissez une ROM dans l’app bureau",
+    "romPlatformMismatch": "Une ROM {rom} ne peut pas être utilisée sur la plateforme actuelle ({platform}). Basculez sur {rom} ou choisissez une ROM {platform}.",
     "desktopOnlySave": "Choisissez une sauvegarde dans l’app bureau",
     "pickSaveExt": "Choisissez un fichier .sav ou .srm",
     "saveDumpFail": "Échec de lecture de la sauvegarde",
@@ -257,6 +258,8 @@
   "logs": {
     "empty": "Aucun journal",
     "close": "Fermer",
+    "clear": "Effacer les journaux",
+    "totalTime": "Total {time}",
     "phase": {
       "erase": "Effacer",
       "write": "Écrire",

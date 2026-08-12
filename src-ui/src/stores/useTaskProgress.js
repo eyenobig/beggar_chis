@@ -1,6 +1,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+
 let nextTaskId = 1
+
 export const useTaskProgress = defineStore('task-progress', () => {
   const drawerOpen = ref(false)
   const tasks = ref([])
@@ -8,12 +10,15 @@ export const useTaskProgress = defineStore('task-progress', () => {
   const romOperationRunning = computed(() =>
     tasks.value.some((task) => task.status === 'running' && ['burn', 'erase', 'dump'].includes(task.kind)),
   )
-  function startTask({ kind, title, detail = '' }) {
+
+  function startTask({ kind, title, detail = '', phase = '' }) {
     const task = {
       id: nextTaskId++,
       kind,
       title,
       detail,
+      /** 'erase' | 'write' | 'verify' | 'dump' | '' — 驱动进度条三色 */
+      phase: phase || '',
       status: 'running',
       done: 0,
       total: 0,
@@ -25,17 +30,37 @@ export const useTaskProgress = defineStore('task-progress', () => {
     drawerOpen.value = true
     return task.id
   }
+
   function updateTask(id, patch) {
     const task = tasks.value.find((item) => item.id === id)
     if (task) Object.assign(task, patch)
   }
-  function updateProgress(id, done, total) {
-    updateTask(id, { done: Number(done) || 0, total: Number(total) || 0 })
+
+  function updateProgress(id, done, total, phase) {
+    const task = tasks.value.find((item) => item.id === id)
+    if (!task) return
+    const nextDone = Number(done) || 0
+    const nextTotal = Number(total) || 0
+    if (task.done === nextDone && task.total === nextTotal && (!phase || task.phase === phase)) return
+    const patch = { done: nextDone, total: nextTotal }
+    if (phase && task.phase !== phase) patch.phase = phase
+    Object.assign(task, patch)
   }
+
   /** 烧录/擦除成功启动或阶段切换时清空进度条（避免残留上一阶段 %）。 */
-  function resetProgress(id) {
-    updateTask(id, { done: 0, total: 0 })
+  function resetProgress(id, phase) {
+    const patch = { done: 0, total: 0 }
+    if (phase != null) patch.phase = phase
+    updateTask(id, patch)
   }
+
+  function setPhase(id, phase) {
+    if (!phase) return
+    const task = tasks.value.find((item) => item.id === id)
+    if (!task || task.phase === phase) return
+    task.phase = phase
+  }
+
   function completeTask(id, detail) {
     const task = tasks.value.find((item) => item.id === id)
     const patch = { status: 'success', finishedAt: Date.now() }
@@ -43,6 +68,7 @@ export const useTaskProgress = defineStore('task-progress', () => {
     if (detail) patch.detail = detail
     updateTask(id, patch)
   }
+
   function failTask(id, error) {
     updateTask(id, {
       status: 'error',
@@ -50,9 +76,11 @@ export const useTaskProgress = defineStore('task-progress', () => {
       finishedAt: Date.now(),
     })
   }
+
   function clearCompleted() {
     tasks.value = tasks.value.filter((task) => task.status === 'running')
   }
+
   return {
     drawerOpen,
     tasks,
@@ -62,6 +90,7 @@ export const useTaskProgress = defineStore('task-progress', () => {
     updateTask,
     updateProgress,
     resetProgress,
+    setPhase,
     completeTask,
     failTask,
     clearCompleted,

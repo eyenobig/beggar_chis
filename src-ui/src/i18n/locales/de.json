@@ -246,6 +246,7 @@
   "toast": {
     "tearHint": "Klicken zum Abreißen",
     "desktopOnlyRom": "ROM in der Desktop-App wählen",
+    "romPlatformMismatch": "Ein {rom}-ROM ist auf der aktuellen Plattform ({platform}) nicht verwendbar. Wechsle zu {rom} oder wähle ein {platform}-ROM.",
     "desktopOnlySave": "Spielstand in der Desktop-App wählen",
     "pickSaveExt": "Bitte .sav- oder .srm-Datei wählen",
     "saveDumpFail": "Spielstand lesen fehlgeschlagen",
@@ -257,6 +258,8 @@
   "logs": {
     "empty": "Keine Protokolle",
     "close": "Schließen",
+    "clear": "Protokolle leeren",
+    "totalTime": "Gesamt {time}",
     "phase": {
       "erase": "Löschen",
       "write": "Schreiben",

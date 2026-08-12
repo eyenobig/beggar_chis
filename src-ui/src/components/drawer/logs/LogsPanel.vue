@@ -10,10 +10,14 @@ const { scrollBind } = useDragScroll()
 const { logs } = storeToRefs(useLogStore())
 const logOutput = ref(null)
 
-watch(logs, async () => {
-  await nextTick()
-  if (logOutput.value) logOutput.value.scrollTop = logOutput.value.scrollHeight
-}, { deep: true })
+/** 仅新增日志时滚到底；进度/总计原地更新不触发 */
+watch(
+  () => logs.value.length,
+  async () => {
+    await nextTick()
+    if (logOutput.value) logOutput.value.scrollTop = logOutput.value.scrollHeight
+  },
+)
 
 function logColor(type) {
   if (type === 'success') return 'text-green-400'
@@ -34,15 +38,12 @@ function logColor(type) {
       {{ t('logs.empty') }}
     </div>
     <div v-for="log in logs" :key="log.id" class="flex items-baseline gap-3 leading-snug">
-      <span class="w-[4.5rem] shrink-0 text-zinc-700">[{{ log.timeStr }}]</span>
+      <span v-if="!log.isTotal" class="w-[4.5rem] shrink-0 text-zinc-700">[{{ log.timeStr }}]</span>
+      <span v-else class="w-[4.5rem] shrink-0" aria-hidden="true"></span>
       <span :class="logColor(log.type)" class="min-w-0 flex-1 truncate" :title="log.message">
-        {{ log.message }}
+        {{ log.message }}<span v-if="log.elapsed" class="ml-1 text-zinc-600">· {{ log.elapsed }}</span>
         <span v-if="log.count > 1" class="ml-1 text-[9px] font-bold text-zinc-600">×{{ log.count }}</span>
       </span>
-      <span
-        v-if="log.elapsed"
-        class="w-14 shrink-0 text-right tabular-nums text-zinc-500"
-      >{{ log.elapsed }}</span>
     </div>
   </div>
 </template>

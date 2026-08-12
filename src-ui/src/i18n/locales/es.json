@@ -246,6 +246,7 @@
   "toast": {
     "tearHint": "Clic para arrancar el ticket",
     "desktopOnlyRom": "Elige una ROM en la app de escritorio",
+    "romPlatformMismatch": "Una ROM {rom} no se puede usar en la plataforma actual ({platform}). Cambia a {rom} o elige una ROM {platform}.",
     "desktopOnlySave": "Elige una partida en la app de escritorio",
     "pickSaveExt": "Elige un archivo .sav o .srm",
     "saveDumpFail": "Error al leer la partida",
@@ -257,6 +258,8 @@
   "logs": {
     "empty": "Sin registros",
     "close": "Cerrar",
+    "clear": "Borrar registros",
+    "totalTime": "Total {time}",
     "phase": {
       "erase": "Borrar",
       "write": "Escribir",

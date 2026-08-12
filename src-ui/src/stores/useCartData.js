@@ -40,6 +40,15 @@ function classify(p) {
   return null
 }
 
+/** 当前平台是否 GB/GBC(MBC)系：'gbc'=GB/GBC，'gba'=GBA。 */
+function platformIsMbc(platform) {
+  return platform === 'gbc'
+}
+/** 平台短标签（通用缩写，跨语言直接展示）。 */
+function platformLabel(platform) {
+  return platformIsMbc(platform) ? 'GB/GBC' : 'GBA'
+}
+
 function fmtSize(bytes) {
   if (!bytes) return null
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(bytes % (1024 * 1024) ? 1 : 0)}MB`
@@ -87,43 +96,73 @@ function sleep(ms) {
 
 /**
  * 进度类 log 并入已有进度行；返回是否已消化（勿再 addLog）。
- * 实际合并由 logStore.addLog 按 phase 锚点完成。
+ * 不写 elapsed：烧录/擦除右侧耗时由 tickTimer 独占，避免双源闪烁。
  */
 function absorbPhaseProgressLog(logStore, rawMessage) {
   const parsed = parsePhaseProgress(rawMessage)
   if (!parsed) return false
-  const id = logStore.addLog(parsed.message)
-  if (parsed.elapsed) logStore.setLogElapsed(id, parsed.elapsed)
+  logStore.addLog(parsed.message)
   return true
 }
 
 /**
- * LOGS 面板阶段进度：同一 phase 原地更新一行；phase 切换新开一行。
- * 底层走 logStore.addLog 的 progress coalesce，堵住 cfb log / progress 双通道刷屏。
+ * LOGS 面板阶段进度：整次操作共用一行原地更新（擦除→写入→校验 文案可换，行不变）。
+ * 底层走 logStore.addLog 的 progress coalesce；拒绝滞后 phase 回退刷屏。
+ * 进度行不写 elapsed；tick 写入 sessionElapsed 底栏。
  */
 function createPhaseProgressLog(logStore) {
   let logId = null
   let phase = ''
   let lastPct = -1
   let lastUiAt = 0
+  let phaseStartedAt = 0
   const UI_THROTTLE_MS = 200
+  const PHASE_ORDER = Object.freeze({ erase: 0, write: 1, verify: 2, dump: 0 })
 
-  function upsert(nextPhase, pct, { elapsed, force = false } = {}) {
+  /** 秒数 → 耗时串：<60s 显 `X.Xs`，否则 `XmXXs`。 */
+  function fmtSec(sec) {
+    sec = Math.max(0, sec)
+    if (sec < 60) return `${sec.toFixed(1)}s`
+    const m = Math.floor(sec / 60)
+    const s = Math.round(sec % 60)
+    return `${m}m${String(s).padStart(2, '0')}s`
+  }
+
+  function upsert(nextPhase, pct, { force = false } = {}) {
     if (!nextPhase) return logId
+    const nextOrd = PHASE_ORDER[nextPhase]
+    const curOrd = PHASE_ORDER[phase]
+    // 滞后 cfb log（仍报擦除时 progress 已进入写入）不得把进度行打回旧阶段
+    if (
+      !force
+      && phase
+      && nextPhase !== phase
+      && nextOrd != null
+      && curOrd != null
+      && nextOrd < curOrd
+    ) {
+      return logId
+    }
     const shownPct = pct != null && pct >= 0 ? pct : (lastPct >= 0 ? lastPct : 0)
     const label = `${nextPhase} ${shownPct}%`
     const now = Date.now()
     const phaseChanged = nextPhase !== phase
     if (!force && !phaseChanged && logId != null && pct === lastPct && now - lastUiAt < UI_THROTTLE_MS) {
-      if (elapsed) logStore.setLogElapsed(logId, elapsed)
       return logId
+    }
+    // 阶段切换：把上一阶段行固化为永久行（写入其最终耗时），再冻结；新阶段另起一行。
+    if (phaseChanged) {
+      if (logId != null && phaseStartedAt) {
+        logStore.setLogElapsed(logId, fmtSec((now - phaseStartedAt) / 1000))
+      }
+      logStore.clearLiveProgress()
+      phaseStartedAt = now
     }
     phase = nextPhase
     lastPct = shownPct
     lastUiAt = now
-    // addLog 对同 phase 进度行 upsert；phase 切换自然新开一行
     logId = logStore.addLog(label)
-    if (elapsed != null) logStore.setLogElapsed(logId, elapsed)
+    if (phaseStartedAt) logStore.setLogElapsed(logId, fmtSec((Date.now() - phaseStartedAt) / 1000))
     return logId
   }
 
@@ -131,18 +170,25 @@ function createPhaseProgressLog(logStore) {
   function fromCfbLog(rawMessage) {
     const parsed = parsePhaseProgress(rawMessage)
     if (!parsed) return false
-    upsert(parsed.phase, parsed.pct, { elapsed: parsed.elapsed, force: true })
+    upsert(parsed.phase, parsed.pct, { force: false })
     return true
   }
 
   function setElapsed(elapsed) {
-    if (logId != null && elapsed != null) logStore.setLogElapsed(logId, elapsed)
+    if (elapsed != null) logStore.setSessionElapsed(elapsed)
+  }
+
+  /** 由 tickTimer 每 250ms 调用：刷新当前阶段行的耗时（「当前操作时间」）。 */
+  function tickPhase() {
+    if (logId == null || !phaseStartedAt) return
+    logStore.setLogElapsed(logId, fmtSec((Date.now() - phaseStartedAt) / 1000))
   }
 
   return {
     upsert,
     fromCfbLog,
     setElapsed,
+    tickPhase,
     get logId() { return logId },
     get phase() { return phase },
   }
@@ -273,9 +319,11 @@ export const useCartData = defineStore('cart', () => {
       return null
     }
     try {
+      // 按当前平台筛选扩展名：GBA 只显 .gba；GB/GBC 只显 .gb/.gbc（setDropped 仍会兜底校验）
+      const mbc = platformIsMbc(emu.currentPlatform)
       const selected = await openDialog({
         multiple: false,
-        filters: [{ name: 'ROM', extensions: ['gba', 'gb', 'gbc'] }],
+        filters: [{ name: mbc ? 'GB/GBC ROM' : 'GBA ROM', extensions: mbc ? ['gb', 'gbc'] : ['gba'] }],
       })
       if (!selected) return null
       const path = typeof selected === 'string' ? selected : selected[0]
@@ -346,9 +394,17 @@ export const useCartData = defineStore('cart', () => {
     const c = classify(path)
     if (!c) return false
     if (c.kind === 'rom') {
+      // 按当前平台筛选：ROM 平台须与当前选择一致；不匹配则拒绝，不自动切平台。
+      if (c.mbc !== platformIsMbc(emu.currentPlatform)) {
+        toast.error(
+          t('toast.romPlatformMismatch', {
+            rom: c.mbc ? 'GB/GBC' : 'GBA',
+            platform: platformLabel(emu.currentPlatform),
+          }),
+        )
+        return false
+      }
       romFile.value = { name: basename(path), path, mbc: c.mbc }
-      if (c.mbc && emu.currentPlatform !== 'gbc') emu.setPlatform('gbc')
-      else if (!c.mbc && emu.currentPlatform !== 'gba') emu.setPlatform('gba')
       readRomFileInfo(path)
     } else {
       saveFile.value = { name: basename(path), path, size: null }
@@ -597,7 +653,7 @@ export const useCartData = defineStore('cart', () => {
     emu.toggleLogs(true, 'rom')
     const taskId = taskProgress.startTask({ kind: 'burn', title: t('logs.taskBurn'), detail: f.name })
     // 烧录成功启动：清空进度条，避免沿用上一次操作的残条/%
-    taskProgress.resetProgress(taskId)
+    taskProgress.resetProgress(taskId, '')
     taskProgress.drawerOpen = true
     toast.info(t('rom.op.burnStart', { name: f.name }))
     const burnStartedAt = Date.now()
@@ -608,20 +664,27 @@ export const useCartData = defineStore('cart', () => {
       const s = Math.round(sec % 60)
       return `${m}m${String(s).padStart(2, '0')}s`
     }
-    // 起始行保留；擦除/写入/校验进度各自一行原地更新；完成/失败另起一行
-    logStore.clearLiveProgress(); logStore.addLog(t('logs.burnName', { name: f.name }), 'warn')
+    // 起始行保留；擦除/写入/校验进度归并同一行原地更新；总计时间在会话底栏
+    logStore.clearLiveProgress()
+    logStore.clearSessionElapsed()
+    logStore.addLog(t('logs.burnName', { name: f.name }), 'warn')
     const phaseProg = createPhaseProgressLog(logStore)
     /** 'erase' | 'write' | 'verify' | '' — 扇区擦除→字节写入时重置进度条 */
     let burnPhase = ''
     const applyBurnPhase = (nextPhase) => {
-      if (!nextPhase) return
-      if (burnPhase && nextPhase !== burnPhase && (nextPhase === 'write' || nextPhase === 'erase' || nextPhase === 'verify')) {
+      if (!nextPhase || nextPhase === burnPhase) return
+      if (burnPhase && (nextPhase === 'write' || nextPhase === 'erase' || nextPhase === 'verify')) {
         progress.value = { done: 0, total: 0 }
-        taskProgress.resetProgress(taskId)
+        taskProgress.resetProgress(taskId, nextPhase)
+      } else {
+        taskProgress.setPhase(taskId, nextPhase)
       }
       burnPhase = nextPhase
     }
-    const tickTimer = setInterval(() => phaseProg.setElapsed(fmtElapsed()), 250)
+    const tickTimer = setInterval(() => {
+      phaseProg.setElapsed(fmtElapsed())
+      phaseProg.tickPhase()
+    }, 250)
     try {
       const { error } = await cfbClient.burnRom({ romPath: f.path, mbc: f.mbc || preferMbc.value }, (ev) => {
         if (ev.type === 'progress') {
@@ -638,15 +701,15 @@ export const useCartData = defineStore('cart', () => {
             phaseProg.upsert(nextPhase, pct)
           }
           progress.value = { done: ev.done, total: ev.total }
-          taskProgress.updateProgress(taskId, ev.done, ev.total)
+          taskProgress.updateProgress(taskId, ev.done, ev.total, burnPhase || undefined)
         } else if (ev.type === 'log') {
           opLogs.value.push(ev.message)
           const raw = String(ev.message || '')
+          // 带 % 的 cfb log：只切 phase / 补进度行；滞后阶段由 phaseProg 拒绝回退
           if (phaseProg.fromCfbLog(raw)) {
             applyBurnPhase(phaseKeyFromLabel(phaseProg.phase))
             return
           }
-          // 兜底：任何进度形态都走 store coalesce，绝不新开行
           if (absorbPhaseProgressLog(logStore, raw)) {
             applyBurnPhase(phaseKeyFromLabel(parsePhaseProgress(raw)?.phase || ''))
             return
@@ -654,14 +717,21 @@ export const useCartData = defineStore('cart', () => {
           const msg = stripLogElapsed(raw)
           // 完成/失败由 finally 单独成行，避免与 cfb 收尾 log 重复
           if (/^(擦除|写入|校验|烧录)(完成|失败|已中断)\b/.test(msg)) return
-          // 非百分比阶段提示：切入校验（progress total 与写入相同）
-          if (/校验/.test(msg) && !/不符/.test(msg)) { applyBurnPhase('verify'); return }
+          // 校验阶段（GBA 无 progress 事件）：切入校验并建一行可见；明细（字节数/扇区）仍作普通日志保留
+          if (/校验/.test(msg)) {
+            applyBurnPhase('verify')
+            if (phaseProg.phase !== 'verify') phaseProg.upsert('verify', 0)
+            logStore.addLog(msg || raw)
+            return
+          }
           // 阶段切换信号：开始写入 / 写入中 / 开始编程 —— 这些是底层阶段提示，
           // 不作为用户可见 log（避免「开始写入…」废话刷屏），只切 phase。
           if (/开始写入|写入中|开始编程/.test(msg)) {
             // GBA 整片擦除没有细粒度 progress；进入写入即代表擦除完成。
             if (burnPhase === 'erase') phaseProg.upsert('erase', 100, { force: true })
             applyBurnPhase('write')
+            // 立即建一行写入阶段（即便随后写入立刻失败、没有 progress 事件，也让「写入」可见）
+            if (phaseProg.phase !== 'write') phaseProg.upsert('write', 0)
             return
           }
           // 擦除开始/整片擦除：仅切 phase，不主动建 0% 占位行——
@@ -706,17 +776,17 @@ export const useCartData = defineStore('cart', () => {
         taskProgress.completeTask(taskId, f.name)
         const r = opResult.value
         const sizePart = r.bytes ? `${(r.bytes / 1024 / 1024).toFixed(1)}MB` : ''
-        const doneId = logStore.addLog(sizePart ? t('logs.burnOkSize', { size: sizePart }) : t('rom.op.burnOk'), 'success')
-        logStore.setLogElapsed(doneId, timePart)
+        logStore.addLog(sizePart ? t('logs.burnOkSize', { size: sizePart }) : t('rom.op.burnOk'), 'success')
         toast.success(t('rom.op.burnOk'))
       } else if (opResult.value && !opResult.value.ok) {
         taskProgress.failTask(taskId, opResult.value.error)
         const failLabel = _opAborted ? t('rom.op.burnAbort') : t('rom.op.burnFail')
-        const failId = logStore.addLog(failLabel, _opAborted ? 'warn' : 'error')
-        logStore.setLogElapsed(failId, timePart)
+        logStore.addLog(failLabel, _opAborted ? 'warn' : 'error')
         if (_opAborted) toast.info(t('rom.op.burnAbort'))
         else toast.error(t('rom.op.burnFail'))
       }
+      logStore.setSessionElapsed(timePart)
+      logStore.clearSessionElapsed()
       await readCart({ silent: true })
     }
   }
@@ -753,22 +823,27 @@ export const useCartData = defineStore('cart', () => {
     _opAborted = false
     // 擦除时展开 ROM 页 + 第三层进度条（与烧录一致，否则 drawer3 不可见）
     emu.toggleLogs(true, 'rom')
-    const taskId = taskProgress.startTask({ kind: 'erase', title: t('logs.taskErase') })
+    const taskId = taskProgress.startTask({ kind: 'erase', title: t('logs.taskErase'), phase: 'erase' })
     // 擦除成功启动：清空进度条
-    taskProgress.resetProgress(taskId)
+    taskProgress.resetProgress(taskId, 'erase')
     taskProgress.drawerOpen = true
     toast.info(t('rom.op.eraseStart'))
     const eraseStartedAt = Date.now()
     const fmtEraseElapsed = () => `${((Date.now() - eraseStartedAt) / 1000).toFixed(1)}s`
-    // 起始行保留；进度「擦除 N%」单行原地更新；完成/失败另起一行
-    logStore.clearLiveProgress(); logStore.addLog(t('logs.eraseCart'), 'warn')
+    // 起始行保留；进度「擦除 N%」单行原地更新；总计时间在会话底栏
+    logStore.clearLiveProgress()
+    logStore.clearSessionElapsed()
+    logStore.addLog(t('logs.eraseCart'), 'warn')
     const phaseProg = createPhaseProgressLog(logStore)
-    const tickTimer = setInterval(() => phaseProg.setElapsed(fmtEraseElapsed()), 250)
+    const tickTimer = setInterval(() => {
+      phaseProg.setElapsed(fmtEraseElapsed())
+      phaseProg.tickPhase()
+    }, 250)
     try {
       const { error } = await cfbClient.erase({ mbc: mbcArgs() }, (ev) => {
         if (ev.type === 'progress') {
           progress.value = { done: ev.done, total: ev.total }
-          taskProgress.updateProgress(taskId, ev.done, ev.total)
+          taskProgress.updateProgress(taskId, ev.done, ev.total, 'erase')
           if (ev.total > 0) {
             const pct = Math.round((ev.done / ev.total) * 100)
             // 不传 elapsed：右侧耗时列统一由 tickTimer 刷新，避免双源交替闪烁。
@@ -817,16 +892,16 @@ export const useCartData = defineStore('cart', () => {
         : fmtEraseElapsed()
       if (opResult.value?.ok) {
         taskProgress.completeTask(taskId)
-        const doneId = logStore.addLog(t('rom.op.eraseOk'), 'success')
-        logStore.setLogElapsed(doneId, timePart)
+        logStore.addLog(t('rom.op.eraseOk'), 'success')
         toast.success(t('rom.op.eraseOk'))
       } else if (opResult.value && !opResult.value.ok) {
         taskProgress.failTask(taskId, opResult.value.error)
-        const failId = logStore.addLog(_opAborted ? t('rom.op.eraseAbort') : t('rom.op.eraseFail'), _opAborted ? 'warn' : 'error')
-        logStore.setLogElapsed(failId, timePart)
+        logStore.addLog(_opAborted ? t('rom.op.eraseAbort') : t('rom.op.eraseFail'), _opAborted ? 'warn' : 'error')
         if (_opAborted) toast.info(t('rom.op.eraseAbort'))
         else toast.error(t('rom.op.eraseFail'))
       }
+      logStore.setSessionElapsed(timePart)
+      logStore.clearSessionElapsed()
       await readCart({ silent: true })
     }
   }
@@ -860,7 +935,7 @@ export const useCartData = defineStore('cart', () => {
     progress.value = { done: 0, total: 0 }
     opLogs.value = []
     _opAborted = false
-    const taskId = taskProgress.startTask({ kind: 'dump', title: t('logs.taskDump'), detail: cartInfo.value?.rom_title || cartInfo.value?.game_name || '' })
+    const taskId = taskProgress.startTask({ kind: 'dump', title: t('logs.taskDump'), detail: cartInfo.value?.rom_title || cartInfo.value?.game_name || '', phase: 'dump' })
     logStore.clearLiveProgress(); logStore.addLog(t('logs.exportRomStart'), 'warn')
     const phaseProg = createPhaseProgressLog(logStore)
     try {
@@ -871,7 +946,7 @@ export const useCartData = defineStore('cart', () => {
       const { error } = await cfbClient.dumpRom({ outputPath: outPath, mbc: mbcArgs() }, (ev) => {
         if (ev.type === 'progress') {
           progress.value = { done: ev.done, total: ev.total }
-          taskProgress.updateProgress(taskId, ev.done, ev.total)
+          taskProgress.updateProgress(taskId, ev.done, ev.total, 'dump')
           if (ev.total > 0) {
             const pct = Math.round((ev.done / ev.total) * 100)
             phaseProg.upsert('dump', pct)

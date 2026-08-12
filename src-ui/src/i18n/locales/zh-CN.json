@@ -283,6 +283,7 @@
   "toast": {
     "tearHint": "点击撕下热敏纸",
     "desktopOnlyRom": "请在桌面客户端中选择 ROM",
+    "romPlatformMismatch": "{rom} ROM 无法用于当前平台（{platform}）。请先切换到 {rom} 平台，或选择 {platform} ROM。",
     "desktopOnlySave": "请在桌面客户端中选择存档",
     "pickSaveExt": "请选择 .sav 或 .srm 存档文件",
     "saveDumpFail": "存档读取失败",
@@ -294,6 +295,8 @@
   "logs": {
     "empty": "暂无日志",
     "close": "关闭",
+    "clear": "清空日志",
+    "totalTime": "总计 {time}",
     "phase": {
       "erase": "擦除",
       "write": "写入",
