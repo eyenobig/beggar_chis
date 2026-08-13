@@ -1,7 +1,7 @@
 {
   "name": "chis-flasher",
   "private": true,
-  "version": "0.2.8",
+  "version": "0.2.9",
   "license": "GPL-3.0-only",
   "type": "module",
   "compatibility": {
