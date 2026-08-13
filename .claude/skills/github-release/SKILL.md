@@ -61,5 +61,5 @@ gh api -X DELETE repos/eyenobig/beggar_chis/releases/ID
 
 - `releaseDraft: false`
 - `prerelease: false`
-- `tagName: ${{ github.ref_name }}`
+- `releaseName: Chis Flasher / 烧丐 ${{ github.ref_name }}`
 - `includeUpdaterJson: true` / `updaterJsonPreferNsis: true`
