@@ -20,11 +20,16 @@ const { toasts } = storeToRefs(toast)
 
 const receiptRef = ref(null)
 
-const SPIT_AREA_H = 480
 const MIN_PAPER_H = 36
 const SPIT_PX_PER_SEC = 56
 /** 二条及以上量高失败时的保底增量，避免 delta=0 变成覆盖 */
 const MIN_LINE_DELTA = 28
+/** 可见吐纸区/布局预留上限：固定值——与 EmulatorWidget.PAPER_AREA_H 的井高(180)一致 */
+const SPIT_AREA_H = 180
+/** 自动裁剪阈值：窗口高度（累积纸长达到一屏即撕下；只管撕纸，不影响布局预留） */
+const winH = ref(typeof window === 'undefined' ? 480 : Math.max(160, window.innerHeight))
+const onWinResize = () => { winH.value = Math.max(160, window.innerHeight) }
+const AUTO_TEAR_H = computed(() => winH.value)
 
 const wellH = ref(0)
 /** 整张纸的 translateY；吐纸时从 -delta → 0 */
@@ -319,6 +324,10 @@ async function drainSpitQueue() {
       revealedIds.value = [...revealedIds.value, id]
       await spitCurrentSheet()
     }
+    // 自动裁剪：待吐队列排空后纸仍超最大高度 → 自动撕下（先放完再撕，不吞队列里的消息）
+    if (!tearing.value && liveItems.value.length && prevHeight >= AUTO_TEAR_H.value) {
+      await tearOff()
+    }
   } finally {
     draining = false
     if (spitQueue.length && !tearing.value) void drainSpitQueue()
@@ -464,6 +473,9 @@ watch(
     if (toasts.value.length) enqueueNewToasts(toasts.value.map((t) => t.id))
   },
 )
+
+onMounted(() => window.addEventListener('resize', onWinResize))
+onBeforeUnmount(() => window.removeEventListener('resize', onWinResize))
 
 onMounted(() => {
   if (props.thermal && toasts.value.length) {

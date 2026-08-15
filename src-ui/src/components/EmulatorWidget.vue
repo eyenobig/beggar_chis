@@ -35,11 +35,7 @@ const root = ref(null)
 const homepageDropZone = ref(null)
 
 const BOOKMARK_W = 28
-/** 吐纸区上限（与 ToastHost.SPIT_AREA_H 一致） */
-const SPIT_H = 480
-const SPIT_PAD = 16
 /** 刀口高度；absolute 吐纸在卡片下，需计入窗口底部预留 */
-const CUTTER_H = 14
 
 const secondPageOpen = computed(
   () => logsOpen.value || shopOpen.value || settingsOpen.value || helpOpen.value,
@@ -66,15 +62,12 @@ const platformOperationLocked = computed(() =>
 )
 
 /**
- * 热敏纸：absolute 吐纸，用 padding 预留高度（勿把 Toast 做成 z 高于抽屉的文档流兄弟，会挡点击）。
- * 关闭热敏纸：Teleport banner，不占底。
+ * 热敏纸：**固定高度预留**（不随 toast 数量变化——窗口高度稳定不因纸伸缩）。
+ * 纸在该条带内滚动吐出（可见井 480），累积到窗口高度由 ToastHost 自动撕落；
+ * 特殊情况超出窗口底部的部分由 body{overflow:hidden} 裁掉。
  */
-const toastBottomInset = computed(() => {
-  if (!thermalPaper.value) return 0
-  const live = Number(toastPaperHeight.value) || 0
-  const paper = Math.min(Math.max(live, 0), SPIT_H)
-  return paper + CUTTER_H + SPIT_PAD
-})
+const PAPER_AREA_H = 180 + 14 + 16 // 可见吐纸井(180) + 刀口 + 底距；与 ToastHost.SPIT_AREA_H 保持一致
+const toastBottomInset = computed(() => (thermalPaper.value ? PAPER_AREA_H : 0))
 
 const frameWidth = computed(() => {
   if (thirdPageOpen.value) return 796 + BOOKMARK_W
