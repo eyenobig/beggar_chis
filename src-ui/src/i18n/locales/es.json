@@ -247,6 +247,8 @@
     "tearHint": "Clic para arrancar el ticket",
     "desktopOnlyRom": "Elige una ROM en la app de escritorio",
     "romPlatformMismatch": "Una ROM {rom} no se puede usar en la plataforma actual ({platform}). Cambia a {rom} o elige una ROM {platform}.",
+    "unsupportedFileType": "Tipo de archivo no admitido: {name} (permitido: .gb / .gbc / .gba / .sav / .srm)",
+    "dropRomsLastWins": "Solo una ROM a la vez: se cargo la ultima de {count} archivos ({name})",
     "desktopOnlySave": "Elige una partida en la app de escritorio",
     "pickSaveExt": "Elige un archivo .sav o .srm",
     "saveDumpFail": "Error al leer la partida",

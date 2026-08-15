@@ -247,6 +247,8 @@
     "tearHint": "클릭하여 감열지 찢기",
     "desktopOnlyRom": "데스크톱 앱에서 ROM을 선택하세요",
     "romPlatformMismatch": "{rom} ROM은 현재 플랫폼({platform})에서 사용할 수 없습니다. 먼저 {rom}로 전환하거나 {platform} ROM을 선택하세요.",
+    "unsupportedFileType": "지원되지 않는 파일 형식입니다: {name} (허용: .gb / .gbc / .gba / .sav / .srm)",
+    "dropRomsLastWins": "한 번에 하나의 ROM만 가능합니다: {count}개 중 마지막({name})을 불러왔습니다",
     "desktopOnlySave": "데스크톱 앱에서 세이브를 선택하세요",
     "pickSaveExt": ".sav 또는 .srm 파일을 선택하세요",
     "saveDumpFail": "세이브 읽기 실패",

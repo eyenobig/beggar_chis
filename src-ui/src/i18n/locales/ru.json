@@ -247,6 +247,8 @@
     "tearHint": "Нажмите, чтобы оторвать чек",
     "desktopOnlyRom": "Выберите ROM в настольном приложении",
     "romPlatformMismatch": "ROM {rom} нельзя использовать на текущей платформе ({platform}). Переключитесь на {rom} или выберите ROM {platform}.",
+    "unsupportedFileType": "Неподдерживаемый тип файла: {name} (допустимо: .gb / .gbc / .gba / .sav / .srm)",
+    "dropRomsLastWins": "За один раз — одна ROM: загружена последняя из {count} ({name})",
     "desktopOnlySave": "Выберите сохранение в настольном приложении",
     "pickSaveExt": "Выберите файл .sav или .srm",
     "saveDumpFail": "Не удалось прочитать сохранение",

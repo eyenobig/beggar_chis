@@ -284,6 +284,8 @@
     "tearHint": "点击撕下热敏纸",
     "desktopOnlyRom": "请在桌面客户端中选择 ROM",
     "romPlatformMismatch": "{rom} ROM 无法用于当前平台（{platform}）。请先切换到 {rom} 平台，或选择 {platform} ROM。",
+    "unsupportedFileType": "不支持的文件类型：{name}（支持 .gb / .gbc / .gba / .sav / .srm）",
+    "dropRomsLastWins": "一次只烧录一个 ROM：已载入 {count} 个中的最后一个「{name}」",
     "desktopOnlySave": "请在桌面客户端中选择存档",
     "pickSaveExt": "请选择 .sav 或 .srm 存档文件",
     "saveDumpFail": "存档读取失败",

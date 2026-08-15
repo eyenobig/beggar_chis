@@ -247,6 +247,8 @@
     "tearHint": "クリックで感熱紙を破る",
     "desktopOnlyRom": "デスクトップアプリで ROM を選んでください",
     "romPlatformMismatch": "{rom} ROM は現在のプラットフォーム（{platform}）では使えません。先に {rom} に切り替えるか、{platform} ROM を選んでください。",
+    "unsupportedFileType": "サポートされていないファイル形式です: {name}（対応: .gb / .gbc / .gba / .sav / .srm）",
+    "dropRomsLastWins": "一度に焼き込める ROM は 1 つです：{count} 個の中から最後の「{name}」を読み込みました",
     "desktopOnlySave": "デスクトップアプリでセーブを選んでください",
     "pickSaveExt": ".sav または .srm を選んでください",
     "saveDumpFail": "セーブの読み出しに失敗",

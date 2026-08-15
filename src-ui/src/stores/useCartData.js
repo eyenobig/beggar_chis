@@ -392,7 +392,13 @@ export const useCartData = defineStore('cart', () => {
 
   function setDropped(path) {
     const c = classify(path)
-    if (!c) return false
+    if (!c) {
+      // 未知扩展名此前静默丢弃（多文件拖拽时表现为「漏录」）——明确提示
+      const msg = t('toast.unsupportedFileType', { name: basename(path) })
+      toast.error(msg)
+      logStore.addLog(msg, 'warn')
+      return false
+    }
     if (c.kind === 'rom') {
       // 按当前平台筛选：ROM 平台须与当前选择一致；不匹配则拒绝，不自动切平台。
       if (c.mbc !== platformIsMbc(emu.currentPlatform)) {
@@ -423,9 +429,17 @@ export const useCartData = defineStore('cart', () => {
 
   function handleDrop(paths) {
     let last = false
+    const roms = []
     for (const p of paths || []) {
       const k = setDropped(p)
-      if (k) last = k
+      if (k) {
+        last = k
+        if (k === 'rom') roms.push(basename(p))
+      }
+    }
+    // romFile 是单槽位：多 ROM 拖入时仅最后一个保留，其余被覆盖——明示避免误以为全部已录
+    if (roms.length > 1) {
+      toast.info(t('toast.dropRomsLastWins', { count: roms.length, name: roms[roms.length - 1] }))
     }
     return last
   }
@@ -622,6 +636,18 @@ export const useCartData = defineStore('cart', () => {
     const f = romFile.value
     if (!f || opRunning.value) return
 
+    // 载入后平台可能已被切换（手动 toggle / 识别卡带自动切）：烧录前重新校验，
+    // 防止 --mbc 标志与 ROM/平台不一致导致错总线烧录（校验必炸且可能烧坏邻区）。
+    if (f.mbc !== platformIsMbc(emu.currentPlatform)) {
+      const msg = t('toast.romPlatformMismatch', {
+        rom: f.mbc ? 'GB/GBC' : 'GBA',
+        platform: platformLabel(emu.currentPlatform),
+      })
+      toast.error(msg)
+      logStore.addLog(msg, 'warn')
+      return
+    }
+
     if (!conn.isConnected) {
       const msg = conn.needsSelection ? t('conn.selectHint') : t('rom.hint.connect')
       toast.error(msg)
@@ -686,7 +712,8 @@ export const useCartData = defineStore('cart', () => {
       phaseProg.tickPhase()
     }, 250)
     try {
-      const { error } = await cfbClient.burnRom({ romPath: f.path, mbc: f.mbc || preferMbc.value }, (ev) => {
+      // f.mbc 必须直传：GBA ROM 的 false 不能被 preferMbc 的 true 吃掉（|| 会吃 false）
+      const { error } = await cfbClient.burnRom({ romPath: f.path, mbc: f.mbc ?? preferMbc.value }, (ev) => {
         if (ev.type === 'progress') {
           if (ev.total > 0) {
             // write/verify total 常相同，校验阶段靠 log 切相；否则 total<4096 视为擦除

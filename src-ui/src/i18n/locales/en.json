@@ -284,6 +284,8 @@
     "tearHint": "Click to tear off the receipt",
     "desktopOnlyRom": "Pick a ROM in the desktop app",
     "romPlatformMismatch": "A {rom} ROM can't be used on the current platform ({platform}). Switch to {rom} first, or pick a {platform} ROM.",
+    "unsupportedFileType": "Unsupported file type: {name} (allowed: .gb / .gbc / .gba / .sav / .srm)",
+    "dropRomsLastWins": "Only one ROM at a time: loaded the last of {count} dropped files ({name})",
     "desktopOnlySave": "Pick a save in the desktop app",
     "pickSaveExt": "Choose a .sav or .srm save file",
     "saveDumpFail": "Save dump failed",

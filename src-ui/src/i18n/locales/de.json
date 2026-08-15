@@ -247,6 +247,8 @@
     "tearHint": "Klicken zum Abreißen",
     "desktopOnlyRom": "ROM in der Desktop-App wählen",
     "romPlatformMismatch": "Ein {rom}-ROM ist auf der aktuellen Plattform ({platform}) nicht verwendbar. Wechsle zu {rom} oder wähle ein {platform}-ROM.",
+    "unsupportedFileType": "Nicht unterstuetzter Dateityp: {name} (erlaubt: .gb / .gbc / .gba / .sav / .srm)",
+    "dropRomsLastWins": "Nur ein ROM gleichzeitig: das letzte von {count} Dateien wurde geladen ({name})",
     "desktopOnlySave": "Spielstand in der Desktop-App wählen",
     "pickSaveExt": "Bitte .sav- oder .srm-Datei wählen",
     "saveDumpFail": "Spielstand lesen fehlgeschlagen",
