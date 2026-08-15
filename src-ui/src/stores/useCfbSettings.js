@@ -165,7 +165,9 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
 
   function withGlobalArgs(args) {
     if (!language.value || language.value === 'auto') return [...args]
-    const lang = language.value === 'zh-CN' ? 'zh' : language.value
+    // cfb 语言码：zh-CN|en|ja|ko|fr|de|es|pt-BR。
+    // zh-CN 原样传（旧映射 'zh' 非法、靠回落侥幸工作）；ru 无 cfb 包 → 回退 en。
+    const lang = language.value === 'ru' ? 'en' : language.value
     return ['--lang', lang, ...args]
   }
 
