@@ -8,13 +8,11 @@ import { Download, ExternalLink, LoaderCircle, RefreshCw } from '@lucide/vue'
 import { useDragScroll } from '../../../composables/useDragScroll'
 import { inTauri } from '../../../services/cfb'
 import { useAppUpdater } from '../../../stores/useAppUpdater'
-import { useCfbSettings } from '../../../stores/useCfbSettings'
 import { useToast } from '../../../stores/useToast'
 
 const { scrollBind } = useDragScroll()
 const { t } = useI18n()
 const toast = useToast()
-const settings = useCfbSettings()
 const appUpdater = useAppUpdater()
 const {
   currentVersion: appVersion,
@@ -150,18 +148,6 @@ async function onUpdateAction() {
           <div class="text-right text-zinc-500">{{ updateProgressPct }}%</div>
         </div>
         <div v-if="updateError" class="break-words text-red-400">{{ updateError }}</div>
-        <div class="flex items-center justify-between gap-3 pt-1">
-          <span class="shrink-0 text-zinc-500">{{ $t('help.updateProxy') }}</span>
-          <input
-            v-model="settings.updateProxy"
-            data-no-drag
-            type="text"
-            spellcheck="false"
-            class="min-w-0 flex-1 rounded border border-white/10 bg-zinc-900 px-1.5 py-0.5 text-right text-[10px] font-semibold text-zinc-300 outline-none focus:border-zinc-500"
-            :placeholder="$t('help.updateProxyPlaceholder')"
-            :title="$t('help.updateProxyHint')"
-          />
-        </div>
       </div>
     </section>
 

@@ -244,10 +244,7 @@
     "updateFound": "Update available: {version}",
     "updateFailed": "Update check failed",
     "updateBlocked": "Flasher task running — wait before installing",
-    "updateDesktopOnly": "Check for updates in the desktop app",
-    "updateProxy": "Update proxy",
-    "updateProxyPlaceholder": "http://127.0.0.1:7890",
-    "updateProxyHint": "The app does not inherit the system proxy; empty = direct first, then local proxies are tried automatically"
+    "updateDesktopOnly": "Check for updates in the desktop app"
   },
   "auth": {
     "account": "Account",

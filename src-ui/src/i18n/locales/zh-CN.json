@@ -244,10 +244,7 @@
     "updateFound": "发现新版本 {version}",
     "updateFailed": "检查更新失败",
     "updateBlocked": "烧录器任务运行中，请等待完成后再安装",
-    "updateDesktopOnly": "请在桌面客户端中检查更新",
-    "updateProxy": "更新代理",
-    "updateProxyPlaceholder": "http://127.0.0.1:7890",
-    "updateProxyHint": "应用不继承系统代理；留空先直连，失败会自动尝试本地常见代理口"
+    "updateDesktopOnly": "请在桌面客户端中检查更新"
   },
   "auth": {
     "account": "账号",
