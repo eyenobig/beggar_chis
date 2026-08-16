@@ -74,6 +74,14 @@ async function onUpdateAction() {
     toast.success(t('help.updateUpToDate'))
   } else if (updateStatus.value === 'available') {
     toast.success(t('help.updateFound', { version: availableAppVersion.value }))
+    // 发现新版本直接进入下载安装（一键更新）；烧录任务运行中则提示稍后再试。
+    if (updateInstallBlocked.value) {
+      toast.error(t('help.updateBlocked'))
+      return
+    }
+    toast.info(t('help.updateDownloading'))
+    const ok = await appUpdater.downloadAndInstall()
+    if (!ok && updateError.value) toast.error(updateError.value)
   } else if (updateStatus.value === 'error') {
     toast.error(updateError.value || t('help.updateFailed'))
   }
