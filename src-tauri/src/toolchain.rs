@@ -488,16 +488,19 @@ pub fn resolve_cfb_binary(cfb_path: String) -> Result<String, String> {
 }
 
 /// 一次性执行已解析出的 cfb 二进制（对应前端 `executeCfb`），收集完整 stdout/stderr。
+/// `rule_dir`：设置页的 rule 数据目录 → 注入 `CFB_RULE_DIR`，cfb 据此加载外部 profiles。
 #[tauri::command]
 pub async fn cfb_exec(
     app: AppHandle,
     bin_path: String,
     args: Vec<String>,
+    rule_dir: Option<String>,
 ) -> Result<CfbExecOutput, String> {
-    let output = app
-        .shell()
-        .command(&bin_path)
-        .args(args)
+    let mut command = app.shell().command(&bin_path).args(args);
+    if let Some(dir) = rule_dir.as_deref().map(str::trim).filter(|d| !d.is_empty()) {
+        command = command.env("CFB_RULE_DIR", dir);
+    }
+    let output = command
         .output()
         .await
         .map_err(|e| format!("执行 {bin_path} 失败: {e}"))?;
@@ -510,18 +513,21 @@ pub async fn cfb_exec(
 
 /// 流式执行（对应前端 `streamCfb`）：逐行把 stdout/stderr 经 `Channel` 推给前端，
 /// 返回 pid 供 [`cfb_kill_process`] 中止；进程退出后自动从 [`CfbChildren`] 里移除。
+/// `rule_dir` 同 `cfb_exec`：注入 `CFB_RULE_DIR` 绑定设置页的 rule 数据目录。
 #[tauri::command]
 pub fn cfb_spawn(
     app: AppHandle,
     children: State<'_, CfbChildren>,
     bin_path: String,
     args: Vec<String>,
+    rule_dir: Option<String>,
     on_event: Channel<CfbStreamEvent>,
 ) -> Result<u32, String> {
-    let (mut rx, child) = app
-        .shell()
-        .command(&bin_path)
-        .args(args)
+    let mut command = app.shell().command(&bin_path).args(args);
+    if let Some(dir) = rule_dir.as_deref().map(str::trim).filter(|d| !d.is_empty()) {
+        command = command.env("CFB_RULE_DIR", dir);
+    }
+    let (mut rx, child) = command
         .spawn()
         .map_err(|e| format!("启动 {bin_path} 失败: {e}"))?;
     let pid = child.pid();

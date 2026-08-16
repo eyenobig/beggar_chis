@@ -13,6 +13,7 @@
     "core:window:allow-outer-position",
     "core:window:allow-outer-size",
     "core:window:allow-current-monitor",
+    "core:window:allow-show",
     "updater:default",
     "process:allow-restart",
     "opener:default",
@@ -59,6 +60,8 @@
     "allow-download-file",
     "allow-launch-skyemu",
     "allow-file-size",
-    "allow-toolchain"
+    "allow-toolchain",
+    "allow-bosskey",
+    "allow-screenshot"
   ]
 }

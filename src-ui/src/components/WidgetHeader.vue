@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { Triangle } from '@lucide/vue'
-import { useConnection } from '../stores/useConnection'
+import { useConnection, shortPort } from '../stores/useConnection'
 import WindowControls from './window/WindowControls.vue'
 import ConnectionDialog from './dialog/ConnectionDialog.vue'
 
@@ -47,7 +47,8 @@ const statusTextClass = computed(() => {
         <span
           v-if="selectedPort"
           class="text-[8px] font-semibold text-zinc-500 truncate max-w-full leading-tight"
-        >{{ selectedPort }}</span>
+          :title="selectedPort"
+        >{{ shortPort(selectedPort) }}</span>
       </span>
     </button>
 

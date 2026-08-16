@@ -143,7 +143,14 @@ fn extract_zip_exe_sync(
     preferred_names: Option<&[String]>,
 ) -> Result<String, String> {
     extract_zip_sync(archive, dest_dir)?;
-    find_preferred_exe(std::path::Path::new(dest_dir), preferred_names)
+    let exe = find_preferred_exe(std::path::Path::new(dest_dir), preferred_names)?;
+    // zip 解压可能丢失执行位（尤其 mac 的 .app 内层二进制），补上 755。
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755));
+    }
+    Ok(exe)
 }
 
 fn default_preferred_exe_names() -> Vec<String> {

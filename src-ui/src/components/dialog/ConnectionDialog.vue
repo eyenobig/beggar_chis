@@ -3,7 +3,7 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { useConnection } from '../../stores/useConnection'
+import { useConnection, shortPort } from '../../stores/useConnection'
 
 const { t } = useI18n()
 const conn = useConnection()
@@ -109,8 +109,8 @@ function deviceMeta(d) {
                 : d.burner ? 'bg-green-400' : 'bg-zinc-300'"
             ></div>
             <div class="flex-1 min-w-0">
-              <div class="text-xs font-semibold text-zinc-800 truncate">
-                {{ d.port }}
+              <div class="text-xs font-semibold text-zinc-800 truncate" :title="d.port">
+                {{ shortPort(d.port) }}
                 <span v-if="d.burner" class="ml-1 text-[9px] font-bold text-green-600">
                   {{ $t('conn.burner') }}
                 </span>

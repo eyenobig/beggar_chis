@@ -1,6 +1,8 @@
 {
   "app": {
-    "title": "Chis Flasher / 烧丐"
+    "title": "Chis Flasher / 烧丐",
+    "screenshotSaved": "스크린샷이 바탕화면에 저장되었습니다: {path}",
+    "screenshotFail": "스크린샷 실패: {err}"
   },
   "menu": {
     "language": "언어",
@@ -79,6 +81,9 @@
       "confirmErase": "지우기 확인",
       "confirmBurn": "쓰기 확인",
       "cancel": "취소",
+      "eraseMode": "지우기 범위",
+      "eraseModeDeep": "전체(헤더 포함)",
+      "eraseModeStandard": "표준",
       "verify": "검증",
       "verifyHint": "로컬 세이브와 카트리지 비교",
       "needSave": "먼저 세이브 파일을 선택하세요",
@@ -175,8 +180,8 @@
     "ui": "Interface",
     "thermalPaper": "감열지 알림",
     "thermalPaperHint": "SkyEmu 아래에 칼날과 감열지를 표시합니다. 끄면 하단 배너로 알립니다.",
-    "chipErase": "Full chip erase",
-    "chipEraseHint": "Erase the entire Flash before burning.",
+    "chipErase": "굽기 시 전체 지우기",
+    "chipEraseHint": "굽기 전 Flash 전체를 지움(느리지만 완전). 끄면 ROM 범위만 지움(빠름). 굽기에만 적용되며 지우기 버튼은 항상 전체 지움.",
     "unlockPpb": "Unlock PPB before burn",
     "unlockPpbHint": "Clear persistent protection bits before burning.",
     "verifyAfter": "Verify after burn",
@@ -213,7 +218,13 @@
     "verifyNeedPath": "먼저 cfb 경로를 설정하거나 다운로드",
     "versionLocal": "로컬",
     "versionUnknown": "알 수 없음",
-    "versionsHint": "툴체인 버전 (엔진 / 룰 / SkyEmu)"
+    "versionsHint": "툴체인 버전 (엔진 / 룰 / SkyEmu)",
+    "bossKey": "보스 키",
+    "bossKeyHint": "창 표시 전역 단축키 (종료하지 않고 숨김, 작업 계속)",
+    "bossKeyCurrent": "현재: {combo}",
+    "bossKeyRecord": "녹화",
+    "bossKeyRecording": "조합 키를 누르세요 (Esc 취소)",
+    "bossKeyCancelRecord": "취소"
   },
   "help": {
     "verifyTitle": "Verification",

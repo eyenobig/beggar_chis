@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { BadgeCheck, LoaderCircle, Trash2 } from '@lucide/vue'
@@ -44,7 +44,47 @@ const {
   cartridgeStickers,
   cfbBinPath,
   ruleDataDir,
+  bossKeyEnabled,
+  bossKeyShortcut,
 } = storeToRefs(settings)
+
+// ---- 老板键：开关即时生效；录制按钮捕获下一个组合键（需至少一个修饰键） ----
+watch(bossKeyEnabled, () => settings.applyBossKey())
+
+const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform || '')
+const recording = ref(false)
+const MOD_PRETTY = { CONTROL: 'Ctrl', ALT: isMac ? '⌥' : 'Alt', SHIFT: isMac ? '⇧' : 'Shift', SUPER: isMac ? '⌘' : 'Win' }
+
+function prettyKeyCode(code) {
+  return String(code || '').replace(/^Key/, '').replace(/^Digit/, '')
+}
+const bossKeyLabel = computed(() => {
+  const { mods, key } = bossKeyShortcut.value || {}
+  if (!Array.isArray(mods) || !key) return '—'
+  return `${mods.map((m) => MOD_PRETTY[m] || m).join('+')}+${prettyKeyCode(key)}`
+})
+
+function onRecordKey(e) {
+  if (!recording.value) return
+  e.preventDefault()
+  e.stopPropagation()
+  if (e.key === 'Escape') {
+    recording.value = false
+    return
+  }
+  const mods = []
+  if (e.ctrlKey) mods.push('CONTROL')
+  if (e.altKey) mods.push('ALT')
+  if (e.shiftKey) mods.push('SHIFT')
+  if (e.metaKey) mods.push('SUPER')
+  // 纯修饰键不落地，等待完整组合
+  if (!mods.length || ['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return
+  bossKeyShortcut.value = { mods, key: e.code }
+  recording.value = false
+  settings.applyBossKey()
+}
+onMounted(() => window.addEventListener('keydown', onRecordKey, true))
+onBeforeUnmount(() => window.removeEventListener('keydown', onRecordKey, true))
 
 const languageOptions = computed(() => [
   { value: 'auto', label: t('settings.langAuto') },
@@ -409,6 +449,38 @@ function toggleManualVoltage() {
             </button>
           </span>
           <UiSwitch v-model="verifyAfter" />
+        </div>
+      </div>
+    </section>
+
+    <section class="space-y-1">
+      <h3 class="mb-2 text-[11px] font-black uppercase tracking-widest text-zinc-400">{{ $t('settings.bossKey') }}</h3>
+      <div class="border-y border-white/10 divide-y divide-white/10">
+        <div class="flex min-h-11 items-center justify-between gap-4 py-2.5 text-xs font-semibold text-zinc-300">
+          <span class="flex min-w-0 items-center gap-1">
+            {{ $t('settings.bossKey') }}
+            <SettingHint :text="$t('settings.bossKeyHint')" />
+          </span>
+          <UiSwitch v-model="bossKeyEnabled" />
+        </div>
+        <div
+          v-if="bossKeyEnabled"
+          class="flex min-h-11 items-center justify-between gap-4 py-2.5 text-xs font-semibold text-zinc-300"
+        >
+          <span class="min-w-0 truncate" :title="bossKeyLabel">
+            {{ recording ? $t('settings.bossKeyRecording') : $t('settings.bossKeyCurrent', { combo: bossKeyLabel }) }}
+          </span>
+          <button
+            data-no-drag
+            type="button"
+            class="shrink-0 rounded-md px-2.5 py-1 text-[10px] font-black transition-colors"
+            :class="recording
+              ? 'bg-red-500 text-white hover:bg-red-400'
+              : 'bg-white text-zinc-950 hover:bg-zinc-200'"
+            @click="recording = !recording"
+          >
+            {{ recording ? $t('settings.bossKeyCancelRecord') : $t('settings.bossKeyRecord') }}
+          </button>
         </div>
       </div>
     </section>

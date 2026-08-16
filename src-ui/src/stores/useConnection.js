@@ -5,6 +5,17 @@ import { defineStore } from 'pinia'
 import { cfbClient, inTauri } from '../services/cfb'
 import { useCfbSettings } from './useCfbSettings'
 
+/** 展示用口名精简（仅显示，传给 cfb 的仍是原始路径）：
+ *  /dev/cu.usbmodem11201 → USB 11201；/dev/cu.usbserial-1234 → USB 1234；
+ *  /dev/ttyUSB0 → ttyUSB0；Windows 的 COM3 原样。完整路径放 title 悬停。 */
+export function shortPort(port) {
+  let s = String(port || '').trim()
+  if (!s) return ''
+  s = s.replace(/^\/dev\/(cu|tty)\./, '').replace(/^\/dev\//, '')
+  s = s.replace(/^usb[a-z]*-?(\d+[a-z]*)$/i, 'USB $1')
+  return s
+}
+
 export const useConnection = defineStore('connection', () => {
   const settings = useCfbSettings()
   const devices = ref([]) // [{port,vid,pid,burner,open,name,serial}]
@@ -30,11 +41,28 @@ export const useConnection = defineStore('connection', () => {
    * 区分依据：同一物理设备不会同时有两个「COM 名不同且都能打开」的口。
    * 所以同 serial 的多个端口里，凡「不同 COM 名 + 都能 open」的一律判为独立设备并保留；
    * 只剩同 COM 名重复、或仅一个能 open 的，才按幽灵口合并（优先 open、次选较小 COM 名）。
+   *
+   * macOS 例外：同一物理设备会同时枚举为 /dev/cu.* 与 /dev/tty.* 且都能 open，
+   * 上面这条判据会把它误判成两台。先剔除「存在 cu.* 孪生口」的 tty.* 条目
+   * （只剩 tty.* 的设备不受影响），再走 serial 合并。
    */
   function dedupeBurners(ports) {
+    let list = ports
+    const cuNames = new Set(
+      ports
+        .filter((p) => String(p.port).startsWith('/dev/cu.'))
+        .map((p) => String(p.port)),
+    )
+    if (cuNames.size > 0) {
+      list = ports.filter((p) => {
+        const name = String(p.port)
+        if (!name.startsWith('/dev/tty.')) return true
+        return !cuNames.has(name.replace(/^\/dev\/tty\./, '/dev/cu.'))
+      })
+    }
     const bySerial = new Map()
     const noSerial = []
-    for (const p of ports) {
+    for (const p of list) {
       const sn = p.serial != null && String(p.serial).trim() !== '' ? String(p.serial) : ''
       if (!sn) {
         noSerial.push(p)

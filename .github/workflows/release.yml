@@ -13,7 +13,7 @@ on:
 
 env:
   CFB_GITHUB_REPO: eyenobig/chis-burner-cmd
-  CFB_RELEASE_TAG: ${{ inputs.cfb_tag || vars.CFB_RELEASE_TAG || 'v0.3.5' }}
+  CFB_RELEASE_TAG: ${{ inputs.cfb_tag || vars.CFB_RELEASE_TAG || 'v0.4.2' }}
   VITE_API_BASE_URL: ${{ secrets.API_BASE_URL }}
 
 jobs:
@@ -47,12 +47,19 @@ jobs:
       contents: write
     strategy:
       fail-fast: false
-      # 暂时只打 Windows x64；恢复多平台时把 macOS/Linux 行加回 matrix。
+      # Windows NSIS + macOS DMG。mac 用 --bundles 覆盖 tauri.conf 的 nsis 目标
+      # （nsis 仅 Windows 可打包）；cfb 侧已有两个 darwin sidecar 产物。
       matrix:
         include:
           - platform: windows-latest
             args: ''
             rust_target: x86_64-pc-windows-msvc
+          - platform: macos-latest
+            args: '--target aarch64-apple-darwin --bundles app,dmg'
+            rust_target: aarch64-apple-darwin
+          - platform: macos-13
+            args: '--target x86_64-apple-darwin --bundles app,dmg'
+            rust_target: x86_64-apple-darwin
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -132,7 +139,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Chis Flasher / 烧丐 ${{ github.ref_name }}
-          releaseBody: Windows x64 installer (NSIS).
+          releaseBody: Windows x64 installer (NSIS) · macOS ARM64/Intel (DMG).
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true

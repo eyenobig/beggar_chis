@@ -1,6 +1,8 @@
 {
   "app": {
-    "title": "Chis Flasher / 烧丐"
+    "title": "Chis Flasher / 烧丐",
+    "screenshotSaved": "Скриншот сохранён на рабочем столе: {path}",
+    "screenshotFail": "Не удалось сделать скриншот: {err}"
   },
   "menu": {
     "language": "Язык",
@@ -79,6 +81,9 @@
       "confirmErase": "Подтвердить стирание",
       "confirmBurn": "Подтвердить запись",
       "cancel": "Отмена",
+      "eraseMode": "Режим стирания",
+      "eraseModeDeep": "Полный (с заголовком)",
+      "eraseModeStandard": "Обычный",
       "verify": "Проверить",
       "verifyHint": "Сравнить локальное сохранение с картриджем",
       "needSave": "Сначала выберите файл сохранения",
@@ -175,8 +180,8 @@
     "ui": "Interface",
     "thermalPaper": "Чеки на термобумаге",
     "thermalPaperHint": "Показывать нож и термобумагу под SkyEmu. Выкл. — уведомления в нижнем баннере.",
-    "chipErase": "Full chip erase",
-    "chipEraseHint": "Erase the entire Flash before burning.",
+    "chipErase": "Полная очистка при записи",
+    "chipEraseHint": "Стирает весь Flash перед записью (медленно, но полностью); выключено = только секторы ROM (быстро). Относится только к записи; кнопка Стереть всегда чистит всё.",
     "unlockPpb": "Unlock PPB before burn",
     "unlockPpbHint": "Clear persistent protection bits before burning.",
     "verifyAfter": "Verify after burn",
@@ -213,7 +218,13 @@
     "verifyNeedPath": "Сначала задайте или скачайте путь cfb",
     "versionLocal": "Локально",
     "versionUnknown": "Неизвестно",
-    "versionsHint": "Версии инструментов (движок / правила / SkyEmu)"
+    "versionsHint": "Версии инструментов (движок / правила / SkyEmu)",
+    "bossKey": "Клавиша босса",
+    "bossKeyHint": "Глобальное сочетание для скрытия/показа окна (скрывает не завершая, задачи продолжаются)",
+    "bossKeyCurrent": "Сейчас: {combo}",
+    "bossKeyRecord": "Записать",
+    "bossKeyRecording": "Нажмите сочетание (Esc — отмена)",
+    "bossKeyCancelRecord": "Отмена"
   },
   "help": {
     "verifyTitle": "Verification",

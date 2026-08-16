@@ -16,7 +16,7 @@ permissions:
 
 env:
   CFB_GITHUB_REPO: eyenobig/chis-burner-cmd
-  CFB_RELEASE_TAG: ${{ vars.CFB_RELEASE_TAG || 'v0.3.5' }}
+  CFB_RELEASE_TAG: ${{ vars.CFB_RELEASE_TAG || 'v0.4.2' }}
 
 jobs:
   frontend:
@@ -35,13 +35,21 @@ jobs:
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false
-      # 暂时只跑 Windows；恢复多平台时把 Linux/macOS 行加回。
+      # Windows + macOS（cfb 侧 build.yml 已发布两个 darwin 产物）。
       matrix:
         include:
           - name: Windows x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             app: tauri-app.exe
+          - name: macOS ARM64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            app: tauri-app
+          - name: macOS Intel
+            os: macos-13
+            target: x86_64-apple-darwin
+            app: tauri-app
 
     runs-on: ${{ matrix.os }}
     steps:

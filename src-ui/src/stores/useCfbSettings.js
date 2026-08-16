@@ -28,6 +28,44 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
   )
   const voltage = computed(() => (voltageAuto.value ? 'auto' : manualVoltage.value))
   const chipErase = ref(saved.chipErase === true)
+  /** 擦除时连 GB 隐藏头部区（开机窗）一起清：MBC5 线性映射下主擦除不覆盖 phys 0x0-0x3FFF，
+   *  旧头部残留会让识别仍报旧游戏。仅对 GB/GBC 卡有效（cfb erase --boot）。 */
+  const eraseBoot = ref(saved.eraseBoot !== false)
+  /** 老板键：全局快捷键切换窗口显隐；mods 为 event.code 修饰键 tokens，key 为 event.code。
+   *  默认平台相关：mac ⌘B（SUPER），Windows/Linux Ctrl+B（CONTROL）。 */
+  const IS_MAC = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform || '')
+  const DEFAULT_BOSS_KEY = Object.freeze({
+    mods: [IS_MAC ? 'SUPER' : 'CONTROL'],
+    key: 'KeyB',
+  })
+  const OLD_DEFAULT_BOSS_KEY = Object.freeze({ mods: ['CONTROL', 'ALT'], key: 'KeyB' })
+  const normalizeCombo = (c) =>
+    JSON.stringify({ mods: [...(c?.mods || [])].sort(), key: c?.key || '' })
+  const savedIsOldDefault = normalizeCombo(saved.bossKeyShortcut) === normalizeCombo(OLD_DEFAULT_BOSS_KEY)
+  const bossKeyEnabled = ref(saved.bossKeyEnabled !== false)
+  const bossKeyShortcut = ref(
+    Array.isArray(saved.bossKeyShortcut?.mods) && saved.bossKeyShortcut.key && !savedIsOldDefault
+      ? { mods: saved.bossKeyShortcut.mods.map(String), key: String(saved.bossKeyShortcut.key) }
+      : { mods: [...DEFAULT_BOSS_KEY.mods], key: DEFAULT_BOSS_KEY.key },
+  )
+
+  /** 把当前老板键设置应用到全局快捷键（Rust 侧注册/注销）。启动与设置变更时调用。 */
+  async function applyBossKey() {
+    if (!inTauri) return
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      if (bossKeyEnabled.value) {
+        await invoke('set_boss_shortcut', {
+          mods: bossKeyShortcut.value.mods,
+          key: bossKeyShortcut.value.key,
+        })
+      } else {
+        await invoke('clear_boss_shortcut')
+      }
+    } catch (err) {
+      console.warn('[bossKey] apply failed:', err)
+    }
+  }
   // PPB 解锁是烧录前自动校验的一部分，不再暴露为用户选项。
   // 固定为 true，同时把旧版曾关闭的持久配置迁移回安全默认值。
   const unlockPpb = ref(true)
@@ -132,6 +170,9 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
       voltageAuto: voltageAuto.value,
       manualVoltage: manualVoltage.value,
       chipErase: chipErase.value,
+      eraseBoot: eraseBoot.value,
+      bossKeyEnabled: bossKeyEnabled.value,
+      bossKeyShortcut: bossKeyShortcut.value,
       unlockPpb: unlockPpb.value,
       verifyAfter: verifyAfter.value,
       thermalPaper: thermalPaper.value,
@@ -193,6 +234,10 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
     voltageAuto,
     manualVoltage,
     chipErase,
+    eraseBoot,
+    bossKeyEnabled,
+    bossKeyShortcut,
+    applyBossKey,
     unlockPpb,
     verifyAfter,
     thermalPaper,

@@ -19,6 +19,17 @@ function formatUpdaterError(cause) {
   ) {
     return '无法获取更新清单（latest.json）。仓库尚无已发布的 Release，或清单文件缺失。请先按发版流程打 tag 发布后再试。'
   }
+  // 平台缺失：已发布版本的更新清单只含部分平台（如 v0.2.12 仅 Windows）。
+  // tauri updater 在解析阶段就抛错，即使版本号相同也不会走到"已是最新"。
+  if (
+    lower.includes('platform')
+    || lower.includes('darwin')
+    || lower.includes('no suitable')
+    || lower.includes('not found for target')
+    || lower.includes('installer')
+  ) {
+    return '当前已发布版本的更新包不包含本平台（macOS 更新包自下个发版起提供，发版流水线已支持 macOS）。可先从 Releases 页手动下载新版安装。'
+  }
   if (lower.includes('network') || lower.includes('timed out') || lower.includes('timeout')) {
     return `网络异常，检查更新失败：${raw}`
   }

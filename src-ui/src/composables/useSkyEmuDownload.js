@@ -30,9 +30,12 @@ export function useSkyEmuDownload() {
   const taskProgress = useTaskProgress()
   const toast = useToast()
 
-  const canLaunch = computed(() =>
-    /\.(exe|app|AppImage|dmg)$/i.test(String(skyEmuPath.value || '')),
-  )
+  const canLaunch = computed(() => {
+    const p = String(skyEmuPath.value || '')
+    // Windows exe / Linux AppImage / mac 手选的 .app 或 .dmg；
+    // mac zip 解出的产物是 .app 包内层二进制（…/SkyEmu.app/Contents/MacOS/SkyEmu），也认。
+    return /\.(exe|app|AppImage|dmg)$/i.test(p) || /\.app\/contents\/macos\//i.test(p)
+  })
 
   /** DirectPlay / SkyEmu 启动仅支持 GBA；平台 `gbc` 含 GB&GBC。 */
   const emulatorSupported = computed(() => currentPlatform.value !== 'gbc')

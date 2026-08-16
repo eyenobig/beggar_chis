@@ -1,6 +1,8 @@
 {
   "app": {
-    "title": "Chis Flasher / 烧丐"
+    "title": "Chis Flasher / 烧丐",
+    "screenshotSaved": "Screenshot auf dem Desktop gespeichert: {path}",
+    "screenshotFail": "Screenshot fehlgeschlagen: {err}"
   },
   "menu": {
     "language": "Sprache",
@@ -79,6 +81,9 @@
       "confirmErase": "Löschen bestätigen",
       "confirmBurn": "Brennen bestätigen",
       "cancel": "Abbrechen",
+      "eraseMode": "Löschbereich",
+      "eraseModeDeep": "Gründlich (mit Header)",
+      "eraseModeStandard": "Standard",
       "verify": "Prüfen",
       "verifyHint": "Lokalen Spielstand mit Modul vergleichen",
       "needSave": "Zuerst Spielstand wählen",
@@ -175,8 +180,8 @@
     "ui": "Interface",
     "thermalPaper": "Thermopapier-Hinweise",
     "thermalPaperHint": "Zeigt Messer und Thermopapier unter SkyEmu. Aus: Hinweise als unteres Banner.",
-    "chipErase": "Full chip erase",
-    "chipEraseHint": "Erase the entire Flash before burning.",
+    "chipErase": "Vollständiges Löschen beim Brennen",
+    "chipEraseHint": "Löscht den ganzen Flash vor dem Brennen (langsamer, gründlich); aus = nur die ROM-Sektoren (schneller). Betrifft nur das Brennen; die Löschen-Taste löscht immer alles.",
     "unlockPpb": "Unlock PPB before burn",
     "unlockPpbHint": "Clear persistent protection bits before burning.",
     "verifyAfter": "Verify after burn",
@@ -213,7 +218,13 @@
     "verifyNeedPath": "Zuerst cfb-Pfad setzen oder herunterladen",
     "versionLocal": "Lokal",
     "versionUnknown": "Unbekannt",
-    "versionsHint": "Toolchain-Versionen (Engine / Rule / SkyEmu)"
+    "versionsHint": "Toolchain-Versionen (Engine / Rule / SkyEmu)",
+    "bossKey": "Chefen-Taste",
+    "bossKeyHint": "Globaler Shortcut zum Ein-/Ausblenden des Fensters (ausblenden ohne Beenden, Aufgaben laufen weiter)",
+    "bossKeyCurrent": "Aktuell: {combo}",
+    "bossKeyRecord": "Aufnehmen",
+    "bossKeyRecording": "Kombination drücken (Esc bricht ab)",
+    "bossKeyCancelRecord": "Abbrechen"
   },
   "help": {
     "verifyTitle": "Verification",

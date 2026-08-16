@@ -8,6 +8,7 @@ import { useCartData } from './stores/useCartData'
 import { useEmulator } from './stores/useEmulator'
 import { useCfbSettings } from './stores/useCfbSettings'
 import { useAppUpdater } from './stores/useAppUpdater'
+import { useToast } from './stores/useToast'
 import { inTauri } from './services/cfb'
 
 const { t } = useI18n()
@@ -63,12 +64,41 @@ async function clientBurn(path) {
 }
 
 onMounted(() => {
+  // 透明窗口防闪白：窗体在 tauri.conf.json 里 visible:false 启动，
+  // 首帧渲染完成后再 show，避免 webview 初始化阶段的白色底一闪而过。
+  // 注意：隐藏窗口里 rAF 可能被暂停，必须带 setTimeout 兜底（Rust 侧 on_page_load 还有第二重兜底）。
+  if (inTauri) {
+    const showWin = () =>
+      import('@tauri-apps/api/window')
+        .then(({ getCurrentWindow }) => getCurrentWindow().show())
+        .catch(() => {})
+    requestAnimationFrame(() => requestAnimationFrame(showWin))
+    setTimeout(showWin, 400)
+  }
   // 先等 cfb 路径就绪再 detect，避免启动竞态：路径未好 → detect 空结果 → 一直显示未连接。
   ;(async () => {
     await useCfbSettings().ensurePathsReady()
     await useConnection().startWatching()
   })()
+  // 老板键：启动即按设置注册全局快捷键（默认 mac ⌘B / Windows Ctrl+B，设置页可改/可关）
+  useCfbSettings().applyBossKey()
   useAppUpdater().init()
+
+  // ⌘P / Ctrl+P：截取应用窗口（含当前连接/卡带/任务状态）到桌面 PNG。
+  // 应用内快捷键（非全局），不抢系统打印。
+  if (inTauri) {
+    window.addEventListener('keydown', async (e) => {
+      if (e.code !== 'KeyP' || !(e.metaKey || e.ctrlKey) || e.repeat) return
+      e.preventDefault()
+      try {
+        const { invoke } = await import('@tauri-apps/api/core')
+        const path = await invoke('screenshot_window')
+        useToast().success(useI18n().t('app.screenshotSaved', { path }))
+      } catch (err) {
+        useToast().error(useI18n().t('app.screenshotFail', { err: String(err || '') }))
+      }
+    })
+  }
 
   if (inTauri) {
     window.__chis = {

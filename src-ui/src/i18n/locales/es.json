@@ -1,6 +1,8 @@
 {
   "app": {
-    "title": "Chis Flasher / 烧丐"
+    "title": "Chis Flasher / 烧丐",
+    "screenshotSaved": "Captura guardada en el Escritorio: {path}",
+    "screenshotFail": "Error de captura: {err}"
   },
   "menu": {
     "language": "Idioma",
@@ -79,6 +81,9 @@
       "confirmErase": "Confirmar borrado",
       "confirmBurn": "Confirmar grabación",
       "cancel": "Cancelar",
+      "eraseMode": "Alcance de borrado",
+      "eraseModeDeep": "Profundo (con cabecera)",
+      "eraseModeStandard": "Estándar",
       "verify": "Verificar",
       "verifyHint": "Comparar partida local con cartucho",
       "needSave": "Elige un archivo de partida primero",
@@ -175,8 +180,8 @@
     "ui": "Interface",
     "thermalPaper": "Avisos en papel térmico",
     "thermalPaperHint": "Muestra el corte y el papel bajo SkyEmu. Si se desactiva, los avisos van a un banner inferior.",
-    "chipErase": "Full chip erase",
-    "chipEraseHint": "Erase the entire Flash before burning.",
+    "chipErase": "Borrado completo al grabar",
+    "chipEraseHint": "Borra toda la Flash antes de grabar (lento, exhaustivo); desactivado = solo los sectores del ROM (rápido). Aplica solo a Grabar; el botón Borrar siempre es completo.",
     "unlockPpb": "Unlock PPB before burn",
     "unlockPpbHint": "Clear persistent protection bits before burning.",
     "verifyAfter": "Verify after burn",
@@ -213,7 +218,13 @@
     "verifyNeedPath": "Configura o descarga una ruta de cfb primero",
     "versionLocal": "Local",
     "versionUnknown": "Desconocido",
-    "versionsHint": "Versiones de toolchain (motor / reglas / SkyEmu)"
+    "versionsHint": "Versiones de toolchain (motor / reglas / SkyEmu)",
+    "bossKey": "Tecla jefe",
+    "bossKeyHint": "Atajo global para ocultar/mostrar la ventana (oculta sin salir, las tareas continúan)",
+    "bossKeyCurrent": "Actual: {combo}",
+    "bossKeyRecord": "Grabar",
+    "bossKeyRecording": "Pulsa una combinación (Esc para cancelar)",
+    "bossKeyCancelRecord": "Cancelar"
   },
   "help": {
     "verifyTitle": "Verification",

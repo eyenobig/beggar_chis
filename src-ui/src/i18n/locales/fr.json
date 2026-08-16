@@ -1,6 +1,8 @@
 {
   "app": {
-    "title": "Chis Flasher / 烧丐"
+    "title": "Chis Flasher / 烧丐",
+    "screenshotSaved": "Capture enregistree sur le Bureau : {path}",
+    "screenshotFail": "Echec de la capture : {err}"
   },
   "menu": {
     "language": "Langue",
@@ -79,6 +81,9 @@
       "confirmErase": "Confirmer l’effacement",
       "confirmBurn": "Confirmer l’écriture",
       "cancel": "Annuler",
+      "eraseMode": "Portée d'effacement",
+      "eraseModeDeep": "Complet (avec en-tête)",
+      "eraseModeStandard": "Standard",
       "verify": "Vérifier",
       "verifyHint": "Comparer sauvegarde locale et cartouche",
       "needSave": "Choisissez d’abord une sauvegarde",
@@ -175,8 +180,8 @@
     "ui": "Interface",
     "thermalPaper": "Toasts papier thermique",
     "thermalPaperHint": "Affiche le cutter et le papier sous SkyEmu. Désactivé : bannière en bas pour garder le feedback.",
-    "chipErase": "Full chip erase",
-    "chipEraseHint": "Erase the entire Flash before burning.",
+    "chipErase": "Effacement complet à l'écriture",
+    "chipEraseHint": "Efface toute la Flash avant écriture (lent, complet) ; désactivé = seuls les secteurs du ROM (rapide). Concerne uniquement l'écriture ; le bouton Effacer est toujours complet.",
     "unlockPpb": "Unlock PPB before burn",
     "unlockPpbHint": "Clear persistent protection bits before burning.",
     "verifyAfter": "Verify after burn",
@@ -213,7 +218,13 @@
     "verifyNeedPath": "Définissez ou téléchargez d'abord un chemin cfb",
     "versionLocal": "Local",
     "versionUnknown": "Inconnu",
-    "versionsHint": "Versions des outils (moteur / règles / SkyEmu)"
+    "versionsHint": "Versions des outils (moteur / règles / SkyEmu)",
+    "bossKey": "Touche patron",
+    "bossKeyHint": "Raccourci global pour masquer/afficher la fenêtre (masque sans quitter, tâches en cours)",
+    "bossKeyCurrent": "Actuel : {combo}",
+    "bossKeyRecord": "Enregistrer",
+    "bossKeyRecording": "Appuyez sur une combinaison (Échap pour annuler)",
+    "bossKeyCancelRecord": "Annuler"
   },
   "help": {
     "verifyTitle": "Verification",

@@ -1,6 +1,8 @@
 {
   "app": {
-    "title": "Chis Flasher / 烧丐"
+    "title": "Chis Flasher / 烧丐",
+    "screenshotSaved": "Screenshot saved to Desktop: {path}",
+    "screenshotFail": "Screenshot failed: {err}"
   },
   "menu": {
     "language": "Language",
@@ -105,6 +107,9 @@
       "confirmErase": "Confirm erase",
       "confirmBurn": "Confirm burn",
       "cancel": "Cancel",
+      "eraseMode": "Erase scope",
+      "eraseModeDeep": "Deep (incl. header)",
+      "eraseModeStandard": "Standard",
       "verify": "Verify",
       "verifyHint": "Compare local save with cartridge",
       "needSave": "Pick a save file first",
@@ -194,8 +199,8 @@
     "cartridgeStickersHint": "Show the sticker shelf when Logs is open. Requires cartridge stage.",
     "thermalPaper": "Thermal paper toasts",
     "thermalPaperHint": "Show the cutter and thermal paper under SkyEmu. When off, toasts use a bottom banner instead so feedback is not lost.",
-    "chipErase": "Full chip erase",
-    "chipEraseHint": "Erase the entire Flash before burning.",
+    "chipErase": "Full-chip erase when burning",
+    "chipEraseHint": "Erase the whole Flash before burning (slower, thorough); off = only the ROM-covered sectors (faster). Applies to Burn only; the Erase button is always whole-chip.",
     "unlockPpb": "Unlock PPB before burn",
     "unlockPpbHint": "Clear persistent protection bits before burning.",
     "verifyAfter": "Verify after burn",
@@ -213,7 +218,13 @@
     "voltageDesktopOnly": "Switch voltage in the desktop app",
     "cartCacheCleared": "Cartridge cache cleared",
     "voltageSet": "GB/GBC voltage set to {v}",
-    "voltageFail": "Voltage switch failed: {err}"
+    "voltageFail": "Voltage switch failed: {err}",
+    "bossKey": "Boss key",
+    "bossKeyHint": "Global shortcut to toggle window visibility (hides without quitting; tasks keep running)",
+    "bossKeyCurrent": "Current: {combo}",
+    "bossKeyRecord": "Record",
+    "bossKeyRecording": "Press a key combo (Esc to cancel)",
+    "bossKeyCancelRecord": "Cancel"
   },
   "help": {
     "verifyTitle": "Verification",

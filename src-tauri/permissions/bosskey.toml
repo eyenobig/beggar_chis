@@ -1,0 +1,7 @@
+[[permission]]
+identifier = "allow-bosskey"
+description = "Allow configuring the boss-key global shortcut (register/clear) from the settings UI."
+commands.allow = [
+  "set_boss_shortcut",
+  "clear_boss_shortcut",
+]

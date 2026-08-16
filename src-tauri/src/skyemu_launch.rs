@@ -17,7 +17,19 @@ pub fn launch_skyemu(
     serial_port: Option<String>,
     rom_size: Option<u64>,
 ) -> Result<String, String> {
-    let exe_path = PathBuf::from(exe.trim());
+    let mut exe_path = PathBuf::from(exe.trim());
+    // mac 手选的是 .app 包（目录）：解析到内层二进制 Contents/MacOS/<name>
+    if exe_path.is_dir() && exe_path.extension().map(|e| e.eq_ignore_ascii_case("app")).unwrap_or(false)
+    {
+        let stem = exe_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| "无法解析 .app 名称".to_string())?;
+        let inner = exe_path.join("Contents/MacOS").join(stem);
+        if inner.is_file() {
+            exe_path = inner;
+        }
+    }
     if !exe_path.is_file() {
         return Err(format!("SkyEmu 可执行文件不存在: {}", exe_path.display()));
     }

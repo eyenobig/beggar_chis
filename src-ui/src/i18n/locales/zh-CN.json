@@ -1,6 +1,8 @@
 {
   "app": {
-    "title": "Chis Flasher / 烧丐"
+    "title": "Chis Flasher / 烧丐",
+    "screenshotSaved": "截图已保存到桌面：{path}",
+    "screenshotFail": "截图失败：{err}"
   },
   "menu": {
     "language": "语言",
@@ -105,6 +107,9 @@
       "confirmErase": "确认擦除",
       "confirmBurn": "确认烧录",
       "cancel": "取消",
+      "eraseMode": "擦除范围",
+      "eraseModeDeep": "彻底（含头部）",
+      "eraseModeStandard": "标准",
       "verify": "验证",
       "verifyHint": "比对本地存档与卡带",
       "needSave": "请先选择存档文件",
@@ -194,8 +199,8 @@
     "cartridgeStickersHint": "打开 Logs 时显示贴纸架；需先开启卡带舞台。",
     "thermalPaper": "热敏纸提示",
     "thermalPaperHint": "在 SkyEmu 下方显示刀口与热敏纸吐纸；关闭后改为窗口底部横幅提示，反馈不会丢失。",
-    "chipErase": "全片擦除模式",
-    "chipEraseHint": "烧录前擦除整颗 Flash。",
+    "chipErase": "烧录时全片擦除",
+    "chipEraseHint": "烧录前先擦除整颗 Flash（慢而彻底）；关闭则只擦 ROM 覆盖的扇区（快）。仅影响「烧录」，「擦除」按钮本身始终是整片。",
     "unlockPpb": "烧录前解锁 PPB",
     "unlockPpbHint": "烧录前解除持久保护位。",
     "verifyAfter": "烧录后校验",
@@ -213,7 +218,13 @@
     "voltageDesktopOnly": "请在桌面客户端中切换电压",
     "cartCacheCleared": "卡带缓存已清除",
     "voltageSet": "GB/GBC 电压已设为 {v}",
-    "voltageFail": "电压切换失败：{err}"
+    "voltageFail": "电压切换失败：{err}",
+    "bossKey": "老板键",
+    "bossKeyHint": "全局快捷键切换窗口显隐（隐藏不退出，任务不受影响）",
+    "bossKeyCurrent": "当前：{combo}",
+    "bossKeyRecord": "录制",
+    "bossKeyRecording": "按下组合键（Esc 取消）",
+    "bossKeyCancelRecord": "取消录制"
   },
   "help": {
     "verifyTitle": "校验说明",

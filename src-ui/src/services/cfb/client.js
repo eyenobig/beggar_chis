@@ -46,7 +46,10 @@ export const cfbClient = Object.freeze({
   },
 
   erase({ mbc = false } = {}, onEvent, onChild) {
-    return streamCfb(withTargetPort(withMbc(['erase'], mbc)), onEvent, onChild)
+    const args = withMbc(['erase'], mbc)
+    // 仅 GB/GBC 有效：连隐藏头部区（开机窗）一起清，旧头部不再残留
+    if (mbc && useCfbSettings().eraseBoot) args.push('--boot')
+    return streamCfb(withTargetPort(args), onEvent, onChild)
   },
 
   dumpRom({ outputPath, mbc = false }, onEvent, onChild) {

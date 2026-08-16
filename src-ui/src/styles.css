@@ -75,6 +75,10 @@ body,
 }
 
 .gbc-prismatic {
+  /* 兜底：老 WKWebView（macOS 12 / Safari 15）不支持 @property，var(--edge-angle)
+     解析为空会让整条 background 失效（白底+彩边全没）。显式声明静态角度保住颜色；
+     新浏览器里 edge-spin 动画照常覆盖此值，行为不变。 */
+  --edge-angle: 135deg;
   /* 双背景：padding-box 铺白、border-box 铺旋转彩虹 → 透明 border 露出彩边 */
   background:
     linear-gradient(#ffffff, #ffffff) padding-box,
@@ -92,6 +96,7 @@ body,
 
 /* GBA 激活态：同款描边按钮，靛蓝灰色板（indigo↔slate）替换彩虹。 */
 .gba-edge {
+  --edge-angle: 135deg; /* 同 gbc-prismatic：@property 不支持时的静态兜底 */
   background:
     linear-gradient(#ffffff, #ffffff) padding-box,
     linear-gradient(var(--edge-angle), #4F46E5, #818CF8, #94A3B8, #6366F1) border-box;
@@ -107,6 +112,7 @@ body,
 /* 存档操作按钮：同款棱光描边结构，语义色由 --save-edge-c* 注入
    常态慢速 edge-spin；hover 轻微弹跳 + 柔和描边亮度脉冲（不用加速扫光） */
 .save-edge {
+  --edge-angle: 135deg; /* 同 gbc-prismatic：@property 不支持时的静态兜底 */
   background:
     linear-gradient(#ffffff, #ffffff) padding-box,
     linear-gradient(

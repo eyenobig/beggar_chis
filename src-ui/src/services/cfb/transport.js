@@ -47,11 +47,18 @@ export function ensureDirectBinary(cfbPath) {
   return resolveDirectBinary(cfbPath)
 }
 
+/** 设置页 rule 数据目录（含 profiles/ 的根）→ cfb 的 CFB_RULE_DIR；空配置返回 null。 */
+function cfbRuleDirEnv() {
+  const dir = String(useCfbSettings().ruleDataDir || '').trim()
+  return dir || null
+}
+
 /** 模拟 plugin-shell `Command` 接口的直连执行器，底层为 cfb_exec/cfb_spawn/cfb_kill_process。 */
 class DirectCfbCommand {
-  constructor(binPath, args) {
+  constructor(binPath, args, ruleDir = null) {
     this.binPath = binPath
     this.args = args
+    this.ruleDir = ruleDir
     this._stdout = []
     this._stderr = []
     this._close = []
@@ -66,7 +73,7 @@ class DirectCfbCommand {
   }
 
   async execute() {
-    const out = await invoke('cfb_exec', { binPath: this.binPath, args: this.args })
+    const out = await invoke('cfb_exec', { binPath: this.binPath, args: this.args, ruleDir: this.ruleDir })
     return { stdout: out.stdout, stderr: out.stderr, code: out.code }
   }
 
@@ -78,7 +85,7 @@ class DirectCfbCommand {
       else if (ev.event === 'Error') this._error.forEach((cb) => cb(ev.payload))
       else if (ev.event === 'Terminated') this._close.forEach((cb) => cb({ code: ev.payload.code, signal: null }))
     }
-    const pid = await invoke('cfb_spawn', { binPath: this.binPath, args: this.args, onEvent: channel })
+    const pid = await invoke('cfb_spawn', { binPath: this.binPath, args: this.args, ruleDir: this.ruleDir, onEvent: channel })
     return { pid, kill: () => invoke('cfb_kill_process', { pid }) }
   }
 }
@@ -86,15 +93,18 @@ class DirectCfbCommand {
 /**
  * 构造本次调用要使用的命令对象：配置了 `cfbBinPath` 时走直连二进制模式
  * （解析已有可执行文件 + `DirectCfbCommand`），否则保持内置 sidecar 行为完全不变。
+ * 两种模式都注入 CFB_RULE_DIR，把设置页的 rule 数据目录绑定到 cfb。
  */
 async function createCommand(args) {
   const settings = useCfbSettings()
   const finalArgs = [...settings.withGlobalArgs(args), '--json']
+  const ruleDir = cfbRuleDirEnv()
   if (settings.cfbBinPath) {
     const binPath = await resolveDirectBinary(settings.cfbBinPath)
-    return new DirectCfbCommand(binPath, finalArgs)
+    return new DirectCfbCommand(binPath, finalArgs, ruleDir)
   }
-  return Command.sidecar('binaries/cfb', finalArgs)
+  const sidecar = Command.sidecar('binaries/cfb', finalArgs)
+  return ruleDir ? sidecar.env('CFB_RULE_DIR', ruleDir) : sidecar
 }
 
 function emitLine(line, onEvent) {

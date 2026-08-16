@@ -1,6 +1,8 @@
 {
   "app": {
-    "title": "Chis Flasher / 烧丐"
+    "title": "Chis Flasher / 烧丐",
+    "screenshotSaved": "スクリーンショットをデスクトップに保存しました: {path}",
+    "screenshotFail": "スクリーンショット失敗: {err}"
   },
   "menu": {
     "language": "言語",
@@ -79,6 +81,9 @@
       "confirmErase": "消去を確認",
       "confirmBurn": "書込を確認",
       "cancel": "取消",
+      "eraseMode": "消去範囲",
+      "eraseModeDeep": "完全（ヘッダー含む）",
+      "eraseModeStandard": "標準",
       "verify": "検証",
       "verifyHint": "ローカルとカートリッジを比較",
       "needSave": "先にセーブを選んでください",
@@ -175,8 +180,8 @@
     "ui": "Interface",
     "thermalPaper": "感熱紙トースト",
     "thermalPaperHint": "SkyEmu の下にカッターと感熱紙を表示。オフ時は下部バナーで通知します。",
-    "chipErase": "Full chip erase",
-    "chipEraseHint": "Erase the entire Flash before burning.",
+    "chipErase": "書き込み時に全消去",
+    "chipEraseHint": "書き込み前に Flash 全体を消去（遅いが完全）。オフなら ROM 範囲のみ消去（速い）。書き込みにのみ適用、消去ボタンは常に全消去。",
     "unlockPpb": "Unlock PPB before burn",
     "unlockPpbHint": "Clear persistent protection bits before burning.",
     "verifyAfter": "Verify after burn",
@@ -213,7 +218,13 @@
     "verifyNeedPath": "先に cfb パスを設定またはダウンロード",
     "versionLocal": "ローカル",
     "versionUnknown": "不明",
-    "versionsHint": "ツールチェーン版本（エンジン／ルール／SkyEmu）"
+    "versionsHint": "ツールチェーン版本（エンジン／ルール／SkyEmu）",
+    "bossKey": "ボスキー",
+    "bossKeyHint": "ウィンドウ表示切替のグローバルショートカット（終了せず隠す・タスク継続）",
+    "bossKeyCurrent": "現在: {combo}",
+    "bossKeyRecord": "録",
+    "bossKeyRecording": "キー組み合わせを押してください（Esc で取消）",
+    "bossKeyCancelRecord": "キャンセル"
   },
   "help": {
     "verifyTitle": "Verification",

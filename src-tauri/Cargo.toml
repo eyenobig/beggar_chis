@@ -1,6 +1,6 @@
 [package]
 name = "tauri-app"
-version = "0.2.12"
+version = "0.2.13"
 description = "A Tauri App"
 authors = ["you"]
 license = "GPL-3.0-only"
@@ -21,9 +21,12 @@ crate-type = ["rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["devtools"] }
+tauri = { version = "2", features = ["macos-private-api", "devtools"] }
 tauri-plugin-opener = "2"
 tauri-plugin-shell = "2"
+tauri-plugin-global-shortcut = "2"
+xcap = "0.4"
+image = "0.25"
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
