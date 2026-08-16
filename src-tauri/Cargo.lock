@@ -4930,7 +4930,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-app"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "futures-util",
  "image 0.25.10",

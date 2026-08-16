@@ -211,12 +211,15 @@ async fn ensure_release_toolchain(app: &AppHandle) -> Result<ToolchainPaths, Str
         },
     };
 
+    // 无安装器 paths.json 的安装形态（如 mac DMG 拖装）：确保 app-data rule 目录存在并
+    // 始终返回——客户端据此填充设置页的 rule 数据目录并注入 CFB_RULE_DIR。
+    // profiles 缺省为空目录 → cfb 读不到外部 json，照常使用内置 profile；用户往
+    // rule/profiles/ 放自定义 profile 后即生效。
+    let _ = std::fs::create_dir_all(&rule_dir);
+
     Ok(ToolchainPaths {
         cfb_bin: Some(bin_path.display().to_string()),
-        rule_dir: rule_dir
-            .join("profiles")
-            .is_dir()
-            .then(|| rule_dir.display().to_string()),
+        rule_dir: Some(rule_dir.display().to_string()),
     })
 }
 

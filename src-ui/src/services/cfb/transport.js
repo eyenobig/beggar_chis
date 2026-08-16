@@ -94,6 +94,7 @@ class DirectCfbCommand {
  * 构造本次调用要使用的命令对象：配置了 `cfbBinPath` 时走直连二进制模式
  * （解析已有可执行文件 + `DirectCfbCommand`），否则保持内置 sidecar 行为完全不变。
  * 两种模式都注入 CFB_RULE_DIR，把设置页的 rule 数据目录绑定到 cfb。
+ * 注意：plugin-shell v2 的 Command 没有 .env() 方法，sidecar 只能在构造 options 里传 env。
  */
 async function createCommand(args) {
   const settings = useCfbSettings()
@@ -103,8 +104,8 @@ async function createCommand(args) {
     const binPath = await resolveDirectBinary(settings.cfbBinPath)
     return new DirectCfbCommand(binPath, finalArgs, ruleDir)
   }
-  const sidecar = Command.sidecar('binaries/cfb', finalArgs)
-  return ruleDir ? sidecar.env('CFB_RULE_DIR', ruleDir) : sidecar
+  const options = ruleDir ? { env: { CFB_RULE_DIR: ruleDir } } : undefined
+  return Command.sidecar('binaries/cfb', finalArgs, options)
 }
 
 function emitLine(line, onEvent) {
