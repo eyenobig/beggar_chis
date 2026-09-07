@@ -223,7 +223,14 @@
     "bossKeyCurrent": "Actual: {combo}",
     "bossKeyRecord": "Grabar",
     "bossKeyRecording": "Pulsa una combinación (Esc para cancelar)",
-    "bossKeyCancelRecord": "Cancelar"
+    "bossKeyCancelRecord": "Cancelar",
+    "pickDestDir": "Elegir carpeta",
+    "downloadStarted": "Iniciando {title}…",
+    "downloadDone": "{title} terminado",
+    "downloadFail": "Error de descarga",
+    "skyemuNoPackage": "No hay paquete de SkyEmu para esta plataforma",
+    "verifyNoOutput": "cfb version no produjo salida",
+    "wordProgram": "palabra"
   },
   "help": {
     "verifyTitle": "Verification",
@@ -244,9 +251,14 @@
     "updateFailed": "Update check failed",
     "updateBlocked": "Flasher task running — wait before installing",
     "updateDesktopOnly": "Check for updates in the desktop app",
-    "updateProxy": "Proxy de actualizacion",
-    "updateProxyPlaceholder": "http://127.0.0.1:7890",
-    "updateProxyHint": "La app no hereda el proxy del sistema; vacio = directo y luego prueba proxies locales"
+    "updateManifestMissing": "No se pudo obtener el manifiesto de actualización",
+    "updatePlatformMissing": "No hay instalador para esta plataforma",
+    "updateNetworkFail": "Error de red al buscar actualizaciones: {err}",
+    "aboutTitle": "Acerca de",
+    "aboutClient": "Cliente",
+    "aboutClientRepo": "Repositorio del cliente",
+    "aboutCfbRepo": "Repositorio del motor",
+    "aboutFoot": "El motor habla con el cliente por NDJSON. Las versiones de la toolchain están en Ajustes."
   },
   "auth": {
     "account": "Cuenta",
@@ -305,7 +317,10 @@
     "saveWriteFail": "Error al escribir la partida",
     "saveEraseFail": "Error al borrar la partida",
     "shopOpenFail": "No se puede abrir la tienda: {err}",
-    "shopInvalidLink": "Enlace de tienda no válido"
+    "shopInvalidLink": "Enlace de tienda no válido",
+    "shopRefresh": "Actualizar",
+    "shopOpenHome": "Abrir inicio de GBMake",
+    "shopEmpty": "No hay recomendaciones de flasher activas"
   },
   "logs": {
     "empty": "Sin registros",
@@ -355,6 +370,25 @@
     "taskSaveDump": "Leer partida",
     "taskSaveWrite": "Escribir partida",
     "taskSaveErase": "Borrar partida",
-    "taskSaveVerify": "Verificar partida"
+    "taskSaveVerify": "Verificar partida",
+    "cfb": {
+      "unlockPpb": "Desbloqueando PPB (All PPB Erase)…",
+      "ppbUnplug": "Desconexión suave tras desbloquear PPB…",
+      "ppbLockWarn": "Aviso: PPB Lock no es 1; All PPB Erase puede no tener efecto",
+      "chipIdRetry": "ID de chip anómalo; relectura tras desconexión suave…",
+      "noFlashId": "No hay ID de flash válido; grabación cancelada (vuelve a insertar el cartucho)",
+      "skipErase": "Sin borrar; escritura directa (--no-erase; el flash debe estar ya borrado)",
+      "romBlank": "El rango ROM ya está en blanco; se omite el borrado por sectores",
+      "blankUnplug": "Desconexión suave tras omitir el borrado, luego escribir",
+      "sectorFallback": "Falló el borrado por sectores; se usa borrado de chip…",
+      "eraseBoot": "Borrando la ventana de arranque (cabecera oculta)…",
+      "eraseBootOk": "Ventana de arranque borrada",
+      "eraseBootFail": "Falló el borrado de la ventana de arranque (zona principal ya limpia)",
+      "verifying": "Verificando…",
+      "verifyRound": "Verificación (ronda {round}): {mm} bytes distintos, {sectors} sectores",
+      "idLine": "ID:{id} tamaño:{size} BuffWr:{buf}",
+      "eraseDoneWrite": "Borrado listo ({n} sectores), empezando a escribir",
+      "sectorEraseRange": "Borrando el rango ROM por sectores (vía rápida, 0x{end} B, {n} sectores)"
+    }
   }
 }

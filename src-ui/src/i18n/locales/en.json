@@ -223,7 +223,14 @@
     "bossKeyCurrent": "Current: {combo}",
     "bossKeyRecord": "Record",
     "bossKeyRecording": "Press a key combo (Esc to cancel)",
-    "bossKeyCancelRecord": "Cancel"
+    "bossKeyCancelRecord": "Cancel",
+    "pickDestDir": "Choose save folder",
+    "downloadStarted": "Starting {title}…",
+    "downloadDone": "{title} finished",
+    "downloadFail": "Download failed",
+    "skyemuNoPackage": "No SkyEmu package for this platform",
+    "verifyNoOutput": "cfb version produced no output",
+    "wordProgram": "word"
   },
   "help": {
     "verifyTitle": "Verification",
@@ -244,9 +251,14 @@
     "updateFailed": "Update check failed",
     "updateBlocked": "Flasher task running — wait before installing",
     "updateDesktopOnly": "Check for updates in the desktop app",
-    "updateProxy": "Update proxy",
-    "updateProxyPlaceholder": "http://127.0.0.1:7890",
-    "updateProxyHint": "The app does not inherit the system proxy; empty = direct first, then local proxies are tried automatically"
+    "updateManifestMissing": "Could not fetch a valid update manifest",
+    "updatePlatformMissing": "No installer for this platform",
+    "updateNetworkFail": "Network error while checking updates: {err}",
+    "aboutTitle": "About",
+    "aboutClient": "Client",
+    "aboutClientRepo": "Client repository",
+    "aboutCfbRepo": "Burner engine repository",
+    "aboutFoot": "The burn engine talks to the client over NDJSON. Toolchain versions are on the Settings page."
   },
   "auth": {
     "account": "Account",
@@ -305,7 +317,10 @@
     "saveWriteFail": "Save write failed",
     "saveEraseFail": "Save erase failed",
     "shopOpenFail": "Cannot open shop: {err}",
-    "shopInvalidLink": "Invalid shop link"
+    "shopInvalidLink": "Invalid shop link",
+    "shopRefresh": "Refresh",
+    "shopOpenHome": "Open GBMake home",
+    "shopEmpty": "No flasher recommendations enabled"
   },
   "logs": {
     "empty": "No logs yet",
@@ -355,6 +370,25 @@
     "taskSaveDump": "Dump save",
     "taskSaveWrite": "Write save",
     "taskSaveErase": "Erase save",
-    "taskSaveVerify": "Verify save"
+    "taskSaveVerify": "Verify save",
+    "cfb": {
+      "unlockPpb": "Unlocking PPB (All PPB Erase)…",
+      "ppbUnplug": "Soft-unplug after PPB unlock…",
+      "ppbLockWarn": "Warning: PPB Lock is not 1; All PPB Erase may have no effect",
+      "chipIdRetry": "Chip ID looks wrong; soft-unplug and re-read…",
+      "noFlashId": "No valid flash ID; aborting burn (reseat the cartridge)",
+      "skipErase": "Skipping erase, writing directly (--no-erase; flash must already be erased)",
+      "romBlank": "ROM range is already blank; skipping sector erase",
+      "blankUnplug": "Soft-unplug after blank skip, then write",
+      "sectorFallback": "Sector erase failed, falling back to chip erase…",
+      "eraseBoot": "Erasing boot window (hidden header)…",
+      "eraseBootOk": "Boot window erase complete",
+      "eraseBootFail": "Boot window erase failed (main area already cleared)",
+      "verifying": "Verifying…",
+      "verifyRound": "Verify (round {round}): {mm} bytes mismatch, {sectors} sectors",
+      "idLine": "ID:{id} size:{size} BuffWr:{buf}",
+      "eraseDoneWrite": "Erase done ({n} sectors), starting write",
+      "sectorEraseRange": "Erasing ROM range by sector (fast path, 0x{end} B, {n} sectors)"
+    }
   }
 }

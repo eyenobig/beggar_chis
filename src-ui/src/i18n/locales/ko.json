@@ -223,7 +223,14 @@
     "bossKeyCurrent": "현재: {combo}",
     "bossKeyRecord": "녹화",
     "bossKeyRecording": "조합 키를 누르세요 (Esc 취소)",
-    "bossKeyCancelRecord": "취소"
+    "bossKeyCancelRecord": "취소",
+    "pickDestDir": "저장 폴더 선택",
+    "downloadStarted": "{title} 시작…",
+    "downloadDone": "{title} 완료",
+    "downloadFail": "다운로드 실패",
+    "skyemuNoPackage": "이 플랫폼용 SkyEmu 패키지가 없습니다",
+    "verifyNoOutput": "cfb version 출력이 없습니다",
+    "wordProgram": "워드"
   },
   "help": {
     "verifyTitle": "Verification",
@@ -244,9 +251,14 @@
     "updateFailed": "Update check failed",
     "updateBlocked": "Flasher task running — wait before installing",
     "updateDesktopOnly": "Check for updates in the desktop app",
-    "updateProxy": "업데이트 프록시",
-    "updateProxyPlaceholder": "http://127.0.0.1:7890",
-    "updateProxyHint": "앱은 시스템 프록시를 상속하지 않습니다. 비우면 직접 연결 후 실패 시 로컬 프록시 자동 시도"
+    "updateManifestMissing": "업데이트 매니페스트를 가져올 수 없습니다",
+    "updatePlatformMissing": "이 플랫폼용 설치 파일이 없습니다",
+    "updateNetworkFail": "업데이트 확인 네트워크 오류: {err}",
+    "aboutTitle": "정보",
+    "aboutClient": "클라이언트",
+    "aboutClientRepo": "클라이언트 저장소",
+    "aboutCfbRepo": "엔진 저장소",
+    "aboutFoot": "엔진은 NDJSON으로 클라이언트와 통신합니다. 툴체인 버전은 설정 페이지에 있습니다."
   },
   "auth": {
     "account": "계정",
@@ -305,7 +317,10 @@
     "saveWriteFail": "세이브 쓰기 실패",
     "saveEraseFail": "세이브 지우기 실패",
     "shopOpenFail": "상점을 열 수 없음: {err}",
-    "shopInvalidLink": "잘못된 상점 링크"
+    "shopInvalidLink": "잘못된 상점 링크",
+    "shopRefresh": "새로고침",
+    "shopOpenHome": "GBMake 홈 열기",
+    "shopEmpty": "사용 중인 라이터 추천이 없습니다"
   },
   "logs": {
     "empty": "로그 없음",

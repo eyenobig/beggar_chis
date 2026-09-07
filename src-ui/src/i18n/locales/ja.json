@@ -223,7 +223,14 @@
     "bossKeyCurrent": "現在: {combo}",
     "bossKeyRecord": "録",
     "bossKeyRecording": "キー組み合わせを押してください（Esc で取消）",
-    "bossKeyCancelRecord": "キャンセル"
+    "bossKeyCancelRecord": "キャンセル",
+    "pickDestDir": "保存先を選択",
+    "downloadStarted": "{title}を開始…",
+    "downloadDone": "{title}が完了しました",
+    "downloadFail": "ダウンロードに失敗しました",
+    "skyemuNoPackage": "このプラットフォーム用の SkyEmu パッケージがありません",
+    "verifyNoOutput": "cfb version の出力がありません",
+    "wordProgram": "ワード"
   },
   "help": {
     "verifyTitle": "Verification",
@@ -244,9 +251,14 @@
     "updateFailed": "Update check failed",
     "updateBlocked": "Flasher task running — wait before installing",
     "updateDesktopOnly": "Check for updates in the desktop app",
-    "updateProxy": "更新プロキシ",
-    "updateProxyPlaceholder": "http://127.0.0.1:7890",
-    "updateProxyHint": "アプリはシステムプロキシを継承しません。空なら直接接続→失敗時にローカルプロキシを自動試行"
+    "updateManifestMissing": "更新マニフェストを取得できませんでした",
+    "updatePlatformMissing": "このプラットフォーム用のインストーラがありません",
+    "updateNetworkFail": "更新確認のネットワークエラー: {err}",
+    "aboutTitle": "情報",
+    "aboutClient": "クライアント",
+    "aboutClientRepo": "クライアントリポジトリ",
+    "aboutCfbRepo": "書き込みエンジンリポジトリ",
+    "aboutFoot": "書き込みエンジンは NDJSON でクライアントと通信します。ツールチェーンのバージョンは設定ページにあります。"
   },
   "auth": {
     "account": "アカウント",
@@ -305,7 +317,10 @@
     "saveWriteFail": "セーブの書き込みに失敗",
     "saveEraseFail": "セーブの消去に失敗",
     "shopOpenFail": "ショップを開けません：{err}",
-    "shopInvalidLink": "無効なショップリンク"
+    "shopInvalidLink": "無効なショップリンク",
+    "shopRefresh": "更新",
+    "shopOpenHome": "GBMake ホームを開く",
+    "shopEmpty": "有効なライター推奨がありません"
   },
   "logs": {
     "empty": "ログはありません",

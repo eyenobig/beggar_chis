@@ -3,6 +3,7 @@
  * Pattern taken from the former skyemu.js resolve flow.
  */
 
+import { i18n } from '../../i18n'
 import { apiFetch } from '../http'
 
 /**
@@ -25,10 +26,25 @@ export async function fetchGithubRelease(repo, tag = 'latest', opts = {}) {
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`
 
   const res = await apiFetch(api, { headers })
+  // `/latest` 在只有 nightly pre-release、或尚未标 latest 时 404；改拿仓库里最新一条。
+  if (!res.ok && res.status === 404 && (!tag || tag === 'latest')) {
+    const listRes = await apiFetch(`https://api.github.com/repos/${repo}/releases?per_page=1`, {
+      headers,
+    })
+    if (listRes.ok) {
+      const list = await listRes.json()
+      const first = Array.isArray(list) ? list[0] : null
+      if (first) return mapGithubRelease(first, tag)
+    }
+  }
   if (!res.ok) {
-    throw new Error(`无法获取 ${repo} 发行版 (${res.status})`)
+    throw new Error(i18n.global.t('help.updateManifestMissing') + ` (${repo} ${res.status})`)
   }
   const release = await res.json()
+  return mapGithubRelease(release, tag)
+}
+
+function mapGithubRelease(release, tag) {
   const assets = (release.assets || []).map((a) => ({
     name: a.name,
     url: a.browser_download_url,

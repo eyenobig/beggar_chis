@@ -223,7 +223,14 @@
     "bossKeyCurrent": "Сейчас: {combo}",
     "bossKeyRecord": "Записать",
     "bossKeyRecording": "Нажмите сочетание (Esc — отмена)",
-    "bossKeyCancelRecord": "Отмена"
+    "bossKeyCancelRecord": "Отмена",
+    "pickDestDir": "Выберите папку",
+    "downloadStarted": "Запуск {title}…",
+    "downloadDone": "{title} завершён",
+    "downloadFail": "Ошибка загрузки",
+    "skyemuNoPackage": "Нет пакета SkyEmu для этой платформы",
+    "verifyNoOutput": "cfb version не вернул вывод",
+    "wordProgram": "слово"
   },
   "help": {
     "verifyTitle": "Verification",
@@ -244,9 +251,14 @@
     "updateFailed": "Update check failed",
     "updateBlocked": "Flasher task running — wait before installing",
     "updateDesktopOnly": "Check for updates in the desktop app",
-    "updateProxy": "Прокси обновлений",
-    "updateProxyPlaceholder": "http://127.0.0.1:7890",
-    "updateProxyHint": "Приложение не наследует системный прокси; пусто = напрямую, затем автоперебор локальных"
+    "updateManifestMissing": "Не удалось получить манифест обновления",
+    "updatePlatformMissing": "Нет установщика для этой платформы",
+    "updateNetworkFail": "Сетевая ошибка при проверке обновлений: {err}",
+    "aboutTitle": "О программе",
+    "aboutClient": "Клиент",
+    "aboutClientRepo": "Репозиторий клиента",
+    "aboutCfbRepo": "Репозиторий движка",
+    "aboutFoot": "Движок общается с клиентом по NDJSON. Версии toolchain — на странице настроек."
   },
   "auth": {
     "account": "Аккаунт",
@@ -305,7 +317,10 @@
     "saveWriteFail": "Не удалось записать сохранение",
     "saveEraseFail": "Не удалось стереть сохранение",
     "shopOpenFail": "Не удалось открыть магазин: {err}",
-    "shopInvalidLink": "Недействительная ссылка магазина"
+    "shopInvalidLink": "Недействительная ссылка магазина",
+    "shopRefresh": "Обновить",
+    "shopOpenHome": "Открыть главную GBMake",
+    "shopEmpty": "Нет активных рекомендаций программаторов"
   },
   "logs": {
     "empty": "Нет журнала",

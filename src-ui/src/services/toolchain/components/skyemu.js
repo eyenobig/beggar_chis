@@ -2,6 +2,7 @@
  * SkyEmu execution adapter — eyenobig DirectPlay + cfb; zip → exe + launch.
  * Acquisition uses shared githubRelease + downloadToolchainAsset.
  */
+import { i18n } from '../../../i18n'
 import {
   detectHostFamily,
   fetchGithubRelease,
@@ -13,10 +14,8 @@ import { versionFromInstallPath } from '../version.js'
 export const SKYEMU = Object.freeze({
   id: 'skyemu',
   displayName: 'SkyEmu',
-  /** DirectPlay + cfb：先 SkyEmu-GBmake，旧名 / ChisBread 作回落。 */
-  repos: ['eyenobig/SkyEmu-GBmake', 'eyenobig/SkyEmu', 'ChisBread/SkyEmu'],
+  /** 只认本仓 Release（v* / nightly），不要回落到 ChisBread / 上游官方包。 */
   repo: 'eyenobig/SkyEmu-GBmake',
-  /** Basenames used by Rust extract_zip_exe to locate the runnable. */
   preferredExeNames: ['SkyEmu.exe', 'skyemu.exe', 'SkyEmu', 'skyemu', 'SkyEmu.AppImage'],
 })
 
@@ -34,12 +33,27 @@ export function formatSkyEmuVersion(path, { local, unknown }) {
 function skyEmuPreferPatterns() {
   const family = detectHostFamily()
   if (family === 'win') {
-    return [/win.*x64.*\.zip$/i, /win.*\.zip$/i, /windows\.exe$/i, /win.*\.exe$/i, /\.exe$/i]
+    return [
+      /skyemu-win-x64\.zip$/i,
+      /win.*x64.*\.zip$/i,
+      /win.*\.zip$/i,
+      /windows\.exe$/i,
+      /win.*\.exe$/i,
+      /\.exe$/i,
+    ]
   }
   if (family === 'mac') {
-    return [/macos.*\.zip$/i, /mac.*\.zip$/i, /macos\.dmg$/i, /mac.*\.dmg$/i, /\.dmg$/i]
+    return [
+      /skyemu-macos\.zip$/i,
+      /macos.*\.zip$/i,
+      /mac.*\.zip$/i,
+      /macos\.dmg$/i,
+      /mac.*\.dmg$/i,
+      /\.dmg$/i,
+    ]
   }
   return [
+    /skyemu-linux-x64\.zip$/i,
     /linuxrelease/i,
     /linux.*x64.*\.zip$/i,
     /linux\.zip$/i,
@@ -53,25 +67,19 @@ function skyEmuPreferPatterns() {
  * @returns {Promise<{ tag: string, name: string, url: string, size: number }>}
  */
 export async function resolveSkyEmuRelease() {
-  let lastErr
-  for (const repo of SKYEMU.repos) {
-    try {
-      const release = await fetchGithubRelease(repo)
-      const name = preferredAssetName(release.assets, skyEmuPreferPatterns())
-      const asset = release.assets.find((a) => a.name === name)
-      if (!asset?.url) continue
-      return {
-        tag: release.tag,
-        name: asset.name,
-        url: asset.url,
-        size: asset.size,
-        repo,
-      }
-    } catch (err) {
-      lastErr = err
-    }
+  const release = await fetchGithubRelease(SKYEMU.repo)
+  const name = preferredAssetName(release.assets, skyEmuPreferPatterns())
+  const asset = release.assets.find((a) => a.name === name)
+  if (!asset?.url) {
+    throw new Error(`${i18n.global.t('settings.skyemuNoPackage')} (${SKYEMU.repo} ${release.tag})`)
   }
-  throw lastErr || new Error('当前平台没有可用的 SkyEmu 安装包')
+  return {
+    tag: release.tag,
+    name: asset.name,
+    url: asset.url,
+    size: asset.size,
+    repo: SKYEMU.repo,
+  }
 }
 
 /**

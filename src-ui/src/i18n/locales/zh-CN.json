@@ -223,7 +223,14 @@
     "bossKeyCurrent": "当前：{combo}",
     "bossKeyRecord": "录制",
     "bossKeyRecording": "按下组合键（Esc 取消）",
-    "bossKeyCancelRecord": "取消录制"
+    "bossKeyCancelRecord": "取消录制",
+    "pickDestDir": "选择保存路径",
+    "downloadStarted": "开始{title}…",
+    "downloadDone": "{title}已完成",
+    "downloadFail": "下载失败",
+    "skyemuNoPackage": "当前平台没有可用的 SkyEmu 安装包",
+    "verifyNoOutput": "cfb version 无输出",
+    "wordProgram": "单字"
   },
   "help": {
     "verifyTitle": "校验说明",
@@ -244,9 +251,14 @@
     "updateFailed": "检查更新失败",
     "updateBlocked": "烧录器任务运行中，请等待完成后再安装",
     "updateDesktopOnly": "请在桌面客户端中检查更新",
-    "updateProxy": "更新代理",
-    "updateProxyPlaceholder": "http://127.0.0.1:7890",
-    "updateProxyHint": "应用不继承系统代理；留空先直连，失败会自动尝试本地常见代理口"
+    "updateManifestMissing": "无法获取更新清单",
+    "updatePlatformMissing": "当前平台没有可用安装包",
+    "updateNetworkFail": "检查更新时网络失败：{err}",
+    "aboutTitle": "关于",
+    "aboutClient": "客户端",
+    "aboutClientRepo": "客户端仓库",
+    "aboutCfbRepo": "烧录引擎仓库",
+    "aboutFoot": "烧录引擎通过 NDJSON 与客户端通信；工具链版本见设置页。"
   },
   "auth": {
     "account": "账号",
@@ -305,7 +317,10 @@
     "saveWriteFail": "存档写入失败",
     "saveEraseFail": "存档擦除失败",
     "shopOpenFail": "无法打开商店：{err}",
-    "shopInvalidLink": "无效的商店链接"
+    "shopInvalidLink": "无效的商店链接",
+    "shopRefresh": "刷新",
+    "shopOpenHome": "打开 GBMake 首页",
+    "shopEmpty": "当前没有启用烧录器推荐"
   },
   "logs": {
     "empty": "暂无日志",
@@ -355,6 +370,25 @@
     "taskSaveDump": "读取存档",
     "taskSaveWrite": "写入存档",
     "taskSaveErase": "擦除存档",
-    "taskSaveVerify": "校验存档"
+    "taskSaveVerify": "校验存档",
+    "cfb": {
+      "unlockPpb": "解锁 PPB (All PPB Erase)…",
+      "ppbUnplug": "PPB 解锁后软件插拔…",
+      "ppbLockWarn": "警告: PPB Lock 非 1，All PPB Erase 可能无效",
+      "chipIdRetry": "芯片 ID 异常，软件插拔后重读…",
+      "noFlashId": "未识别到有效 flash ID，中止烧录（请重插卡带）",
+      "skipErase": "跳过擦除，直接写入（--no-erase，flash 须已为擦除态）",
+      "romBlank": "ROM 范围已空白，跳过扇区擦除",
+      "blankUnplug": "空白跳过后软件插拔，再写入",
+      "sectorFallback": "扇区擦除失败，回落整片擦除…",
+      "eraseBoot": "擦除开机窗（隐藏头部区）…",
+      "eraseBootOk": "开机窗擦除完成",
+      "eraseBootFail": "开机窗擦除失败（主区已清空）",
+      "verifying": "校验中…",
+      "verifyRound": "校验(第{round}轮): {mm} 字节不符, {sectors} 扇区",
+      "idLine": "ID:{id} 容量:{size} BuffWr:{buf}",
+      "eraseDoneWrite": "擦除完毕（{n} 扇区），开始写入",
+      "sectorEraseRange": "逐扇区擦除 ROM 范围（快路径, 0x{end} B, {n} 扇区）"
+    }
   }
 }

@@ -223,7 +223,14 @@
     "bossKeyCurrent": "Actuel : {combo}",
     "bossKeyRecord": "Enregistrer",
     "bossKeyRecording": "Appuyez sur une combinaison (Échap pour annuler)",
-    "bossKeyCancelRecord": "Annuler"
+    "bossKeyCancelRecord": "Annuler",
+    "pickDestDir": "Choisir le dossier",
+    "downloadStarted": "Démarrage de {title}…",
+    "downloadDone": "{title} terminé",
+    "downloadFail": "Échec du téléchargement",
+    "skyemuNoPackage": "Aucun paquet SkyEmu pour cette plateforme",
+    "verifyNoOutput": "cfb version n'a rien renvoyé",
+    "wordProgram": "mot"
   },
   "help": {
     "verifyTitle": "Verification",
@@ -244,9 +251,14 @@
     "updateFailed": "Update check failed",
     "updateBlocked": "Flasher task running — wait before installing",
     "updateDesktopOnly": "Check for updates in the desktop app",
-    "updateProxy": "Proxy de mise a jour",
-    "updateProxyPlaceholder": "http://127.0.0.1:7890",
-    "updateProxyHint": "L'app n'herite pas du proxy systeme ; vide = direct puis essai auto des proxies locaux"
+    "updateManifestMissing": "Impossible de récupérer le manifeste de mise à jour",
+    "updatePlatformMissing": "Pas d'installateur pour cette plateforme",
+    "updateNetworkFail": "Erreur réseau lors de la vérification : {err}",
+    "aboutTitle": "À propos",
+    "aboutClient": "Client",
+    "aboutClientRepo": "Dépôt client",
+    "aboutCfbRepo": "Dépôt du moteur",
+    "aboutFoot": "Le moteur communique avec le client en NDJSON. Les versions de la toolchain sont dans Réglages."
   },
   "auth": {
     "account": "Compte",
@@ -305,7 +317,10 @@
     "saveWriteFail": "Échec d’écriture de la sauvegarde",
     "saveEraseFail": "Échec d’effacement de la sauvegarde",
     "shopOpenFail": "Impossible d’ouvrir la boutique : {err}",
-    "shopInvalidLink": "Lien boutique invalide"
+    "shopInvalidLink": "Lien boutique invalide",
+    "shopRefresh": "Actualiser",
+    "shopOpenHome": "Ouvrir l'accueil GBMake",
+    "shopEmpty": "Aucune recommandation de flasheur activée"
   },
   "logs": {
     "empty": "Aucun journal",
