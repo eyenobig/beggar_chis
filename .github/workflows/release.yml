@@ -47,8 +47,8 @@ jobs:
       contents: write
     strategy:
       fail-fast: false
-      # Windows NSIS + macOS DMG。mac 用 --bundles 覆盖 tauri.conf 的 nsis 目标
-      # （nsis 仅 Windows 可打包）；cfb 侧已有两个 darwin sidecar 产物。
+      # Windows NSIS + macOS DMG + Linux AppImage/deb。
+      # mac/linux 用 --bundles 覆盖 tauri.conf 的 nsis 目标（nsis 仅 Windows）。
       matrix:
         include:
           - platform: windows-latest
@@ -60,6 +60,9 @@ jobs:
           - platform: macos-latest
             args: '--target x86_64-apple-darwin --bundles app,dmg'
             rust_target: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: '--target x86_64-unknown-linux-gnu --bundles appimage,deb'
+            rust_target: x86_64-unknown-linux-gnu
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -139,7 +142,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Chis Flasher / 烧丐 ${{ github.ref_name }}
-          releaseBody: Windows x64 installer (NSIS) · macOS ARM64/Intel (DMG).
+          releaseBody: Windows x64 installer (NSIS) · macOS ARM64/Intel (DMG) · Linux x64 (AppImage / deb).
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
