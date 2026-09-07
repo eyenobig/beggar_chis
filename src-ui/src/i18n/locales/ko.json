@@ -135,7 +135,6 @@
     }
   },
   "launch": {
-    "gbcUnsupported": "GB/GBC does not support the emulator",
     "start": "실행",
     "downloadSkyEmu": "SkyEmu 다운로드",
     "downloading": "다운로드 중…",

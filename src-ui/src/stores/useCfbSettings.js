@@ -226,7 +226,6 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
 
   function withBurnArgs(args) {
     const out = withPortArgs(args)
-    if (chipErase.value) out.push('--chip-erase')
     if (!verifyAfter.value) out.push('--no-verify')
     return out
   }

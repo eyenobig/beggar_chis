@@ -135,7 +135,6 @@
     }
   },
   "launch": {
-    "gbcUnsupported": "GB/GBC does not support the emulator",
     "start": "Запуск",
     "downloadSkyEmu": "Скачать SkyEmu",
     "downloading": "Загрузка…",

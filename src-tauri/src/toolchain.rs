@@ -87,6 +87,43 @@ pub fn detect_default_rule_dir() -> Option<String> {
     detect_dev_rule_data_dir()
 }
 
+/// 开发态：本机刚 sync 的 SkyEmu（windows-x64 / linux-x64 / mine 构建）。
+#[tauri::command]
+pub fn detect_default_skyemu() -> Option<String> {
+    detect_dev_skyemu()
+}
+
+fn skyemu_bin_name() -> &'static str {
+    if cfg!(windows) {
+        "SkyEmu.exe"
+    } else {
+        "SkyEmu"
+    }
+}
+
+/// 开发态候选：Windows sync 目录、Linux cmake 目录、mine 本地构建。
+fn dev_skyemu_candidates(project: &Path, name: &str) -> Vec<PathBuf> {
+    let sky = project.join("skyemu");
+    let mine = sky.join("skyemu-compare").join("mine").join("build");
+    vec![
+        sky.join("build").join("windows-x64").join(name),
+        sky.join("build").join("linux-x64").join(name),
+        sky.join("build").join("bin").join(name),
+        mine.join("dp").join("bin").join("Release").join(name),
+        mine.join("bin").join(name),
+    ]
+}
+
+fn detect_dev_skyemu() -> Option<String> {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let beggar = manifest.parent()?;
+    let project = beggar.parent()?;
+    dev_skyemu_candidates(project, skyemu_bin_name())
+        .into_iter()
+        .find(|p| p.is_file())
+        .map(|p| p.display().to_string())
+}
+
 /// 开发态探测已构建 cfb **可执行文件**（绝不返回源码根目录）。
 /// 优先级：配置的本地源码 `target/` → 本 app sidecar（ensure:cfb 本地编或 GitHub）。
 fn detect_dev_cfb_bin() -> Option<String> {
@@ -648,5 +685,40 @@ mod tests {
     fn resolve_accepts_missing_gracefully() {
         let err = resolve_cfb_binary("/no/such/cfb/path".into()).unwrap_err();
         assert!(err.contains("不存在") || err.contains("未找到") || err.contains("未配置"));
+    }
+
+    #[test]
+    fn detect_dev_skyemu_is_exe_when_present() {
+        let Some(bin) = detect_dev_skyemu() else {
+            return;
+        };
+        let path = Path::new(&bin);
+        assert!(path.is_file(), "detect_dev_skyemu 必须是文件: {bin}");
+        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        assert!(
+            name.eq_ignore_ascii_case("SkyEmu.exe") || name.eq_ignore_ascii_case("SkyEmu"),
+            "意外的 SkyEmu 文件名: {bin}"
+        );
+    }
+
+    #[test]
+    fn dev_skyemu_candidates_cover_linux_and_windows() {
+        let hits = dev_skyemu_candidates(Path::new("/proj"), "SkyEmu");
+        let joined: Vec<String> = hits
+            .iter()
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .collect();
+        assert!(
+            joined.iter().any(|p| p.ends_with("skyemu/build/linux-x64/SkyEmu")),
+            "必须包含 Linux cmake 同步目录: {joined:?}"
+        );
+        assert!(
+            joined.iter().any(|p| p.ends_with("skyemu/build/windows-x64/SkyEmu")),
+            "必须包含 Windows sync 目录: {joined:?}"
+        );
+        assert!(
+            joined.iter().any(|p| p.contains("skyemu-compare/mine/build")),
+            "必须包含 mine 本地构建: {joined:?}"
+        );
     }
 }

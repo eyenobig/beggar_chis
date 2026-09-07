@@ -135,7 +135,6 @@
     "checksumInvalid": "Invalid ({stored}/{computed})"
   },
   "launch": {
-    "gbcUnsupported": "GB/GBC does not support the emulator",
     "start": "Launch",
     "downloadSkyEmu": "Download SkyEmu",
     "downloading": "Downloading…",
@@ -200,7 +199,7 @@
     "thermalPaper": "Thermal paper toasts",
     "thermalPaperHint": "Show the cutter and thermal paper under SkyEmu. When off, toasts use a bottom banner instead so feedback is not lost.",
     "chipErase": "Full-chip erase when burning",
-    "chipEraseHint": "Erase the whole Flash before burning (slower, thorough); off = only the ROM-covered sectors (faster). Applies to Burn only; the Erase button is always whole-chip.",
+    "chipEraseHint": "Runs `cfb erase` on the whole Flash, then burns. Off = default burn (skip blank sectors). The Erase button is always whole-chip.",
     "unlockPpb": "Unlock PPB before burn",
     "unlockPpbHint": "Clear persistent protection bits before burning.",
     "verifyAfter": "Verify after burn",

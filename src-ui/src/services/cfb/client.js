@@ -19,7 +19,6 @@ function withTargetPort(args) {
 function withBurnArgs(args) {
   const settings = useCfbSettings()
   const out = withTargetPort(args)
-  if (settings.chipErase) out.push('--chip-erase')
   if (!settings.verifyAfter) out.push('--no-verify')
   return out
 }
@@ -42,7 +41,16 @@ export const cfbClient = Object.freeze({
   },
 
   burnRom({ romPath, mbc = false }, onEvent, onChild) {
-    return streamCfb(withBurnArgs(withMbc(['burn', '--rom', romPath], mbc)), onEvent, onChild)
+    const settings = useCfbSettings()
+    const burn = () =>
+      streamCfb(withBurnArgs(withMbc(['burn', '--rom', romPath], mbc)), onEvent, onChild)
+    if (!settings.chipErase) return burn()
+    // 整片清场走独立 `cfb erase`，再默认 burn。
+    // 不要传 --no-erase：GBA 会卡在写入 0% / @0x4000；空白扇区由 cfb 自己跳过 0x30。
+    return streamCfb(withTargetPort(withMbc(['erase'], mbc)), onEvent, onChild).then((erased) => {
+      if (erased.error) return erased
+      return burn()
+    })
   },
 
   erase({ mbc = false } = {}, onEvent, onChild) {

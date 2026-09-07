@@ -107,3 +107,16 @@ export function detectTriple() {
   if (process.platform === 'linux') return `${arch}-unknown-linux-gnu`
   throw new Error(`Unsupported platform: ${process.platform}/${process.arch}`)
 }
+
+/** Tauri sidecar 文件名：`cfb-<triple>`，仅 Windows 带 `.exe`。 */
+export function sidecarFileName(triple = detectTriple()) {
+  return triple.includes('windows') ? `cfb-${triple}.exe` : `cfb-${triple}`
+}
+
+/** chis-burner-cmd Release 已供货、烧丐 CI/打包应对齐的三元组。 */
+export const SIDECAR_TRIPLES = Object.freeze([
+  'x86_64-pc-windows-msvc',
+  'x86_64-unknown-linux-gnu',
+  'x86_64-apple-darwin',
+  'aarch64-apple-darwin',
+])

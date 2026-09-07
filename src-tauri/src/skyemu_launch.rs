@@ -1,21 +1,35 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// 写入 DirectPlay 配置 ROM，并以该路径为 argv[1] 启动 ChisBread SkyEmu。
+/// 写入 DirectPlay 配置 ROM，并以该路径为 argv[1] 启动 eyenobig/SkyEmu。
 ///
-/// 配置格式见 DirectPlayV0.3 release notes：
+/// 配置写到 SkyEmu 用户目录 `directplay/`（与模拟器侧一致），不要写 exe 旁。
+///
+/// GBA（`mbc=false`）:
 /// ```text
 /// READREALTIME
 /// <rom_size_bytes>
 /// SERIAL
-/// <port|AUTO>
-/// <backup|AUTO>
+/// AUTO
+/// AUTO
 /// ```
+/// 口行 AUTO：SkyEmu `cfb_refresh` 按 kind=gba 选台。末行 AUTO：`cfb save-probe`。
+///
+/// GB/GBC（`mbc=true`）:
+/// ```text
+/// READREALTIME
+/// <rom_size_bytes, 0=从卡带头识别>
+/// SERIAL
+/// AUTO
+/// ```
+/// 扩展名必须是 `.gb` / `.gbc`，SkyEmu 才走 GB 总线。
 #[tauri::command]
 pub fn launch_skyemu(
     exe: String,
     serial_port: Option<String>,
     rom_size: Option<u64>,
+    mbc: Option<bool>,
+    cfb_bin: Option<String>,
 ) -> Result<String, String> {
     let mut exe_path = PathBuf::from(exe.trim());
     // mac 手选的是 .app 包（目录）：解析到内层二进制 Contents/MacOS/<name>
@@ -34,20 +48,101 @@ pub fn launch_skyemu(
         return Err(format!("SkyEmu 可执行文件不存在: {}", exe_path.display()));
     }
 
-    let dir = exe_path
+    let cwd = exe_path
         .parent()
         .ok_or_else(|| "无法解析 SkyEmu 所在目录".to_string())?;
-    let rom_path = dir.join("virtual_rom.gba");
 
-    let port = normalize_serial_port(serial_port.as_deref().unwrap_or("AUTO"));
-    let size = rom_size.unwrap_or(32 * 1024 * 1024).max(1);
+    let is_mbc = mbc.unwrap_or(false);
+    // 烧丐启动一律 AUTO：SkyEmu 用 cfb detect 按 kind=gba / gb_mbc 选口。
+    // serial_port 保留给旧前端签名，不再钉 COM。
+    let _ = serial_port;
+    let port = launch_serial_port();
+    // GB: 0 = 从卡带头 0x148 识别真实 ROM 大小。烧录器 CFI 报的是 flash 芯片容量
+    // （常见 32MB），拿去当 GB ROM 窗口会把模拟器撑爆。
+    // GBA: 缺省仍用 32MB 窗口，有实测容量则用实测值。
+    let size = if is_mbc {
+        rom_size.unwrap_or(0)
+    } else {
+        rom_size.unwrap_or(32 * 1024 * 1024).max(1)
+    };
+    let name = if is_mbc {
+        "virtual_rom.gb"
+    } else {
+        "virtual_rom.gba"
+    };
+    let dir = directplay_dir();
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("创建 DirectPlay 目录失败: {e}"))?;
+    let rom_path = dir.join(name);
     // SkyEmu 解析要求 LF；用 \n 避免 Windows 写文件时变成 CRLF 后再被二次转换。
-    let config = format!("READREALTIME\n{size}\nSERIAL\n{port}\nAUTO\n");
+    let config = directplay_config(is_mbc, size, &port);
     std::fs::write(&rom_path, config.as_bytes())
-        .map_err(|e| format!("写入 virtual_rom.gba 失败: {e}"))?;
+        .map_err(|e| format!("写入 {name} 失败: {e}"))?;
 
-    spawn_skyemu(&exe_path, &rom_path, dir)?;
+    spawn_skyemu(&exe_path, &rom_path, cwd, cfb_bin.as_deref())?;
     Ok(rom_path.to_string_lossy().into_owned())
+}
+
+fn directplay_config(mbc: bool, rom_size: u64, port: &str) -> String {
+    if mbc {
+        format!("READREALTIME\n{rom_size}\nSERIAL\n{port}\n")
+    } else {
+        format!("READREALTIME\n{rom_size}\nSERIAL\n{port}\nAUTO\n")
+    }
+}
+
+/// 与 SkyEmu `SDL_GetPrefPath("Sky","SkyEmu")` + `directplay/` 对齐。
+fn directplay_dir() -> PathBuf {
+    #[cfg(windows)]
+    {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            if !appdata.is_empty() {
+                return PathBuf::from(appdata)
+                    .join("Sky")
+                    .join("SkyEmu")
+                    .join("directplay");
+            }
+        }
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            if !local.is_empty() {
+                return PathBuf::from(local)
+                    .join("SkyEmu")
+                    .join("directplay");
+            }
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            if !home.is_empty() {
+                return PathBuf::from(home)
+                    .join("Library")
+                    .join("Application Support")
+                    .join("Sky")
+                    .join("SkyEmu")
+                    .join("directplay");
+            }
+        }
+    }
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            if !home.is_empty() {
+                return PathBuf::from(home)
+                    .join(".local")
+                    .join("share")
+                    .join("Sky")
+                    .join("SkyEmu")
+                    .join("directplay");
+            }
+        }
+    }
+    std::env::temp_dir().join("SkyEmu").join("directplay")
+}
+
+/// 烧丐启动口：永远 AUTO。多烧录器时由 SkyEmu `cfb_refresh` 按 .gba / .gb 选 kind。
+fn launch_serial_port() -> String {
+    "AUTO".to_string()
 }
 
 fn normalize_serial_port(port: &str) -> String {
@@ -57,21 +152,21 @@ fn normalize_serial_port(port: &str) -> String {
     }
     #[cfg(windows)]
     {
-        // CreateFile 对 COM10+ 需要 \\.\COMx；SkyEmu AUTO 路径也用此形式。
+        // SkyEmu 开串口会自己加 \\.\ ；配置里只写 COM7，避免双重前缀。
         const WIN_DEV_PREFIX: &str = r"\\.\";
         if let Some(rest) = p.strip_prefix(WIN_DEV_PREFIX) {
-            return format!("{WIN_DEV_PREFIX}{rest}");
-        }
-        if p.len() >= 4 && p[..3].eq_ignore_ascii_case("COM") {
-            return format!("{WIN_DEV_PREFIX}{p}");
+            return rest.to_string();
         }
     }
     p.to_string()
 }
 
-fn spawn_skyemu(exe: &Path, rom: &Path, cwd: &Path) -> Result<(), String> {
+fn spawn_skyemu(exe: &Path, rom: &Path, cwd: &Path, cfb_bin: Option<&str>) -> Result<(), String> {
     let mut cmd = Command::new(exe);
     cmd.arg(rom).current_dir(cwd);
+    if let Some(bin) = cfb_bin.map(str::trim).filter(|s| !s.is_empty()) {
+        cmd.env("CFB_BIN", bin);
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -83,4 +178,76 @@ fn spawn_skyemu(exe: &Path, rom: &Path, cwd: &Path) -> Result<(), String> {
     cmd.spawn()
         .map_err(|e| format!("启动 SkyEmu 失败: {e}"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gba_config_asks_skyemu_to_probe_save() {
+        let s = directplay_config(false, 32 * 1024 * 1024, "AUTO");
+        assert_eq!(
+            s,
+            "READREALTIME\n33554432\nSERIAL\nAUTO\nAUTO\n",
+            "口 AUTO 时存档也应 AUTO：口由 cfb 按 kind=gba 选，存档走 save-probe"
+        );
+    }
+
+    #[test]
+    fn beggar_launch_always_auto() {
+        assert_eq!(launch_serial_port(), "AUTO", "烧丐启动必须 AUTO，不能钉已选 COM");
+        assert_eq!(
+            directplay_config(false, 32 * 1024 * 1024, &launch_serial_port()),
+            "READREALTIME\n33554432\nSERIAL\nAUTO\nAUTO\n",
+            "GBA 启动配置口必须是 AUTO"
+        );
+        assert_eq!(
+            directplay_config(true, 0, &launch_serial_port()),
+            "READREALTIME\n0\nSERIAL\nAUTO\n",
+            "GB 启动配置口必须是 AUTO；size=0 从头识别"
+        );
+    }
+
+    #[test]
+    fn gba_config_format_can_pin_com_for_skyemu_play() {
+        let s = directplay_config(false, 16 * 1024 * 1024, "COM7");
+        assert_eq!(
+            s,
+            "READREALTIME\n16777216\nSERIAL\nCOM7\nAUTO\n",
+            "格式器仍能写 COM（SkyEmu 侧栏点某台 Play）；烧丐启动不走这条"
+        );
+    }
+
+    #[test]
+    fn gb_config_uses_header_sized_rom() {
+        let s = directplay_config(true, 0, "AUTO");
+        assert_eq!(
+            s,
+            "READREALTIME\n0\nSERIAL\nAUTO\n",
+            "GB 配置 size=0 从头识别；烧丐口为 AUTO"
+        );
+    }
+
+    #[test]
+    fn windows_com_strips_device_prefix() {
+        let p = normalize_serial_port(r"\\.\COM13");
+        #[cfg(windows)]
+        assert_eq!(p, "COM13", "配置里只留 COM13，开串口由 SkyEmu 加 \\\\.\\");
+        #[cfg(not(windows))]
+        assert_eq!(p, r"\\.\COM13");
+    }
+
+    #[test]
+    fn empty_port_is_auto() {
+        assert_eq!(normalize_serial_port(""), "AUTO");
+        assert_eq!(normalize_serial_port("auto"), "AUTO");
+    }
+
+    #[test]
+    fn directplay_dir_is_not_exe_adjacent() {
+        let dir = directplay_dir();
+        let name = dir.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        assert_eq!(name, "directplay", "假 ROM 必须落在 directplay 子目录: {dir:?}");
+    }
 }

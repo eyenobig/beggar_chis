@@ -6,12 +6,12 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { detectTriple, repoRoot } from './cfb-config.mjs'
+import { detectTriple, repoRoot, sidecarFileName } from './cfb-config.mjs'
 
 const root = repoRoot()
 const target = detectTriple()
 const windows = target.includes('windows')
-const sidecarName = windows ? `cfb-${target}.exe` : `cfb-${target}`
+const sidecarName = sidecarFileName(target)
 const sidecarPath = join(root, 'src-tauri', 'binaries', sidecarName)
 const requiredSaveTypes = ['eeprom4k', 'eeprom64k', 'sram', 'flash', 'fram']
 

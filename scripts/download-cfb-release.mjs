@@ -2,14 +2,12 @@
 /** Download a prebuilt cfb sidecar from the configured chis-burner-cmd GitHub Release. */
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { detectTriple, githubConfig, repoRoot } from './cfb-config.mjs'
+import { detectTriple, githubConfig, repoRoot, sidecarFileName } from './cfb-config.mjs'
 
 const root = repoRoot()
 const { repository, releaseTag, token } = githubConfig()
 const target = detectTriple()
-const assetName = process.platform === 'win32' || target.includes('windows')
-  ? `cfb-${target}.exe`
-  : `cfb-${target}`
+const assetName = sidecarFileName(target)
 
 const apiUrl = releaseTag === 'latest'
   ? `https://api.github.com/repos/${repository}/releases/latest`

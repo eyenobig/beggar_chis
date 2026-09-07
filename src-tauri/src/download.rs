@@ -158,6 +158,7 @@ fn default_preferred_exe_names() -> Vec<String> {
         "skyemu.exe".into(),
         "skyemu".into(),
         "skyemu.app".into(),
+        "skyemu.appimage".into(),
     ]
 }
 
@@ -190,7 +191,12 @@ fn find_preferred_exe(
             preferred = Some(path);
             break;
         }
-        if any_exe.is_none() && (name.ends_with(".exe") || name.ends_with(".app")) {
+        if any_exe.is_none()
+            && (name.ends_with(".exe")
+                || name.ends_with(".app")
+                || name.ends_with(".appimage")
+                || name == "skyemu")
+        {
             any_exe = Some(path);
         }
     }

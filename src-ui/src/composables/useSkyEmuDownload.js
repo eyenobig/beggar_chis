@@ -3,7 +3,8 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { inTauri, cfbClient } from '../services/cfb'
-import { downloadSkyEmuTo, resolveSkyEmuRelease } from '../services/toolchain'
+import { downloadSkyEmuTo, resolveCfbBinary, resolveSkyEmuRelease } from '../services/toolchain'
+import { useCfbSettings } from '../stores/useCfbSettings'
 import {
   pickAssetDestDir,
   resolveAssetDestDir,
@@ -17,7 +18,17 @@ import { useToast } from '../stores/useToast'
 
 const downloading = ref(false)
 
-/** ChisBread DirectPlay 默认按 32MB GBA 窗口映射；有卡带 info 时用实测容量。 */
+/** Windows exe / Linux AppImage 或无后缀 SkyEmu / mac .app 及包内二进制。 */
+export function isSkyEmuBinary(path) {
+  const raw = String(path || '').trim()
+  if (!raw) return false
+  if (/\.(exe|app|AppImage|dmg)$/i.test(raw)) return true
+  const norm = raw.replace(/\\/g, '/')
+  if (/\.app\/contents\/macos\//i.test(norm)) return true
+  return /(^|\/)SkyEmu$/i.test(norm)
+}
+
+/** DirectPlay 默认按 32MB GBA 窗口映射；有卡带 info 时用实测容量。 */
 const DEFAULT_DIRECTPLAY_ROM_SIZE = 32 * 1024 * 1024
 
 /** 共享：SkyEmu 下载 / 启动（首页按钮与设置页共用） */
@@ -26,19 +37,12 @@ export function useSkyEmuDownload() {
   const emu = useEmulator()
   const conn = useConnection()
   const cart = useCartData()
+  const cfbSettings = useCfbSettings()
   const { skyEmuPath, currentPlatform } = storeToRefs(emu)
   const taskProgress = useTaskProgress()
   const toast = useToast()
 
-  const canLaunch = computed(() => {
-    const p = String(skyEmuPath.value || '')
-    // Windows exe / Linux AppImage / mac 手选的 .app 或 .dmg；
-    // mac zip 解出的产物是 .app 包内层二进制（…/SkyEmu.app/Contents/MacOS/SkyEmu），也认。
-    return /\.(exe|app|AppImage|dmg)$/i.test(p) || /\.app\/contents\/macos\//i.test(p)
-  })
-
-  /** DirectPlay / SkyEmu 启动仅支持 GBA；平台 `gbc` 含 GB&GBC。 */
-  const emulatorSupported = computed(() => currentPlatform.value !== 'gbc')
+  const canLaunch = computed(() => isSkyEmuBinary(skyEmuPath.value))
 
   function openSettingsWithProgress() {
     emu.openBookmark(BOOKMARK_IDS.settings)
@@ -46,15 +50,11 @@ export function useSkyEmuDownload() {
   }
 
   /**
-   * DirectPlay：生成 virtual_rom.gba（READREALTIME/SERIAL）并带参启动。
+   * DirectPlay：按平台写 virtual_rom.gba / virtual_rom.gb 并带参启动。
    * 裸 openPath 不会读卡带。串口由 SkyEmu 独占，启动前释放 cfb。
    */
   async function launchSkyEmu() {
     if (!canLaunch.value || downloading.value) return
-    if (!emulatorSupported.value) {
-      toast.error(t('launch.gbcUnsupported'))
-      return
-    }
     if (!inTauri) {
       toast.error(t('launch.desktopOnly'))
       return
@@ -66,15 +66,8 @@ export function useSkyEmuDownload() {
     }
 
     try {
-      // 尽量拿到已选 COM，避免 AUTO 漏检非 0483:0721 设备
-      if (!conn.selectedPort) {
-        await conn.detect()
-      }
-      const serialPort = conn.selectedPort || 'AUTO'
-      if (!conn.selectedPort) {
-        toast.error(t('launch.noBurner'))
-        return
-      }
+      // 口写 AUTO：SkyEmu 用 cfb detect+info 按 gba / gb_mbc 选台，不钉本页已选 COM。
+      const serialPort = 'AUTO'
 
       // 释放串口给 SkyEmu；不走 disconnect()，以免关掉自动重连偏好
       try {
@@ -84,15 +77,30 @@ export function useSkyEmuDownload() {
       }
       conn.connected = false
 
-      const romSize =
-        Number(cart.flashInfo?.capacityBytes) > 0
+      const isMbc = currentPlatform.value === 'gbc'
+      // GB: 传 0，让 SkyEmu 读卡带头 0x148。CFI 容量是烧录器 flash 芯片的，不是 GB ROM。
+      // GBA: 有实测容量用实测，否则 32MB 窗口。
+      const romSize = isMbc
+        ? 0
+        : Number(cart.flashInfo?.capacityBytes) > 0
           ? Number(cart.flashInfo.capacityBytes)
           : DEFAULT_DIRECTPLAY_ROM_SIZE
+
+      let cfbBin = String(cfbSettings.cfbBinPath || '').trim()
+      if (cfbBin) {
+        try {
+          cfbBin = String(await resolveCfbBinary(cfbBin) || cfbBin)
+        } catch {
+          // 路径无效时仍启动：SkyEmu 会自己找 exe 旁 / PATH 的 cfb
+        }
+      }
 
       const romPath = await invoke('launch_skyemu', {
         exe: skyEmuPath.value,
         serialPort,
         romSize,
+        mbc: isMbc,
+        cfbBin: cfbBin || null,
       })
 
       const msg = t('launch.directPlayLog', { port: serialPort, rom: romPath })
@@ -159,7 +167,6 @@ export function useSkyEmuDownload() {
     skyEmuPath,
     downloading,
     canLaunch,
-    emulatorSupported,
     downloadSkyEmu,
     launchSkyEmu,
     pickDestDir: () =>

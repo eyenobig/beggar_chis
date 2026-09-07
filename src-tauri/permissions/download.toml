@@ -5,7 +5,7 @@ commands.allow = ["download_file", "extract_zip_exe"]
 
 [[permission]]
 identifier = "allow-launch-skyemu"
-description = "Allow writing DirectPlay virtual_rom.gba and launching SkyEmu with that ROM argument."
+description = "Allow writing DirectPlay virtual_rom.gba / virtual_rom.gb and launching SkyEmu with that ROM argument."
 commands.allow = ["launch_skyemu"]
 
 [[permission]]

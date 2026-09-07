@@ -6,6 +6,7 @@ commands.allow = [
   "sync_local_paths_json",
   "detect_default_cfb_bin",
   "detect_default_rule_dir",
+  "detect_default_skyemu",
   "resolve_cfb_binary",
   "cfb_exec",
   "cfb_spawn",

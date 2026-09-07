@@ -16,7 +16,7 @@ permissions:
 
 env:
   CFB_GITHUB_REPO: eyenobig/chis-burner-cmd
-  CFB_RELEASE_TAG: ${{ vars.CFB_RELEASE_TAG || 'v0.4.2' }}
+  CFB_RELEASE_TAG: ${{ vars.CFB_RELEASE_TAG || 'v0.4.3' }}
 
 jobs:
   frontend:
@@ -29,13 +29,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run check:sidecar-bind
       - run: npm run build:web
 
   desktop:
     name: ${{ matrix.name }}
     strategy:
       fail-fast: false
-      # Windows + macOS（cfb 侧 build.yml 已发布两个 darwin 产物）。
+      # Windows + macOS + Linux（cfb Release 已有对应 sidecar）。
       matrix:
         include:
           - name: Windows x64
@@ -49,6 +50,10 @@ jobs:
           - name: macOS Intel (cross on ARM)
             os: macos-latest
             target: x86_64-apple-darwin
+            app: tauri-app
+          - name: Linux x64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
             app: tauri-app
 
     runs-on: ${{ matrix.os }}

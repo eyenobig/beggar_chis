@@ -135,7 +135,6 @@
     "checksumInvalid": "无效 ({stored}/{computed})"
   },
   "launch": {
-    "gbcUnsupported": "GB/GBC 不支持模拟器",
     "start": "启动",
     "downloadSkyEmu": "下载 SkyEmu",
     "downloading": "下载中…",
@@ -200,7 +199,7 @@
     "thermalPaper": "热敏纸提示",
     "thermalPaperHint": "在 SkyEmu 下方显示刀口与热敏纸吐纸；关闭后改为窗口底部横幅提示，反馈不会丢失。",
     "chipErase": "烧录时全片擦除",
-    "chipEraseHint": "烧录前先擦除整颗 Flash（慢而彻底）；关闭则只擦 ROM 覆盖的扇区（快）。仅影响「烧录」，「擦除」按钮本身始终是整片。",
+    "chipEraseHint": "烧录前先 `cfb erase` 擦除整颗 Flash，再写入；关闭则走默认 burn（空白扇区跳过）。仅影响「烧录」，「擦除」按钮始终整片。",
     "unlockPpb": "烧录前解锁 PPB",
     "unlockPpbHint": "烧录前解除持久保护位。",
     "verifyAfter": "烧录后校验",

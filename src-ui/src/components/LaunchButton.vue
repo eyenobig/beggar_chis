@@ -1,16 +1,11 @@
 <script setup>
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { LoaderCircle, Play, Download } from '@lucide/vue'
 import { useSkyEmuDownload } from '../composables/useSkyEmuDownload'
 
-const { t } = useI18n()
-const { downloading, canLaunch, emulatorSupported, downloadSkyEmu, launchSkyEmu } =
-  useSkyEmuDownload()
+const { downloading, canLaunch, downloadSkyEmu, launchSkyEmu } = useSkyEmuDownload()
 
-const blocked = computed(() => !emulatorSupported.value)
-const disabled = computed(() => downloading.value || blocked.value)
-const reason = computed(() => (blocked.value ? t('launch.gbcUnsupported') : undefined))
+const disabled = computed(() => downloading.value)
 
 function onClick() {
   if (disabled.value) return
@@ -27,14 +22,9 @@ function onClick() {
       data-no-drag
       class="flex h-12 w-full items-center justify-center gap-2 rounded-xl border transition-all"
       :class="disabled
-        ? blocked && !downloading
-          ? 'cursor-not-allowed bg-zinc-200 text-zinc-400 border-zinc-200'
-          : 'cursor-wait bg-zinc-800 text-white border-zinc-800 opacity-90'
+        ? 'cursor-wait bg-zinc-800 text-white border-zinc-800 opacity-90'
         : 'cursor-pointer bg-zinc-900 text-white border-zinc-900 hover:bg-black active:scale-[0.99]'"
       :disabled="disabled"
-      :title="reason"
-      :aria-disabled="blocked || undefined"
-      :aria-label="reason"
       @click="onClick"
     >
       <LoaderCircle

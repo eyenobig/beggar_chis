@@ -1,5 +1,5 @@
 /**
- * SkyEmu execution adapter — ChisBread fork: zip → exe + DirectPlay launch.
+ * SkyEmu execution adapter — eyenobig DirectPlay + cfb; zip → exe + launch.
  * Acquisition uses shared githubRelease + downloadToolchainAsset.
  */
 import {
@@ -13,9 +13,11 @@ import { versionFromInstallPath } from '../version.js'
 export const SKYEMU = Object.freeze({
   id: 'skyemu',
   displayName: 'SkyEmu',
-  repo: 'ChisBread/SkyEmu',
+  /** DirectPlay + cfb：先 SkyEmu-GBmake，旧名 / ChisBread 作回落。 */
+  repos: ['eyenobig/SkyEmu-GBmake', 'eyenobig/SkyEmu', 'ChisBread/SkyEmu'],
+  repo: 'eyenobig/SkyEmu-GBmake',
   /** Basenames used by Rust extract_zip_exe to locate the runnable. */
-  preferredExeNames: ['skyemu.exe', 'skyemu'],
+  preferredExeNames: ['SkyEmu.exe', 'skyemu.exe', 'SkyEmu', 'skyemu', 'SkyEmu.AppImage'],
 })
 
 /**
@@ -37,25 +39,39 @@ function skyEmuPreferPatterns() {
   if (family === 'mac') {
     return [/macos.*\.zip$/i, /mac.*\.zip$/i, /macos\.dmg$/i, /mac.*\.dmg$/i, /\.dmg$/i]
   }
-  return [/linux\.zip$/i, /linux/i, /\.AppImage$/i]
+  return [
+    /linuxrelease/i,
+    /linux.*x64.*\.zip$/i,
+    /linux\.zip$/i,
+    /linux.*\.AppImage$/i,
+    /\.AppImage$/i,
+    /linux/i,
+  ]
 }
 
 /**
  * @returns {Promise<{ tag: string, name: string, url: string, size: number }>}
  */
 export async function resolveSkyEmuRelease() {
-  const release = await fetchGithubRelease(SKYEMU.repo)
-  const name = preferredAssetName(release.assets, skyEmuPreferPatterns())
-  const asset = release.assets.find((a) => a.name === name)
-  if (!asset?.url) {
-    throw new Error('当前平台没有可用的 SkyEmu 安装包')
+  let lastErr
+  for (const repo of SKYEMU.repos) {
+    try {
+      const release = await fetchGithubRelease(repo)
+      const name = preferredAssetName(release.assets, skyEmuPreferPatterns())
+      const asset = release.assets.find((a) => a.name === name)
+      if (!asset?.url) continue
+      return {
+        tag: release.tag,
+        name: asset.name,
+        url: asset.url,
+        size: asset.size,
+        repo,
+      }
+    } catch (err) {
+      lastErr = err
+    }
   }
-  return {
-    tag: release.tag,
-    name: asset.name,
-    url: asset.url,
-    size: asset.size,
-  }
+  throw lastErr || new Error('当前平台没有可用的 SkyEmu 安装包')
 }
 
 /**

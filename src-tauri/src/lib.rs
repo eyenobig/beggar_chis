@@ -48,6 +48,7 @@ pub fn run() {
             toolchain::read_cargo_version,
             toolchain::detect_default_cfb_bin,
             toolchain::detect_default_rule_dir,
+            toolchain::detect_default_skyemu,
             toolchain::bootstrap_toolchain_paths,
             toolchain::sync_local_paths_json,
             toolchain::install_dir,

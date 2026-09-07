@@ -5,6 +5,10 @@ import { useTaskProgress } from './useTaskProgress'
 import { getLocalPaths, patchLocalConfig } from '../services/localConfig'
 import { i18n } from '../i18n'
 
+const inTauri =
+  typeof window !== 'undefined' &&
+  ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
+
 function t(key, params) {
   return i18n.global.t(key, params)
 }
@@ -47,6 +51,18 @@ export const useEmulator = defineStore('emulator', () => {
   watch(skyEmuPath, (path) => {
     patchLocalConfig('paths', { skyEmuPath: path || '' })
   })
+
+  async function detectLocalSkyEmu() {
+    if (!inTauri || skyEmuPath.value) return
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const found = await invoke('detect_default_skyemu')
+      if (found) skyEmuPath.value = String(found)
+    } catch {
+      // 无本机构建时保持空，走设置页下载 / 选路径
+    }
+  }
+  detectLocalSkyEmu()
 
   const logsOpen = computed({
     get: () => LOGS_TABS.has(activeBookmark.value),
