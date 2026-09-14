@@ -142,9 +142,39 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Chis Flasher / 烧丐 ${{ github.ref_name }}
-          releaseBody: Windows x64 installer (NSIS) · macOS ARM64/Intel (DMG) · Linux x64 (AppImage / deb).
+          releaseBody: |
+            Windows x64 installer (NSIS) · macOS ARM64/Intel (DMG) · Linux x64 GUI (AppImage / deb).
+
+            Linux: prefer the `.deb` package on Ubuntu/Debian (`sudo apt install ./Chis.Flasher_*_amd64.deb`). The AppImage is portable, not an installer. WSL must have WSLg or another graphical desktop/display; a command-only WSL session cannot show desktop windows.
+
+            Updater signatures are collected in the `signatures-*.zip` archive. They are verification data, not installers.
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
+  organize-signatures:
+    name: Collect updater signatures
+    needs: publish-tauri
+    if: ${{ startsWith(github.ref, 'refs/tags/') && needs.publish-tauri.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Archive signatures and remove loose signature assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          mkdir signatures
+          gh release download "$RELEASE_TAG" --pattern '*.sig' --dir signatures
+          test -n "$(find signatures -maxdepth 1 -type f -name '*.sig' -print -quit)"
+          archive="signatures-${RELEASE_TAG}.zip"
+          (cd signatures && zip -q "../$archive" ./*.sig)
+          gh release upload "$RELEASE_TAG" "$archive" --clobber
+          gh api --paginate "repos/$GH_REPO/releases/tags/$RELEASE_TAG" --jq '.assets[] | select(.name | endswith(".sig")) | .id' |
+            while read -r asset_id; do
+              gh api --method DELETE "repos/$GH_REPO/releases/assets/$asset_id"
+            done

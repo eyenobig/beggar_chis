@@ -1,8 +1,8 @@
 [package]
 name = "tauri-app"
-version = "0.4.0"
-description = "A Tauri App"
-authors = ["you"]
+version = "0.4.1"
+description = "Chis Flasher desktop cartridge tool"
+authors = ["GBMake"]
 license = "GPL-3.0-only"
 edition = "2021"
 
