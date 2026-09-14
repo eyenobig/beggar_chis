@@ -10,6 +10,7 @@
  * production ensure still prefers the Rust path (SHA-256 + version verify).
  */
 import { invoke } from '@tauri-apps/api/core'
+import { i18n } from '../../../i18n'
 import { fetchGithubRelease } from '../githubRelease.js'
 import { downloadToolchainAsset } from '../download.js'
 
@@ -21,13 +22,17 @@ export const CFB = Object.freeze({
   defaultTag: 'latest',
 })
 
-/**
- * Settings row badge: prefer `cfb version` result stored in settings.
- * @param {string} [activeVersion]
- * @returns {string}
- */
+/** Settings 徽章：只展示现场 `cfb version`，不读 package.json compatibility。 */
 export function formatCfbVersion(activeVersion) {
   return String(activeVersion || '').trim() || '—'
+}
+
+/** `cfb version --json`：`{type:version}` 或纯 log。 */
+export function versionFromCfbEvent(ev) {
+  if (!ev || typeof ev !== 'object') return ''
+  if (ev.type === 'version' && ev.version) return String(ev.version).trim()
+  if (ev.type === 'log' && ev.message) return String(ev.message).replace(/^cfb\s+/i, '').trim()
+  return ''
 }
 
 /**
@@ -41,7 +46,7 @@ export async function resolveCfbRelease(triple) {
   const assetName = isWin ? `cfb-${hostTriple}.exe` : `cfb-${hostTriple}`
   const asset = release.assets.find((a) => a.name === assetName)
   if (!asset?.url) {
-    throw new Error(`CFB ${release.tag} 缺少平台资产 ${assetName}`)
+    throw new Error(`${i18n.global.t('help.updatePlatformMissing')} (${release.tag} ${assetName})`)
   }
   return {
     tag: release.tag,

@@ -8,13 +8,11 @@ import { Download, ExternalLink, LoaderCircle, RefreshCw } from '@lucide/vue'
 import { useDragScroll } from '../../../composables/useDragScroll'
 import { inTauri } from '../../../services/cfb'
 import { useAppUpdater } from '../../../stores/useAppUpdater'
-import { useCfbSettings } from '../../../stores/useCfbSettings'
 import { useToast } from '../../../stores/useToast'
 
 const { scrollBind } = useDragScroll()
 const { t } = useI18n()
 const toast = useToast()
-const settings = useCfbSettings()
 const appUpdater = useAppUpdater()
 const {
   currentVersion: appVersion,
@@ -150,29 +148,17 @@ async function onUpdateAction() {
           <div class="text-right text-zinc-500">{{ updateProgressPct }}%</div>
         </div>
         <div v-if="updateError" class="break-words text-red-400">{{ updateError }}</div>
-        <div class="flex items-center justify-between gap-3 pt-1">
-          <span class="shrink-0 text-zinc-500">{{ $t('help.updateProxy') }}</span>
-          <input
-            v-model="settings.updateProxy"
-            data-no-drag
-            type="text"
-            spellcheck="false"
-            class="min-w-0 flex-1 rounded border border-white/10 bg-zinc-900 px-1.5 py-0.5 text-right text-[10px] font-semibold text-zinc-300 outline-none focus:border-zinc-500"
-            :placeholder="$t('help.updateProxyPlaceholder')"
-            :title="$t('help.updateProxyHint')"
-          />
-        </div>
       </div>
     </section>
 
     <section class="space-y-3">
-      <h3 class="text-[11px] font-black uppercase tracking-widest text-zinc-400">About</h3>
+      <h3 class="text-[11px] font-black uppercase tracking-widest text-zinc-400">{{ $t('help.aboutTitle') }}</h3>
 
       <div class="space-y-2.5">
         <div class="flex items-center justify-between gap-3 border-b border-white/10 pb-2.5">
           <div class="min-w-0">
-            <div class="text-[11px] font-bold text-zinc-300">客户端</div>
-            <div class="text-[9px] text-zinc-600">Chis Flasher / 烧丐</div>
+            <div class="text-[11px] font-bold text-zinc-300">{{ $t('help.aboutClient') }}</div>
+            <div class="text-[9px] text-zinc-600">{{ $t('app.title') }}</div>
           </div>
           <span class="text-[11px] font-black text-emerald-400 tabular-nums">{{ clientVersion }}</span>
         </div>
@@ -189,7 +175,7 @@ async function onUpdateAction() {
           @click="openRepo(CLIENT_REPO_URL)"
         >
           <div class="min-w-0">
-            <div class="text-[11px] font-bold text-zinc-300">客户端仓库</div>
+            <div class="text-[11px] font-bold text-zinc-300">{{ $t('help.aboutClientRepo') }}</div>
             <div class="truncate text-[9px] text-zinc-600">{{ CLIENT_REPO_URL }}</div>
           </div>
           <ExternalLink class="h-3.5 w-3.5 shrink-0 text-zinc-500" :stroke-width="2.25" />
@@ -201,7 +187,7 @@ async function onUpdateAction() {
           @click="openRepo(CFB_REPO_URL)"
         >
           <div class="min-w-0">
-            <div class="text-[11px] font-bold text-zinc-300">烧录引擎仓库</div>
+            <div class="text-[11px] font-bold text-zinc-300">{{ $t('help.aboutCfbRepo') }}</div>
             <div class="truncate text-[9px] text-zinc-600">{{ CFB_REPO_URL }}</div>
           </div>
           <ExternalLink class="h-3.5 w-3.5 shrink-0 text-zinc-500" :stroke-width="2.25" />
@@ -210,7 +196,7 @@ async function onUpdateAction() {
     </section>
 
     <p class="text-[10px] leading-relaxed text-zinc-600">
-      烧录引擎通过 NDJSON 与客户端通信；工具链版本见设置页。
+      {{ $t('help.aboutFoot') }}
     </p>
   </div>
 </template>

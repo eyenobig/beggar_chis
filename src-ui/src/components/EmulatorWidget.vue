@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
@@ -106,6 +106,7 @@ function isOverHomepage(position) {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
+  await nextTick()
   addLog(t('logs.systemInit'))
   if (inTauri) {
     try {

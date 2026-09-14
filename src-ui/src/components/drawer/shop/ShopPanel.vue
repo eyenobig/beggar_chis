@@ -231,7 +231,7 @@ defineExpose({ loadRecommendations, loading })
       v-else
       class="flex min-h-[10rem] flex-col items-center justify-center gap-2 rounded-xl border border-white/10 text-[10px] text-zinc-500"
     >
-      <span>{{ error || '当前没有启用烧录器推荐' }}</span>
+      <span>{{ error || $t('toast.shopEmpty') }}</span>
       <button
         data-no-drag
         type="button"

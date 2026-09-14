@@ -5,8 +5,13 @@
  */
 import { dirname } from '@tauri-apps/api/path'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
+import { i18n } from '../i18n'
 import { useTaskProgress } from '../stores/useTaskProgress'
 import { useToast } from '../stores/useToast'
+
+function t(key, params) {
+  return i18n.global.t(key, params)
+}
 
 /**
  * @param {string | null | undefined} path file or directory
@@ -29,7 +34,7 @@ export async function pickAssetDestDir({ title, defaultPath } = {}) {
   const selected = await openDialog({
     directory: true,
     multiple: false,
-    title: title || '选择保存路径',
+    title: title || t('settings.pickDestDir'),
     defaultPath: defaultPath || undefined,
   })
   if (!selected) return null
@@ -63,7 +68,7 @@ export async function runToolchainDownloadTask({
     title,
     detail: detail || '',
   })
-  addLog?.(`开始${title}…`, 'warn')
+  addLog?.(t('settings.downloadStarted', { title }), 'warn')
   try {
     const dest = await run({
       taskId,
@@ -71,12 +76,12 @@ export async function runToolchainDownloadTask({
       updateProgress: (done, total) => taskProgress.updateProgress(taskId, done, total),
     })
     taskProgress.completeTask(taskId, dest)
-    const msg = `${title}已完成`
+    const msg = t('settings.downloadDone', { title })
     toast.success(msg)
     addLog?.(`${msg}\n${dest}`, 'success')
     return dest
   } catch (error) {
-    const msg = String(error?.message || error || '下载失败')
+    const msg = String(error?.message || error || t('settings.downloadFail'))
     taskProgress.failTask(taskId, msg)
     toast.error(msg)
     addLog?.(msg, 'error')

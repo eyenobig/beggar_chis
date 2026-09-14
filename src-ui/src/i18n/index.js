@@ -38,13 +38,16 @@ export function detectSystemLocale() {
   const lang = (typeof navigator !== "undefined" ? navigator.language : "" || "").toLowerCase();
   if (lang.startsWith("zh")) return "zh-CN";
   const prefix = lang.split("-")[0];
-  return messages[prefix] ? prefix : "zh-CN";
+  return messages[prefix] ? prefix : "en";
 }
 
 /** 读取偏好：auto 或具体语言码 */
 export function getLocalePreference() {
   const locale = getLocalLocale();
-  const pref = locale.pref || getLocalSettings().language;
+  const settingsLang = getLocalSettings().language;
+  // 设置页显式语言优先：避免 locale.pref=auto 把 UI 落回系统中文。
+  if (settingsLang && settingsLang !== "auto" && messages[settingsLang]) return settingsLang;
+  const pref = locale.pref || settingsLang;
   if (pref === "auto") return "auto";
   if (pref && messages[pref]) return pref;
   // 兼容旧版只存了 resolved
@@ -79,6 +82,6 @@ export const i18n = createI18n({
   legacy: false,
   globalInjection: true,
   locale: resolveLocale(getLocalePreference()),
-  fallbackLocale: "zh-CN",
+  fallbackLocale: "en",
   messages,
 });

@@ -1,5 +1,6 @@
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { apiUrl } from '../config/api'
+import { i18n } from '../i18n'
 import { inTauri } from './cfb'
 import { apiFetch } from './http'
 import {
@@ -296,10 +297,10 @@ export async function fetchFlasherStoreRecommendations({ signal } = {}) {
 /** 仅允许打开 GBMake HTTPS storefront（含 CMS 富文本链接的 /us/* 路径）。 */
 export async function openFlasherStoreUrl(url) {
   const parsed = new URL(String(url || ''))
-  if (parsed.origin !== STOREFRONT_ORIGIN) throw new Error('不允许打开非 GBMake 商店地址')
-  if (parsed.protocol !== 'https:') throw new Error('仅允许 HTTPS')
+  if (parsed.origin !== STOREFRONT_ORIGIN) throw new Error(i18n.global.t('toast.shopInvalidLink'))
+  if (parsed.protocol !== 'https:') throw new Error(i18n.global.t('toast.shopInvalidLink'))
   if (!/^\/us(?:\/.*)?$/.test(parsed.pathname)) {
-    throw new Error('无效的 GBMake 商店路径')
+    throw new Error(i18n.global.t('toast.shopInvalidLink'))
   }
   if (inTauri) {
     await openUrl(parsed.toString())

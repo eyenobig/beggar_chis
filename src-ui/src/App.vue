@@ -31,7 +31,7 @@ async function clientBurn(path) {
   const conn = useConnection()
   emu.toggleLogs(true, 'rom')
   if (!cart.setDropped(path)) {
-    return { ok: false, error: '无法识别 ROM 路径' }
+    return { ok: false, error: t('logs.pickRomFail') }
   }
   // 等连接 + Flash 识别（由 startWatching / readCart 完成），避免抢串口
   for (let i = 0; i < 60; i++) {
@@ -39,13 +39,13 @@ async function clientBurn(path) {
     await new Promise((r) => setTimeout(r, 300))
   }
   if (!conn.isConnected) {
-    return { ok: false, error: '烧录器未连接' }
+    return { ok: false, error: t('rom.hint.connect') }
   }
   if (!cart.flashInfo) {
     await cart.readCart()
   }
   if (!cart.flashInfo) {
-    return { ok: false, error: cart.cartError || '未检测到卡带' }
+    return { ok: false, error: cart.cartError || t('rom.hint.empty') }
   }
   // 等串口完全释放（info 进程退出）
   await new Promise((r) => setTimeout(r, 800))
@@ -59,7 +59,7 @@ async function clientBurn(path) {
     result: cart.opResult,
     rom: cart.romFile,
     fileInfo: cart.romFileInfo,
-    error: cart.opResult?.ok ? undefined : (cart.opResult?.error || '烧录失败'),
+    error: cart.opResult?.ok ? undefined : (cart.opResult?.error || t('rom.op.burnFail')),
   }
 }
 

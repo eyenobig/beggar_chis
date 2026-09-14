@@ -3,23 +3,15 @@ import { defineStore } from 'pinia'
 import { getVersion } from '@tauri-apps/api/app'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { check } from '@tauri-apps/plugin-updater'
+import { i18n } from '../i18n'
 import { inTauri } from '../services/cfb'
-import { useCfbSettings } from './useCfbSettings'
 import { useCartData } from './useCartData'
 
 const AUTO_CHECK_DELAY_MS = 10_000
 const AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 
-/** 本地常见代理口（Clash 系默认 7890 在首位）；直连失败时按序试探。 */
-const LOCAL_PROXY_CANDIDATES = ['http://127.0.0.1:7890', 'http://127.0.0.1:7897', 'http://127.0.0.1:1087']
-
-function isNetworkError(cause) {
-  const lower = String(cause?.message || cause || '').toLowerCase()
-  return lower.includes('error sending request')
-    || lower.includes('network')
-    || lower.includes('timed out')
-    || lower.includes('timeout')
-    || lower.includes('connection')
+function t(key, params) {
+  return i18n.global.t(key, params)
 }
 
 function formatUpdaterError(cause) {
@@ -30,10 +22,8 @@ function formatUpdaterError(cause) {
     || lower.includes('error status request')
     || lower.includes('404')
   ) {
-    return '无法获取更新清单（latest.json）。仓库尚无已发布的 Release，或清单文件缺失。请先按发版流程打 tag 发布后再试。'
+    return t('help.updateManifestMissing')
   }
-  // 平台缺失：已发布版本的更新清单只含部分平台（如 v0.2.12 仅 Windows）。
-  // tauri updater 在解析阶段就抛错，即使版本号相同也不会走到"已是最新"。
   if (
     lower.includes('platform')
     || lower.includes('darwin')
@@ -41,13 +31,18 @@ function formatUpdaterError(cause) {
     || lower.includes('not found for target')
     || lower.includes('installer')
   ) {
-    return '当前已发布版本的更新包不包含本平台（macOS 更新包自下个发版起提供，发版流水线已支持 macOS）。可先从 Releases 页手动下载新版安装。'
+    return t('help.updatePlatformMissing')
   }
-  if (isNetworkError(cause)) {
-    const raw = String(cause?.message || cause || '')
-    return `网络异常（多为应用不继承系统代理、直连 GitHub 失败）：${raw}。可在更新代理里填 http://127.0.0.1:7890 后重试。`
+  if (
+    lower.includes('error sending request')
+    || lower.includes('network')
+    || lower.includes('timed out')
+    || lower.includes('timeout')
+    || lower.includes('connection')
+  ) {
+    return t('help.updateNetworkFail', { err: raw })
   }
-  return raw || '检查更新失败'
+  return raw || t('help.updateFailed')
 }
 
 export const useAppUpdater = defineStore('appUpdater', () => {
@@ -97,66 +92,35 @@ export const useAppUpdater = defineStore('appUpdater', () => {
     if (!inTauri || isChecking.value || isDownloading.value) return null
     status.value = 'checking'
     error.value = ''
-    const doCheck = (proxy) =>
-      check({ timeout: 15_000, ...(proxy ? { proxy } : {}) })
-    let update = null
-    let cause = null
-    // 1) 设置了更新代理 → 直接用；没设置 → 先直连。
-    const settings = useCfbSettings()
-    const attempts = []
-    if (settings.updateProxy) attempts.push(settings.updateProxy)
-    else attempts.push(null)
-    for (const proxy of attempts) {
-      try {
-        update = await doCheck(proxy)
-        cause = null
-        break
-      } catch (e) {
-        cause = e
-        // 代理已配置但失败 / 或非网络错误 → 不再自动试探
-        if (proxy || !isNetworkError(e)) break
+    try {
+      const update = await check({ timeout: 15_000 })
+      lastCheckedAt.value = new Date().toISOString()
+      if (!update) {
+        pendingUpdate = null
+        availableVersion.value = ''
+        notes.value = ''
+        publishedAt.value = ''
+        status.value = 'upToDate'
+        return null
       }
-    }
-    // 2) 直连网络失败且未配置代理 → 自动试探本地常见代理口，成功则记住。
-    if (!update && cause && !settings.updateProxy && isNetworkError(cause)) {
-      for (const proxy of LOCAL_PROXY_CANDIDATES) {
-        try {
-          update = await doCheck(proxy)
-          settings.updateProxy = proxy
-          cause = null
-          break
-        } catch {
-          /* try next */
-        }
-      }
-    }
-    lastCheckedAt.value = new Date().toISOString()
-    if (cause) {
+      pendingUpdate = update
+      availableVersion.value = String(update.version || '')
+      notes.value = String(update.body || '')
+      publishedAt.value = update.date ? String(update.date) : ''
+      status.value = 'available'
+      return update
+    } catch (cause) {
       error.value = formatUpdaterError(cause)
       status.value = 'error'
       if (silent) console.warn('[appUpdater] automatic check failed:', cause)
       return null
     }
-    if (!update) {
-      pendingUpdate = null
-      availableVersion.value = ''
-      notes.value = ''
-      publishedAt.value = ''
-      status.value = 'upToDate'
-      return null
-    }
-    pendingUpdate = update
-    availableVersion.value = String(update.version || '')
-    notes.value = String(update.body || '')
-    publishedAt.value = update.date ? String(update.date) : ''
-    status.value = 'available'
-    return update
   }
 
   async function downloadAndInstall() {
     if (!inTauri || isDownloading.value) return false
     if (cart.opRunning) {
-      error.value = '烧录器任务运行中，请等待任务完成后再安装更新。'
+      error.value = t('help.updateBlocked')
       status.value = 'blocked'
       return false
     }

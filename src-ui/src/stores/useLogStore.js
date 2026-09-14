@@ -1,101 +1,18 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { i18n } from '../i18n'
-import zhCN from '../i18n/locales/zh-CN.json'
-import en from '../i18n/locales/en.json'
-import ja from '../i18n/locales/ja.json'
-import ko from '../i18n/locales/ko.json'
-import es from '../i18n/locales/es.json'
-import fr from '../i18n/locales/fr.json'
-import de from '../i18n/locales/de.json'
-import ru from '../i18n/locales/ru.json'
 
 const MAX_LOGS = 500
 const DEDUPE_WINDOW_MS = 1000
 const VALID_TYPES = new Set(['info', 'success', 'warn', 'error'])
 const ANSI_PATTERN = /\u001B\[[0-?]*[ -/]*[@-~]/g
-/** Strip trailing `· 12.3s` / `| 12.3s` from cfb progress lines */
+/** Strip trailing `· 12.3s` / `| 12.3s` from cfb lines */
 const ELAPSED_TAIL = /\s*[|·•･・]\s*(\d+(?:\.\d+)?)s\s*$/u
-/**
- * Phase + percent, optional cfb elapsed tail:
- * `löschen 4%` / `löschen 4% · 8.0s` / `erase 4%`
- */
-const PHASE_PCT_LINE = /^(.+?)\s+(\d+)\s*%(?:\s*[|·•･・].*)?$/u
+/** 通用进度行检测：任意文字 + 百分比（跨语言，百分比格式全球统一） */
+const IS_PROGRESS_LINE = /\s\d+\s*%/
 
 const LIVE_PROGRESS_KEY = '__progress__'
 const LIVE_TOTAL_KEY = '__total__'
-
-/** UI locale packs (beggar_chis) */
-const UI_LOCALE_PACKS = Object.freeze({
-  'zh-CN': zhCN,
-  en,
-  ja,
-  ko,
-  es,
-  fr,
-  de,
-  ru,
-})
-
-/**
- * cfb CLI progress.label.* (chis-burner-cmd/src/i18n)
- * Must stay in sync with burner language packs — these are what stdout emits.
- */
-const CFB_PROGRESS_LABELS = Object.freeze({
-  erase: ['擦除', 'erase', 'löschen', 'effacer', 'borrar', '지우기', '消去', 'apagar', 'Стереть'],
-  write: ['写入', 'write', 'schreiben', 'écrire', 'escribir', '쓰기', '書込', 'gravar', 'Запись', '编程', 'program', 'programming'],
-  verify: ['校验', 'verify', 'prüfen', 'vérifier', 'verificar', '검증', '検証', '照合', 'Проверка'],
-  dump: ['导出', 'dump', 'export', 'lesen', 'lire', 'leer', '읽기', '読取', '読出', '덤프', 'ler', 'Дамп', '读取', 'read', 'reading'],
-})
-
-function foldLabel(s) {
-  return String(s || '')
-    .normalize('NFKC')
-    .toLocaleLowerCase()
-    .trim()
-}
-
-/** Build once: every UI + cfb phase label → erase|write|verify|dump */
-function buildPhaseLabelMap() {
-  const map = Object.create(null)
-
-  for (const [phase, labels] of Object.entries(CFB_PROGRESS_LABELS)) {
-    for (const label of labels) map[foldLabel(label)] = phase
-  }
-
-  for (const pack of Object.values(UI_LOCALE_PACKS)) {
-    const phase = pack?.logs?.phase
-    if (!phase || typeof phase !== 'object') continue
-    for (const [key, label] of Object.entries(phase)) {
-      if (typeof label === 'string' && label.trim()) map[foldLabel(label)] = key
-    }
-  }
-
-  // Also register runtime i18n messages (covers hot-added packs)
-  for (const loc of i18n.global.availableLocales || []) {
-    const phase = i18n.global.getLocaleMessage(loc)?.logs?.phase
-    if (!phase || typeof phase !== 'object') continue
-    for (const [key, label] of Object.entries(phase)) {
-      if (typeof label === 'string' && label.trim()) map[foldLabel(label)] = key
-    }
-  }
-
-  return map
-}
-
-const PHASE_LABEL_MAP = buildPhaseLabelMap()
-
-function phaseLabel(phaseKey) {
-  return i18n.global.t(`logs.phase.${phaseKey}`)
-}
-
-function formatPhaseMessage(phaseKey, pct) {
-  return `${phaseLabel(phaseKey)} ${pct}%`
-}
-
-function formatTotalMessage(time) {
-  return i18n.global.t('logs.totalTime', { time: String(time) })
-}
 
 let nextLogId = 0
 
@@ -128,52 +45,16 @@ export function stripLogElapsed(message) {
   return String(message || '').replace(ELAPSED_TAIL, '').trim()
 }
 
-/**
- * Parse phase progress from UI or cfb language packs.
- * @returns {{ phase: string, pct: number, message: string, elapsed: string|null } | null}
- */
-export function parsePhaseProgress(message) {
-  const raw = String(message || '')
-  const body = stripLogElapsed(raw)
-  const m = PHASE_PCT_LINE.exec(body) || PHASE_PCT_LINE.exec(raw)
-  if (!m) return null
-
-  const token = m[1].trim()
-  const pct = Number(m[2])
-  const phase = PHASE_LABEL_MAP[foldLabel(token)] || null
-  if (!phase || !Number.isFinite(pct)) return null
-
-  const elapsedMatch = raw.match(ELAPSED_TAIL)
-  return {
-    phase,
-    pct,
-    message: formatPhaseMessage(phase, pct),
-    elapsed: elapsedMatch?.[1] != null ? `${elapsedMatch[1]}s` : null,
-  }
+function formatTotalMessage(time) {
+  return i18n.global.t('logs.totalTime', { time: String(time) })
 }
 
 function isTotalTimeMessage(message) {
   const body = stripLogElapsed(String(message || ''))
   if (!/(\d+(?:\.\d+)?s|\d+m\d{2}s)\s*$/i.test(body)) return false
-  for (const pack of Object.values(UI_LOCALE_PACKS)) {
-    const tpl = pack?.logs?.totalTime
-    if (typeof tpl !== 'string') continue
-    const prefix = tpl.replace(/\{time\}/g, '').trim()
-    if (prefix && foldLabel(body).startsWith(foldLabel(prefix))) return true
-  }
   const sample = formatTotalMessage('0.0s')
   const prefix = sample.replace(/0\.0s\s*$/i, '').trim()
-  return !!(prefix && foldLabel(body).startsWith(foldLabel(prefix)))
-}
-
-function isProgressBoundary(message) {
-  return (
-    /^(擦除|写入|校验|烧录|读取|导出).*(完成|失败|已中断)\b/.test(message)
-    || /^(擦除卡带|烧录\s)/.test(message)
-    || /\b(erase|write|verify|burn|dump|export)\b.*(complete|fail|abort|done|finished|ok)\b/i.test(message)
-    || /整片擦除完毕/.test(message)
-    || /^(Burn|Erase|Dump|Export)\b/i.test(message)
-  )
+  return !!(prefix && body.toLowerCase().startsWith(prefix.toLowerCase()))
 }
 
 export const useLogStore = defineStore('log', () => {
@@ -219,11 +100,13 @@ export const useLogStore = defineStore('log', () => {
   function upsertLiveLine(key, message, type = 'info', elapsed = undefined) {
     const timestamp = Date.now()
     const existing = findLiveEntry(key, (log) =>
-      key === LIVE_TOTAL_KEY ? isTotalTimeMessage(log.message) : !!parsePhaseProgress(log.message),
+      key === LIVE_TOTAL_KEY ? isTotalTimeMessage(log.message) : IS_PROGRESS_LINE.test(log.message),
     )
     if (existing) {
       if (existing.message !== message) existing.message = message
       if (elapsed !== undefined) existing.elapsed = elapsed
+      existing.isTotal = key === LIVE_TOTAL_KEY
+      existing.isProgress = key === LIVE_PROGRESS_KEY
       liveProgressIds[key] = existing.id
       ensureTotalAtBottom()
       hasUnread.value = true
@@ -238,6 +121,7 @@ export const useLogStore = defineStore('log', () => {
       count: 1,
       elapsed: elapsed ?? null,
       isTotal: key === LIVE_TOTAL_KEY,
+      isProgress: key === LIVE_PROGRESS_KEY,
     }
     logs.value.push(entry)
     if (logs.value.length > MAX_LOGS) logs.value.splice(0, logs.value.length - MAX_LOGS)
@@ -252,9 +136,9 @@ export const useLogStore = defineStore('log', () => {
     const normalizedType = VALID_TYPES.has(type) ? type : 'info'
     const timestamp = Date.now()
 
-    const progress = parsePhaseProgress(message)
-    if (progress) {
-      return upsertLiveLine(LIVE_PROGRESS_KEY, progress.message, 'info', elapsed)
+    // 进度行（含百分比）：原地更新，不新增行
+    if (IS_PROGRESS_LINE.test(message)) {
+      return upsertLiveLine(LIVE_PROGRESS_KEY, message, 'info', elapsed)
     }
 
     if (isTotalTimeMessage(message)) {
@@ -263,21 +147,19 @@ export const useLogStore = defineStore('log', () => {
       return upsertLiveLine(LIVE_TOTAL_KEY, formatTotalMessage(time), 'info')
     }
 
-    if (isProgressBoundary(message)) clearLiveProgress()
-
-    const previous = logs.value.at(-1)
+    // 去重：同 type + message 在 1s 内合并计数
+    const last = logs.value[logs.value.length - 1]
     if (
-      previous &&
-      previous.message === message &&
-      previous.type === normalizedType &&
-      previous.elapsed == null &&
-      timestamp - previous.timestamp <= DEDUPE_WINDOW_MS
+      last
+      && last.type === normalizedType
+      && last.message === message
+      && !last.isProgress
+      && !last.isTotal
+      && timestamp - last.timestamp < DEDUPE_WINDOW_MS
     ) {
-      previous.count += 1
-      previous.timestamp = timestamp
-      previous.timeStr = timeString(timestamp)
+      last.count++
       hasUnread.value = true
-      return previous.id
+      return last.id
     }
 
     const entry = {
@@ -287,7 +169,9 @@ export const useLogStore = defineStore('log', () => {
       message,
       type: normalizedType,
       count: 1,
-      elapsed: null,
+      elapsed: elapsed ?? null,
+      isTotal: false,
+      isProgress: false,
     }
     logs.value.push(entry)
     if (logs.value.length > MAX_LOGS) logs.value.splice(0, logs.value.length - MAX_LOGS)
@@ -295,52 +179,48 @@ export const useLogStore = defineStore('log', () => {
     return entry.id
   }
 
-  function clearLogs() {
-    logs.value = []
-    hasUnread.value = false
-    delete liveProgressIds[LIVE_PROGRESS_KEY]
-    delete liveProgressIds[LIVE_TOTAL_KEY]
-  }
-
-  function updateLog(id, value, type) {
+  function updateLog(id, updates) {
     const entry = logs.value.find((log) => log.id === id)
     if (!entry) return
-    const message = normalizeMessage(value)
-    const progress = parsePhaseProgress(message)
-    entry.message = progress ? progress.message : message
-    if (progress) liveProgressIds[LIVE_PROGRESS_KEY] = id
-    if (type && VALID_TYPES.has(type)) entry.type = type
+    Object.assign(entry, updates)
   }
 
   function setLogElapsed(id, elapsed) {
     const entry = logs.value.find((log) => log.id === id)
-    if (!entry) return
-    entry.elapsed = elapsed == null || elapsed === '' ? null : String(elapsed)
+    if (entry) entry.elapsed = elapsed
   }
 
-  function setSessionElapsed(elapsed) {
-    if (elapsed == null || elapsed === '') return
-    upsertLiveLine(LIVE_TOTAL_KEY, formatTotalMessage(elapsed), 'info')
+  const sessionElapsed = ref('')
+
+  function setSessionElapsed(time) {
+    sessionElapsed.value = String(time || '')
   }
 
   function clearSessionElapsed() {
-    delete liveProgressIds[LIVE_TOTAL_KEY]
+    sessionElapsed.value = ''
   }
 
   function markRead() {
     hasUnread.value = false
   }
 
+  function clearLogs() {
+    logs.value = []
+    hasUnread.value = false
+    for (const k of Object.keys(liveProgressIds)) delete liveProgressIds[k]
+  }
+
   return {
     logs,
     hasUnread,
+    sessionElapsed,
     addLog,
     updateLog,
     setLogElapsed,
+    clearLiveProgress,
     setSessionElapsed,
     clearSessionElapsed,
-    clearLogs,
     markRead,
-    clearLiveProgress,
+    clearLogs,
   }
 })

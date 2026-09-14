@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { applyLocalePreference, getLocalePreference } from '../i18n'
+import { applyLocalePreference, getLocalePreference, i18n } from '../i18n'
 import { ensureCfbPaths, resolveCfbBinary, installDir } from '../services/toolchain'
 import { getLocalPaths, getLocalSettings, patchLocalConfig } from '../services/localConfig'
 
@@ -43,9 +43,6 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
     JSON.stringify({ mods: [...(c?.mods || [])].sort(), key: c?.key || '' })
   const savedIsOldDefault = normalizeCombo(saved.bossKeyShortcut) === normalizeCombo(OLD_DEFAULT_BOSS_KEY)
   const bossKeyEnabled = ref(saved.bossKeyEnabled !== false)
-  /** 更新代理（http://host:port）：应用进程不继承系统代理，国内直连 GitHub 常失败；
-   *  留空先直连，失败自动尝试本地常见代理口（7890 等）并回填。 */
-  const updateProxy = ref(String(saved.updateProxy || '').trim())
   const bossKeyShortcut = ref(
     Array.isArray(saved.bossKeyShortcut?.mods) && saved.bossKeyShortcut.key && !savedIsOldDefault
       ? { mods: saved.bossKeyShortcut.mods.map(String), key: String(saved.bossKeyShortcut.key) }
@@ -175,7 +172,6 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
       chipErase: chipErase.value,
       eraseBoot: eraseBoot.value,
       bossKeyEnabled: bossKeyEnabled.value,
-      updateProxy: updateProxy.value,
       bossKeyShortcut: bossKeyShortcut.value,
       unlockPpb: unlockPpb.value,
       verifyAfter: verifyAfter.value,
@@ -209,10 +205,9 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
   }
 
   function withGlobalArgs(args) {
-    if (!language.value || language.value === 'auto') return [...args]
-    // cfb 语言码：zh-CN|en|ja|ko|fr|de|es|pt-BR。
-    // zh-CN 原样传（旧映射 'zh' 非法、靠回落侥幸工作）；ru 无 cfb 包 → 回退 en。
-    const lang = language.value === 'ru' ? 'en' : language.value
+    // 始终把当前 UI 语言传给 cfb，避免 auto/系统中文把 detect/info 日志打成中文。
+    const resolved = String(i18n.global.locale.value || 'en')
+    const lang = resolved === 'ru' ? 'en' : resolved
     return ['--lang', lang, ...args]
   }
 
@@ -240,7 +235,6 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
     eraseBoot,
     bossKeyEnabled,
     bossKeyShortcut,
-    updateProxy,
     applyBossKey,
     unlockPpb,
     verifyAfter,

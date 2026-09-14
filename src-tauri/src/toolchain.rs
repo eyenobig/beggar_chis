@@ -124,19 +124,68 @@ fn detect_dev_skyemu() -> Option<String> {
         .map(|p| p.display().to_string())
 }
 
+fn cfb_bin_name() -> &'static str {
+    if cfg!(windows) {
+        "cfb.exe"
+    } else {
+        "cfb"
+    }
+}
+
+/// `cargo build --release` 默认落 `target/release`；显式 `--target` 才落 `target/<triple>/`。
+/// 两份都在时取修改时间更新的，避免旧 triple 目录里的版本覆盖当前版本。
+fn local_release_cfb_candidates(source: &Path) -> [PathBuf; 2] {
+    let name = cfb_bin_name();
+    let triple = current_triple();
+    [
+        source.join("target").join("release").join(name),
+        source.join("target").join(triple).join("release").join(name),
+    ]
+}
+
+fn newest_existing_file(paths: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
+    paths.into_iter().filter(|p| p.is_file()).max_by_key(|p| {
+        p.metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+    })
+}
+
+fn paths_same_file(a: &Path, b: &Path) -> bool {
+    let norm = |p: &Path| p.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+    norm(a) == norm(b)
+}
+
+/// 已持久化的路径若是源码 `target/` 里的旧产物，改指同批候选里更新的那份。
+fn newer_local_release_if_stale(current: &Path) -> Option<PathBuf> {
+    let source = cfb_config::resolve_local_cfb_source()?;
+    let target_root = source.join("target");
+    let cur = current.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+    let root = target_root.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+    if !cur.starts_with(&root) {
+        return None;
+    }
+    let newest = newest_existing_file(local_release_cfb_candidates(&source))?;
+    if paths_same_file(&newest, current) {
+        return None;
+    }
+    Some(newest)
+}
+
 /// 开发态探测已构建 cfb **可执行文件**（绝不返回源码根目录）。
-/// 优先级：配置的本地源码 `target/` → 本 app sidecar（ensure:cfb 本地编或 GitHub）。
+/// 优先级：本地源码 `target/` 里最新的 release → debug → 本 app sidecar。
 fn detect_dev_cfb_bin() -> Option<String> {
     let triple = current_triple();
-    let bin_name = if cfg!(windows) { "cfb.exe" } else { "cfb" };
     if let Some(source) = cfb_config::resolve_local_cfb_source() {
-        let candidates = [
-            source.join("target").join(triple).join("release").join(bin_name),
-            source.join("target").join("release").join(bin_name),
-            source.join("target").join(triple).join("debug").join(bin_name),
-            source.join("target").join("debug").join(bin_name),
+        if let Some(p) = newest_existing_file(local_release_cfb_candidates(&source)) {
+            return Some(p.display().to_string());
+        }
+        let name = cfb_bin_name();
+        let debug = [
+            source.join("target").join("debug").join(name),
+            source.join("target").join(triple).join("debug").join(name),
         ];
-        if let Some(p) = candidates.into_iter().find(|p| p.is_file()) {
+        if let Some(p) = newest_existing_file(debug) {
             return Some(p.display().to_string());
         }
     }
@@ -276,6 +325,23 @@ fn read_installer_paths() -> Option<InstallerPaths> {
     let file = dir.join("paths.json");
     let text = std::fs::read_to_string(&file).ok()?;
     serde_json::from_str(&text).ok()
+}
+
+/// 启动 SkyEmu / 直连 spawn 用的同一份 cfb：设置页路径 → 开发探测 → 打包 sidecar。
+/// 不再拷一份到 SkyEmu 目录。
+pub(crate) fn resolve_runtime_cfb(app: &AppHandle, hinted: Option<&str>) -> Option<String> {
+    if let Some(p) = resolve_cfb_hint(hinted) {
+        return Some(p);
+    }
+    if let Some(p) = detect_dev_cfb_bin() {
+        return Some(p);
+    }
+    bundled_sidecar(app, current_triple()).map(|p| p.display().to_string())
+}
+
+fn resolve_cfb_hint(hinted: Option<&str>) -> Option<String> {
+    let raw = hinted.map(str::trim).filter(|s| !s.is_empty())?;
+    resolve_cfb_binary(raw.to_string()).ok()
 }
 
 /// 解析打包进安装包的 cfb sidecar（tauri.conf.json `externalBin: binaries/cfb`）。
@@ -489,6 +555,9 @@ pub fn resolve_cfb_binary(cfb_path: String) -> Result<String, String> {
     let triple = current_triple();
 
     if path.is_file() {
+        if let Some(newer) = newer_local_release_if_stale(path) {
+            return Ok(newer.display().to_string());
+        }
         return Ok(path.display().to_string());
     }
 
@@ -500,16 +569,19 @@ pub fn resolve_cfb_binary(cfb_path: String) -> Result<String, String> {
         // 兼容旧 Settings：曾把源码根目录当作工具链路径。
         let manifest = path.join("Cargo.toml");
         if manifest.is_file() {
+            if let Some(p) = newest_existing_file(local_release_cfb_candidates(path)) {
+                return Ok(p.display().to_string());
+            }
             if let Ok(target_dir) = cargo_target_dir(&manifest.to_string_lossy()) {
-                let bin_name = if cfg!(windows) { "cfb.exe" } else { "cfb" };
+                let bin_name = cfb_bin_name();
                 let candidates = [
+                    PathBuf::from(&target_dir).join("release").join(bin_name),
                     PathBuf::from(&target_dir)
                         .join(triple)
                         .join("release")
                         .join(bin_name),
-                    PathBuf::from(&target_dir).join("release").join(bin_name),
                 ];
-                if let Some(p) = candidates.into_iter().find(|p| p.is_file()) {
+                if let Some(p) = newest_existing_file(candidates) {
                     return Ok(p.display().to_string());
                 }
                 return Err(format!(
@@ -627,6 +699,34 @@ mod tests {
     }
 
     #[test]
+    fn detect_dev_cfb_bin_skips_stale_triple_release() {
+        let Some(source) = cfb_config::resolve_local_cfb_source() else {
+            return;
+        };
+        let name = cfb_bin_name();
+        let host = source.join("target").join("release").join(name);
+        let triple = source
+            .join("target")
+            .join(current_triple())
+            .join("release")
+            .join(name);
+        if !host.is_file() || !triple.is_file() {
+            return;
+        }
+        let Some(got) = detect_dev_cfb_bin() else {
+            return;
+        };
+        let host_t = host.metadata().and_then(|m| m.modified()).ok();
+        let triple_t = triple.metadata().and_then(|m| m.modified()).ok();
+        if host_t > triple_t {
+            assert!(
+                paths_same_file(Path::new(&got), &host),
+                "host target/release 更新时应选它（避免旧 triple 目录的 0.3.6），实际: {got}"
+            );
+        }
+    }
+
+    #[test]
     fn detect_dev_cfb_bin_returns_executable_not_source_root() {
         let Some(bin) = detect_dev_cfb_bin() else {
             // 本机尚未构建 / 无 sidecar 时跳过（CI 可能无产物）。
@@ -654,6 +754,33 @@ mod tests {
                 "must not return chis-burner-cmd source root"
             );
         }
+    }
+
+    #[test]
+    fn resolve_stale_triple_file_upgrades_to_newer_host_release() {
+        let Some(source) = cfb_config::resolve_local_cfb_source() else {
+            return;
+        };
+        let name = cfb_bin_name();
+        let host = source.join("target").join("release").join(name);
+        let triple = source
+            .join("target")
+            .join(current_triple())
+            .join("release")
+            .join(name);
+        if !host.is_file() || !triple.is_file() {
+            return;
+        }
+        let host_t = host.metadata().and_then(|m| m.modified()).ok();
+        let triple_t = triple.metadata().and_then(|m| m.modified()).ok();
+        if !(host_t > triple_t) {
+            return;
+        }
+        let got = resolve_cfb_binary(triple.display().to_string()).expect("应能解析旧 triple 路径");
+        assert!(
+            paths_same_file(Path::new(&got), &host),
+            "指向旧 triple cfb 时应改到更新的 target/release: {got}"
+        );
     }
 
     #[test]
@@ -685,6 +812,21 @@ mod tests {
     fn resolve_accepts_missing_gracefully() {
         let err = resolve_cfb_binary("/no/such/cfb/path".into()).unwrap_err();
         assert!(err.contains("不存在") || err.contains("未找到") || err.contains("未配置"));
+    }
+
+    #[test]
+    fn resolve_cfb_hint_empty_is_none() {
+        assert!(resolve_cfb_hint(None).is_none(), "空 hint 不能当路径");
+        assert!(resolve_cfb_hint(Some("")).is_none());
+        assert!(resolve_cfb_hint(Some("   ")).is_none());
+    }
+
+    #[test]
+    fn resolve_cfb_hint_missing_is_none() {
+        assert!(
+            resolve_cfb_hint(Some("/no/such/cfb.exe")).is_none(),
+            "不存在的 hint 应回落到探测/sidecar，不能硬用"
+        );
     }
 
     #[test]

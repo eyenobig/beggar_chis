@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use tauri::AppHandle;
+
 /// 写入 DirectPlay 配置 ROM，并以该路径为 argv[1] 启动 eyenobig/SkyEmu。
 ///
 /// 配置写到 SkyEmu 用户目录 `directplay/`（与模拟器侧一致），不要写 exe 旁。
@@ -25,6 +27,7 @@ use std::process::Command;
 /// 扩展名必须是 `.gb` / `.gbc`，SkyEmu 才走 GB 总线。
 #[tauri::command]
 pub fn launch_skyemu(
+    app: AppHandle,
     exe: String,
     serial_port: Option<String>,
     rom_size: Option<u64>,
@@ -79,7 +82,9 @@ pub fn launch_skyemu(
     std::fs::write(&rom_path, config.as_bytes())
         .map_err(|e| format!("写入 {name} 失败: {e}"))?;
 
-    spawn_skyemu(&exe_path, &rom_path, cwd, cfb_bin.as_deref())?;
+    // 与烧丐 Settings / sidecar 同一份 cfb，避免 SkyEmu 再下一份或用 exe 旁旧副本。
+    let cfb = crate::toolchain::resolve_runtime_cfb(&app, cfb_bin.as_deref());
+    spawn_skyemu(&exe_path, &rom_path, cwd, cfb.as_deref())?;
     Ok(rom_path.to_string_lossy().into_owned())
 }
 

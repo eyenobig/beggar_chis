@@ -28,6 +28,7 @@ export {
 export {
   CFB,
   formatCfbVersion,
+  versionFromCfbEvent,
   resolveCfbRelease,
   downloadCfbTo,
   ensureCfbPaths,

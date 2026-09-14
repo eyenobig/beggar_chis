@@ -29,8 +29,13 @@ const logStore = useLogStore()
 const toast = useToast()
 const cartridgeCache = useCartridgeCache()
 const { downloading, downloadSkyEmu } = useSkyEmuDownload()
-const { downloadingCfb, downloadingRule, downloadCfb, downloadRule } = useCfbRuleDownload()
+const { downloadingCfb, downloadingRule, downloadCfb: downloadCfbBin, downloadRule } = useCfbRuleDownload()
 const { cfbVersion, ruleVersion, skyEmuVersion, refreshCfbVersion } = useToolchainVersions()
+
+async function downloadCfb() {
+  await downloadCfbBin()
+  await refreshCfbVersion()
+}
 const { records: cachedCartridges } = storeToRefs(cartridgeCache)
 const { currentPlatform, skyEmuPath } = storeToRefs(emulator)
 const {
@@ -83,7 +88,10 @@ function onRecordKey(e) {
   recording.value = false
   settings.applyBossKey()
 }
-onMounted(() => window.addEventListener('keydown', onRecordKey, true))
+onMounted(() => {
+  window.addEventListener('keydown', onRecordKey, true)
+  refreshCfbVersion()
+})
 onBeforeUnmount(() => window.removeEventListener('keydown', onRecordKey, true))
 
 const languageOptions = computed(() => [
@@ -102,55 +110,42 @@ const skyEmuPathLabel = computed(() => skyEmuPath.value || t('settings.skyemuUns
 const cfbPathLabel = computed(() => cfbBinPath.value || t('settings.pathUnset'))
 const rulePathLabel = computed(() => ruleDataDir.value || t('settings.pathUnset'))
 
-onMounted(() => {
-  settings.ensurePathsReady()
-  refreshCfbVersion()
-})
-
-/** 选择 cfb 可执行文件（与一般 bin 引用一致）。 */
-async function pickCfbBin() {
+async function pickPath({ directory = false, title, current } = {}) {
   if (!inTauri) {
     toast.error(t('settings.pathPickDesktopOnly'))
-    return
+    return ''
   }
   const selected = await openDialog({
     multiple: false,
-    title: t('settings.cfbPathPick'),
-    defaultPath: cfbBinPath.value || undefined,
+    directory,
+    title,
+    defaultPath: current || undefined,
   })
-  if (!selected) return
-  const path = typeof selected === 'string' ? selected : selected[0]
+  if (!selected) return ''
+  return typeof selected === 'string' ? selected : selected[0] || ''
+}
+
+async function pickCfbBin() {
+  const path = await pickPath({ title: t('settings.cfbPathPick'), current: cfbBinPath.value })
   if (!path) return
   cfbBinPath.value = path
-  clearDirectBinaryCache()
   toast.success(t('settings.pathUpdated'))
   logStore.addLog(`cfb: ${path}`, 'success')
 }
 
-/** 选择已解压的 rule 数据目录（含 profiles）。 */
 async function pickRuleDir() {
-  if (!inTauri) {
-    toast.error(t('settings.pathPickDesktopOnly'))
-    return
-  }
-  const selected = await openDialog({
+  const path = await pickPath({
     directory: true,
-    multiple: false,
     title: t('settings.rulePathPick'),
-    defaultPath: ruleDataDir.value || undefined,
+    current: ruleDataDir.value,
   })
-  if (!selected) return
-  const path = typeof selected === 'string' ? selected : selected[0]
   if (!path) return
   ruleDataDir.value = path
   toast.success(t('settings.pathUpdated'))
   logStore.addLog(`rule: ${path}`, 'success')
 }
 
-/**
- * 验证配置的 cfb 路径：解析可执行文件 → 运行 `cfb version`。
- * 只确认二进制可运行，不比对 Cargo.toml。
- */
+/** 解析路径后跑 `cfb version`，只确认能跑，不比对 Cargo.toml。 */
 async function verifyToolchain() {
   if (verifying.value) return
   if (!inTauri) {
@@ -167,25 +162,17 @@ async function verifyToolchain() {
   try {
     clearDirectBinaryCache()
     const binPath = await invoke('resolve_cfb_binary', { cfbPath: cfbBinPath.value })
-    // 若配置的是源码根/bins 目录，验证成功后写回实际 exe，避免设置页继续显示目录。
-    if (binPath && binPath !== cfbBinPath.value) {
-      cfbBinPath.value = binPath
-    }
-    let binVer = ''
-    const { error } = await cfbClient.version((ev) => {
-      if (ev?.type === 'version' && ev.version) binVer = String(ev.version)
-      else if (ev?.type === 'log' && ev.message) binVer = String(ev.message)
-    })
-    if (!binVer) throw new Error(error || 'cfb version 无输出')
-    settings.setActiveCfbVersion(binVer)
-
+    if (binPath && binPath !== cfbBinPath.value) cfbBinPath.value = binPath
+    const binVer = await refreshCfbVersion()
+    if (binVer == null) return
+    if (!binVer) throw new Error(t('settings.verifyNoOutput'))
     const msg = t('settings.verifyOk', { path: binPath, bin: binVer })
     toast.success(msg)
     logStore.addLog(msg, 'success')
   } catch (error) {
     settings.setActiveCfbVersion('')
     const raw = String(error?.message || error)
-    const missing = /未找到|不存在|未配置/i.test(raw)
+    const missing = /未找到|不存在|未配置|not found|does not exist|not configured/i.test(raw)
     const msg = missing ? t('settings.verifyMissing') : t('settings.verifyFail', { err: raw })
     toast.error(msg)
     logStore.addLog(msg, 'error')

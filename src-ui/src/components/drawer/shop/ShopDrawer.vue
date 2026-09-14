@@ -54,8 +54,8 @@ async function refreshShop() {
             data-no-drag
             type="button"
             class="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-zinc-500 transition-colors hover:bg-white/5 hover:text-yellow-400 disabled:opacity-40"
-            title="刷新"
-            aria-label="刷新"
+            :title="$t('toast.shopRefresh')"
+            :aria-label="$t('toast.shopRefresh')"
             :disabled="shopLoading"
             @click="refreshShop"
           >
@@ -69,8 +69,8 @@ async function refreshShop() {
             data-no-drag
             type="button"
             class="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-zinc-500 transition-colors hover:bg-white/5 hover:text-yellow-400"
-            title="打开 GBMake 首页"
-            aria-label="打开 GBMake 首页"
+            :title="$t('toast.shopOpenHome')"
+            :aria-label="$t('toast.shopOpenHome')"
             @click="openGbmakeHome"
           >
             <ExternalLink class="h-3.5 w-3.5" :stroke-width="2.5" />

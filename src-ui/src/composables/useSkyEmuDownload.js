@@ -3,7 +3,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { inTauri, cfbClient } from '../services/cfb'
-import { downloadSkyEmuTo, resolveCfbBinary, resolveSkyEmuRelease } from '../services/toolchain'
+import { downloadSkyEmuTo, resolveSkyEmuRelease } from '../services/toolchain'
 import { useCfbSettings } from '../stores/useCfbSettings'
 import {
   pickAssetDestDir,
@@ -86,14 +86,8 @@ export function useSkyEmuDownload() {
           ? Number(cart.flashInfo.capacityBytes)
           : DEFAULT_DIRECTPLAY_ROM_SIZE
 
-      let cfbBin = String(cfbSettings.cfbBinPath || '').trim()
-      if (cfbBin) {
-        try {
-          cfbBin = String(await resolveCfbBinary(cfbBin) || cfbBin)
-        } catch {
-          // 路径无效时仍启动：SkyEmu 会自己找 exe 旁 / PATH 的 cfb
-        }
-      }
+      await cfbSettings.ensurePathsReady()
+      const cfbBin = String(cfbSettings.cfbBinPath || '').trim()
 
       const romPath = await invoke('launch_skyemu', {
         exe: skyEmuPath.value,

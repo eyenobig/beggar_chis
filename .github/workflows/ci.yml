@@ -16,7 +16,7 @@ permissions:
 
 env:
   CFB_GITHUB_REPO: eyenobig/chis-burner-cmd
-  CFB_RELEASE_TAG: ${{ vars.CFB_RELEASE_TAG || 'v0.4.3' }}
+  CFB_RELEASE_TAG: ${{ vars.CFB_RELEASE_TAG || 'v0.5.0' }}
 
 jobs:
   frontend:

@@ -7,6 +7,7 @@
  * shape so a future GitHub Release install can plug into downloadToolchainAsset.
  */
 import { invoke } from '@tauri-apps/api/core'
+import { i18n } from '../../../i18n'
 
 /** Keep defaults aligned with cfb-config (rule under cfb vendor). */
 export const RULE = Object.freeze({
@@ -67,7 +68,5 @@ export async function ensureRulePaths() {
  * Throws until RULE.repo + release assets are defined.
  */
 export async function resolveRuleRelease() {
-  throw new Error(
-    'rule 远程发行版尚未启用：当前仅使用本地 vendor/profiles 或 cfb 内嵌资料（见 .agents/skills/prod-packaging）',
-  )
+  throw new Error(i18n.global.t('settings.ruleRemoteUnavailable'))
 }

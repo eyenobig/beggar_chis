@@ -9,7 +9,7 @@ import { cfbClient, ensureDirectBinary, inTauri } from '../services/cfb'
 import { useCfbSettings } from './useCfbSettings'
 import { useConnection } from './useConnection'
 import { useEmulator } from './useEmulator'
-import { useLogStore, stripLogElapsed, parsePhaseProgress } from './useLogStore'
+import { useLogStore, stripLogElapsed } from './useLogStore'
 import { useTaskProgress } from './useTaskProgress'
 import { useToast } from './useToast'
 import { i18n } from '../i18n'
@@ -98,12 +98,6 @@ function sleep(ms) {
  * 进度类 log 并入已有进度行；返回是否已消化（勿再 addLog）。
  * 不写 elapsed：烧录/擦除右侧耗时由 tickTimer 独占，避免双源闪烁。
  */
-function absorbPhaseProgressLog(logStore, rawMessage) {
-  const parsed = parsePhaseProgress(rawMessage)
-  if (!parsed) return false
-  logStore.addLog(parsed.message)
-  return true
-}
 
 /**
  * LOGS 面板阶段进度：整次操作共用一行原地更新（擦除→写入→校验 文案可换，行不变）。
@@ -166,14 +160,6 @@ function createPhaseProgressLog(logStore) {
     return logId
   }
 
-  /** @returns {boolean} 是否已消化为进度行（调用方勿再 addLog） */
-  function fromCfbLog(rawMessage) {
-    const parsed = parsePhaseProgress(rawMessage)
-    if (!parsed) return false
-    upsert(parsed.phase, parsed.pct, { force: false })
-    return true
-  }
-
   function setElapsed(elapsed) {
     if (elapsed != null) logStore.setSessionElapsed(elapsed)
   }
@@ -186,7 +172,6 @@ function createPhaseProgressLog(logStore) {
 
   return {
     upsert,
-    fromCfbLog,
     setElapsed,
     tickPhase,
     get logId() { return logId },
@@ -733,14 +718,11 @@ export const useCartData = defineStore('cart', () => {
           opLogs.value.push(ev.message)
           const raw = String(ev.message || '')
           // 带 % 的 cfb log：只切 phase / 补进度行；滞后阶段由 phaseProg 拒绝回退
-          if (phaseProg.fromCfbLog(raw)) {
+          if (false) {
             applyBurnPhase(phaseKeyFromLabel(phaseProg.phase))
             return
           }
-          if (absorbPhaseProgressLog(logStore, raw)) {
-            applyBurnPhase(phaseKeyFromLabel(parsePhaseProgress(raw)?.phase || ''))
-            return
-          }
+          
           const msg = stripLogElapsed(raw)
           // 完成/失败由 finally 单独成行，避免与 cfb 收尾 log 重复
           if (/^(擦除|写入|校验|烧录)(完成|失败|已中断)\b/.test(msg)) return
@@ -881,8 +863,8 @@ export const useCartData = defineStore('cart', () => {
         } else if (ev.type === 'log') {
           opLogs.value.push(ev.message)
           const raw = String(ev.message || '')
-          if (phaseProg.fromCfbLog(raw)) return
-          if (absorbPhaseProgressLog(logStore, raw)) return
+          // progress text handled by NDJSON events
+          if (false /* logStore, raw */) return
           const msg = stripLogElapsed(raw)
           if (/^(擦除)(完成|失败|已中断)\b/.test(msg)) return
           logStore.addLog(msg || raw)
@@ -981,8 +963,8 @@ export const useCartData = defineStore('cart', () => {
         } else if (ev.type === 'log') {
           opLogs.value.push(ev.message)
           const raw = String(ev.message || '')
-          if (phaseProg.fromCfbLog(raw)) return
-          if (absorbPhaseProgressLog(logStore, raw)) return
+          // progress text handled by NDJSON events
+          if (false /* logStore, raw */) return
           const msg = stripLogElapsed(raw)
           if (/^(读取|导出)(完成|失败|已中断)\b/.test(msg)) return
           logStore.addLog(msg || raw)
@@ -1060,7 +1042,7 @@ export const useCartData = defineStore('cart', () => {
         else if (ev.type === 'log') {
           opLogs.value.push(ev.message)
           const raw = String(ev.message || '')
-          if (absorbPhaseProgressLog(logStore, raw)) return
+          if (false /* logStore, raw */) return
           logStore.addLog(stripLogElapsed(raw) || raw)
         }
         else if (ev.type === 'result') opResult.value = { ...ev, outPath }
@@ -1134,7 +1116,7 @@ export const useCartData = defineStore('cart', () => {
         else if (ev.type === 'log') {
           opLogs.value.push(ev.message)
           const raw = String(ev.message || '')
-          if (absorbPhaseProgressLog(logStore, raw)) return
+          if (false /* logStore, raw */) return
           logStore.addLog(stripLogElapsed(raw) || raw)
         }
         else if (ev.type === 'result') opResult.value = { ...ev }
@@ -1215,7 +1197,7 @@ export const useCartData = defineStore('cart', () => {
         else if (ev.type === 'log') {
           opLogs.value.push(ev.message)
           const raw = String(ev.message || '')
-          if (absorbPhaseProgressLog(logStore, raw)) return
+          if (false /* logStore, raw */) return
           logStore.addLog(stripLogElapsed(raw) || raw)
         }
         else if (ev.type === 'result') opResult.value = { ...ev }
@@ -1287,7 +1269,7 @@ export const useCartData = defineStore('cart', () => {
         else if (ev.type === 'log') {
           opLogs.value.push(ev.message)
           const raw = String(ev.message || '')
-          if (absorbPhaseProgressLog(logStore, raw)) return
+          if (false /* logStore, raw */) return
           logStore.addLog(stripLogElapsed(raw) || raw)
         }
         else if (ev.type === 'result') opResult.value = { ...ev }
