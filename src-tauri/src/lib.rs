@@ -40,6 +40,7 @@ pub fn run() {
             download::extract_zip_exe,
             download::file_size,
             skyemu_launch::launch_skyemu,
+            skyemu_launch::skyemu_watch_exit,
             toolchain::git_head_sha,
             toolchain::git_pull,
             toolchain::rebuild_cfb_sidecar,
@@ -90,6 +91,14 @@ pub fn run() {
                 }
             }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // 关窗 = 退出: 杀掉所有 cfb 子进程, 释放串口 (否则 ttyACM 被孤儿进程占用,
+            // 重开应用后 cfb 打不开串口 —— 真机实测)
+            if let tauri::WindowEvent::Destroyed = event {
+                let children = window.app_handle().state::<toolchain::CfbChildren>();
+                children.kill_all();
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

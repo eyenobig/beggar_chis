@@ -84,8 +84,8 @@ pub fn launch_skyemu(
 
     // 与烧丐 Settings / sidecar 同一份 cfb，避免 SkyEmu 再下一份或用 exe 旁旧副本。
     let cfb = crate::toolchain::resolve_runtime_cfb(&app, cfb_bin.as_deref());
-    spawn_skyemu(&exe_path, &rom_path, cwd, cfb.as_deref())?;
-    Ok(rom_path.to_string_lossy().into_owned())
+    let child = spawn_skyemu(&exe_path, &rom_path, cwd, cfb.as_deref())?;
+    Ok(format!("{}|{}", rom_path.to_string_lossy(), child.id()))
 }
 
 fn directplay_config(mbc: bool, rom_size: u64, port: &str) -> String {
@@ -166,7 +166,17 @@ fn normalize_serial_port(port: &str) -> String {
     p.to_string()
 }
 
-fn spawn_skyemu(exe: &Path, rom: &Path, cwd: &Path, cfb_bin: Option<&str>) -> Result<(), String> {
+/// 清理残留的 SkyEmu 进程 (孤儿: 上次会话退出后仍占用串口)。
+fn kill_stale_skyemu() {
+    #[cfg(windows)]
+    let _ = Command::new("taskkill").args(["/F", "/IM", "SkyEmu.exe"]).output();
+    #[cfg(not(windows))]
+    let _ = Command::new("pkill").arg("-f").arg("SkyEmu").output();
+}
+
+fn spawn_skyemu(exe: &Path, rom: &Path, cwd: &Path, cfb_bin: Option<&str>) -> Result<std::process::Child, String> {
+    // 清理残留的 SkyEmu 孤儿进程: 它若还开着串口, 新会话会打不开
+    kill_stale_skyemu();
     let mut cmd = Command::new(exe);
     cmd.arg(rom).current_dir(cwd);
     if let Some(bin) = cfb_bin.map(str::trim).filter(|s| !s.is_empty()) {
@@ -181,8 +191,7 @@ fn spawn_skyemu(exe: &Path, rom: &Path, cwd: &Path, cfb_bin: Option<&str>) -> Re
         cmd.creation_flags(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
     }
     cmd.spawn()
-        .map_err(|e| format!("启动 SkyEmu 失败: {e}"))?;
-    Ok(())
+        .map_err(|e| format!("启动 SkyEmu 失败: {e}"))
 }
 
 #[cfg(test)]
@@ -255,4 +264,40 @@ mod tests {
         let name = dir.file_name().and_then(|s| s.to_str()).unwrap_or("");
         assert_eq!(name, "directplay", "假 ROM 必须落在 directplay 子目录: {dir:?}");
     }
+}
+
+
+/// 监控 SkyEmu 进程, 退出后自动 cfb detect (恢复 chis-flasher 对烧录器的控制)。
+/// 前端在 launch 成功后调用, 传入 spawn 返回的 pid。
+#[tauri::command]
+pub async fn skyemu_watch_exit(
+    app: AppHandle,
+    pid: u32,
+) -> Result<(), String> {
+        tauri::async_runtime::spawn(async move {
+        // 轮询等待进程退出 (Windows 无 waitpid, 用任务管理器思路: 检查进程存在)
+        loop {
+            #[cfg(windows)]
+            let alive = std::process::Command::new("tasklist")
+                .args(["/FI", &format!("PID eq {pid}"), "/NH"])
+                .output()
+                .map(|o| String::from_utf8_lossy(&o.stdout).contains(&pid.to_string()))
+                .unwrap_or(true);
+            #[cfg(not(windows))]
+            let alive = std::path::Path::new(&format!("/proc/{pid}")).exists();
+
+            if !alive {
+                log_printf(&format!("SkyEmu (pid {pid}) exited; re-detecting burner..."));
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1000));
+        }
+        // 退出后: cfb detect 让应用恢复设备列表 (走 toolchain::cfb_exec 的 detect)
+        let _ = crate::toolchain::cfb_detect_after_skyemu(app).await;
+    });
+    Ok(())
+}
+
+fn log_printf(msg: &str) {
+    println!("[skyemu_launch] {msg}");
 }

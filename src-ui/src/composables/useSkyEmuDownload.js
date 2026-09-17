@@ -97,10 +97,17 @@ export function useSkyEmuDownload() {
         cfbBin: cfbBin || null,
       })
 
-      const msg = t('launch.directPlayLog', { port: serialPort, rom: romPath })
+      const romOnly = String(romPath || '').split('|')[0]
+      const msg = t('launch.directPlayLog', { port: serialPort, rom: romOnly })
       toast.success(t('launch.started'))
       emu.addLog(msg, 'success')
       emu.addLog(t('launch.serialHandedOff'), 'warn')
+
+      // 监控 SkyEmu 退出: 退出后自动重连串口 (cfb 重新 detect), 恢复 chis-flasher 对烧录器的控制
+      const spawned = String(romPath || '')
+      const pid = Number(spawned.split('|').pop()) || 0
+      // SkyEmu 退出后自动 detect, 恢复设备列表和烧录器控制
+      invoke('skyemu_watch_exit', { pid }).catch(() => {})
     } catch (error) {
       const msg = String(error?.message || error || t('launch.fail'))
       toast.error(msg)

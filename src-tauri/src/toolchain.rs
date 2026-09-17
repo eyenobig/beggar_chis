@@ -493,6 +493,15 @@ pub fn rebuild_cfb_sidecar(cfb_dir: String, rule_dir: Option<String>) -> Result<
 #[derive(Default)]
 pub struct CfbChildren(Arc<Mutex<HashMap<u32, CommandChild>>>);
 
+impl CfbChildren {
+    /// 退出清理: 杀掉全部子进程并清空表 (释放串口等资源)。
+    pub fn kill_all(&self) {
+        for (_, child) in self.0.lock().unwrap().drain() {
+            let _ = child.kill();
+        }
+    }
+}
+
 /// 转发给前端的流式事件（对应 `streamCfb` 里对 `stdout`/`stderr`/`close` 的监听）。
 #[derive(Clone, Serialize)]
 #[serde(tag = "event", content = "payload")]
@@ -673,6 +682,19 @@ pub fn cfb_spawn(
 }
 
 /// 中止 [`cfb_spawn`] 启动的子进程（对应前端「中断」按钮）。
+/// SkyEmu 退出后自动 detect: 让应用恢复烧录器在线状态。
+#[tauri::command]
+pub async fn cfb_detect_after_skyemu(app: tauri::AppHandle) {
+    let Some(bin) = resolve_runtime_cfb(&app, None) else {
+        return;
+    };
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        let _ = std::process::Command::new(bin)
+            .args(["--lang", "en", "detect"])
+            .output();
+    }).await;
+}
+
 #[tauri::command]
 pub fn cfb_kill_process(children: State<'_, CfbChildren>, pid: u32) -> Result<(), String> {
     if let Some(child) = children.0.lock().unwrap().remove(&pid) {
