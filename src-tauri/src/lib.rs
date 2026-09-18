@@ -40,6 +40,7 @@ pub fn run() {
             download::extract_zip_exe,
             download::file_size,
             event_listener::start_event_listener,
+            event_listener::poll_events,
             skyemu_launch::launch_skyemu,
             skyemu_launch::skyemu_watch_exit,
             toolchain::git_head_sha,
@@ -82,6 +83,10 @@ pub fn run() {
             });
         })
         .setup(|_app| {
+            // 本地 UDP 事件监听在 Rust 侧启动（不依赖前端 invoke；端口仍可由设置页切换）
+            if let Err(e) = event_listener::start_listener(event_listener::DEFAULT_EVENT_PORT) {
+                eprintln!("[event_listener] {e}");
+            }
             // 老板键不再在此硬编码注册：前端启动时按设置调用 set_boss_shortcut 应用
             // 仅 debug 构建自动开 DevTools；release / 安装包默认关闭。
             #[cfg(debug_assertions)]
