@@ -182,6 +182,8 @@ fn spawn_skyemu(exe: &Path, rom: &Path, cwd: &Path, cfb_bin: Option<&str>) -> Re
     if let Some(bin) = cfb_bin.map(str::trim).filter(|s| !s.is_empty()) {
         cmd.env("CFB_BIN", bin);
     }
+    // 退出通知端口：SkyEmu 退出时向 127.0.0.1:<port> 发 UDP（event_listener 转成事件）
+    cmd.env("CHIS_EVENT_PORT", crate::event_listener::current_port().to_string());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -274,7 +276,8 @@ pub async fn skyemu_watch_exit(
     app: AppHandle,
     pid: u32,
 ) -> Result<(), String> {
-        tauri::async_runtime::spawn(async move {
+    log_printf(&format!("watching SkyEmu pid {pid} for exit..."));
+    tauri::async_runtime::spawn_blocking(move || {
         // 轮询等待进程退出 (Windows 无 waitpid, 用任务管理器思路: 检查进程存在)
         loop {
             #[cfg(windows)]
@@ -287,13 +290,15 @@ pub async fn skyemu_watch_exit(
             let alive = std::path::Path::new(&format!("/proc/{pid}")).exists();
 
             if !alive {
-                log_printf(&format!("SkyEmu (pid {pid}) exited; re-detecting burner..."));
+                log_printf(&format!("SkyEmu (pid {pid}) exited; notifying frontend..."));
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(1000));
         }
-        // 退出后: cfb detect 让应用恢复设备列表 (走 toolchain::cfb_exec 的 detect)
-        let _ = crate::toolchain::cfb_detect_after_skyemu(app).await;
+        // 备份通道（UDP 通知的主路径见 event_listener）：写事件槽，前端 poll_events 拉取。
+        // 不用 app.emit——推送到 webview 实测触发 0xc0000005。
+        let _ = &app;
+        crate::event_listener::post_event(&format!("skyemu-exited:{pid}"));
     });
     Ok(())
 }

@@ -18,6 +18,26 @@ import { useToast } from '../stores/useToast'
 
 const downloading = ref(false)
 
+/** 恢复防抖：UDP 通知与 pid 轮询双通道会各触发一次，2s 内只执行一回。 */
+let lastRestoreAt = 0
+let exitPollingTimer = null
+let exitPollingHandlers = null
+
+/** 注册轮询回调（每次启动刷新引用）并确保定时器在跑。 */
+function ensureExitPolling() {
+  if (exitPollingTimer) return
+  exitPollingTimer = setInterval(async () => {
+    if (!exitPollingHandlers) return
+    try {
+      const msg = await invoke('poll_events')
+      if (!msg || !String(msg).startsWith('skyemu-exited')) return
+      if (Date.now() - lastRestoreAt < 2000) return
+      lastRestoreAt = Date.now()
+      exitPollingHandlers.onExit()
+    } catch { /* 命令不可用(非 tauri)时静默 */ }
+  }, 1000)
+}
+
 /** Windows exe / Linux AppImage 或无后缀 SkyEmu / mac .app 及包内二进制。 */
 export function isSkyEmuBinary(path) {
   const raw = String(path || '').trim()
@@ -89,6 +109,7 @@ export function useSkyEmuDownload() {
       await cfbSettings.ensurePathsReady()
       const cfbBin = String(cfbSettings.cfbBinPath || '').trim()
 
+      conn.directPlay = true // 会话开始：UI 显示「SkyEmu 会话中」而非离线
       const romPath = await invoke('launch_skyemu', {
         exe: skyEmuPath.value,
         serialPort,
@@ -107,8 +128,22 @@ export function useSkyEmuDownload() {
       const spawned = String(romPath || '')
       const pid = Number(spawned.split('|').pop()) || 0
       // SkyEmu 退出后自动 detect, 恢复设备列表和烧录器控制
-      invoke('skyemu_watch_exit', { pid }).catch(() => {})
+      invoke('skyemu_watch_exit', { pid }).catch((e) => {
+        emu.addLog(`skyemu_watch_exit failed: ${String(e?.message || e)}`, 'error')
+      })
+
+      // 启动恢复轮询（幂等）：Rust 事件槽收到 skyemu-exited（UDP 或 pid 备份）即恢复。
+      // 不用事件推送（emit 到 webview 实测崩溃），1s 轮询本地 IPC 开销可忽略。
+      exitPollingHandlers = {
+        onExit: async () => {
+          conn.directPlay = false // 会话结束：恢复常规连接态显示
+          emu.addLog(t('launch.serialReturned'), 'success')
+          await conn.handleDeviceChange()
+        },
+      }
+      ensureExitPolling()
     } catch (error) {
+      conn.directPlay = false
       const msg = String(error?.message || error || t('launch.fail'))
       toast.error(msg)
       emu.addLog(msg, 'error')

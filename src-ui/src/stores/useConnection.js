@@ -21,6 +21,8 @@ export const useConnection = defineStore('connection', () => {
   const devices = ref([]) // [{port,vid,pid,burner,open,name,serial}]
   const detecting = ref(false)
   const connected = ref(false)
+  /** DirectPlay 会话中（SkyEmu 持有串口）：此时「断开」是有意为之，UI 显示会话态。 */
+  const directPlay = ref(false)
   const dialogOpen = ref(false)
   const lastError = ref('')
   const selectedPort = ref(null)
@@ -281,6 +283,7 @@ export const useConnection = defineStore('connection', () => {
     burners,
     detecting,
     connected,
+    directPlay,
     dialogOpen,
     lastError,
     selectedPort,

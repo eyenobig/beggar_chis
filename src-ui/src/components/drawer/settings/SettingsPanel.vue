@@ -36,10 +36,17 @@ async function downloadCfb() {
   await downloadCfbBin()
   await refreshCfbVersion()
 }
+// 事件监听端口：变更即保存并由 Rust 重启监听（同端口幂等）
+watch(eventPort, (p) => {
+  const port = Number(p) > 0 && Number(p) < 65536 ? Number(p) : 47623
+  invoke('start_event_listener', { port }).catch(() => {})
+})
+
 const { records: cachedCartridges } = storeToRefs(cartridgeCache)
 const { currentPlatform, skyEmuPath } = storeToRefs(emulator)
 const {
   language,
+  eventPort,
   voltageAuto,
   manualVoltage,
   chipErase,
@@ -416,6 +423,19 @@ function toggleManualVoltage() {
     <section class="space-y-1">
       <h3 class="mb-2 text-[11px] font-black uppercase tracking-widest text-zinc-400">{{ $t('settings.burn') }}</h3>
       <div class="border-y border-white/10 divide-y divide-white/10">
+        <div class="flex min-h-11 items-center justify-between gap-4 py-2.5 text-xs font-semibold text-zinc-300">
+          <span class="flex min-w-0 items-center gap-1">
+            {{ $t('settings.eventPort') }}
+            <SettingHint :text="$t('settings.eventPortHint')" />
+          </span>
+          <input
+            v-model.number="eventPort"
+            type="number"
+            min="1"
+            max="65535"
+            class="w-24 rounded-md border border-white/10 bg-zinc-800/60 px-2 py-1 text-right text-xs text-zinc-100 outline-none focus:border-zinc-500"
+          />
+        </div>
         <div class="flex min-h-11 items-center justify-between gap-4 py-2.5 text-xs font-semibold text-zinc-300">
           <span class="flex min-w-0 items-center gap-1">
             {{ $t('settings.chipErase') }}

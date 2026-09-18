@@ -682,19 +682,6 @@ pub fn cfb_spawn(
 }
 
 /// 中止 [`cfb_spawn`] 启动的子进程（对应前端「中断」按钮）。
-/// SkyEmu 退出后自动 detect: 让应用恢复烧录器在线状态。
-#[tauri::command]
-pub async fn cfb_detect_after_skyemu(app: tauri::AppHandle) {
-    let Some(bin) = resolve_runtime_cfb(&app, None) else {
-        return;
-    };
-    let _ = tauri::async_runtime::spawn_blocking(move || {
-        let _ = std::process::Command::new(bin)
-            .args(["--lang", "en", "detect"])
-            .output();
-    }).await;
-}
-
 #[tauri::command]
 pub fn cfb_kill_process(children: State<'_, CfbChildren>, pid: u32) -> Result<(), String> {
     if let Some(child) = children.0.lock().unwrap().remove(&pid) {

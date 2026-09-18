@@ -5,8 +5,13 @@ commands.allow = ["download_file", "extract_zip_exe"]
 
 [[permission]]
 identifier = "allow-launch-skyemu"
-description = "Allow writing DirectPlay virtual_rom.gba / virtual_rom.gb and launching SkyEmu with that ROM argument."
-commands.allow = ["launch_skyemu"]
+description = "Allow writing DirectPlay virtual_rom.gba / virtual_rom.gb, launching SkyEmu, and watching its exit to restore the serial connection."
+commands.allow = ["launch_skyemu", "skyemu_watch_exit"]
+
+[[permission]]
+identifier = "allow-event-listener"
+description = "Allow starting the local UDP event listener (SkyEmu exit notifications -> connection restore)."
+commands.allow = ["start_event_listener", "poll_events"]
 
 [[permission]]
 identifier = "allow-file-size"

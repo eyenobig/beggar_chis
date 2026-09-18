@@ -39,6 +39,7 @@ pub fn run() {
             download::download_file,
             download::extract_zip_exe,
             download::file_size,
+            event_listener::start_event_listener,
             skyemu_launch::launch_skyemu,
             skyemu_launch::skyemu_watch_exit,
             toolchain::git_head_sha,
@@ -111,3 +112,4 @@ mod download;
 mod skyemu_launch;
 mod toolchain;
 mod toolchain_update;
+mod event_listener;

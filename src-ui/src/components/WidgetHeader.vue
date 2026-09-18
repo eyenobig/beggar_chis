@@ -9,17 +9,19 @@ import ConnectionDialog from './dialog/ConnectionDialog.vue'
 
 const { t } = useI18n()
 const conn = useConnection()
-const { isConnected, isConnecting, dialogOpen, selectedPort, needsSelection } = storeToRefs(conn)
+const { isConnected, isConnecting, dialogOpen, selectedPort, needsSelection, directPlay } = storeToRefs(conn)
 const { openDialog } = conn
 
 const dotClass = computed(() => {
   if (isConnected.value)  return 'w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)] animate-pulse transition-colors'
+  if (directPlay.value) return 'w-1.5 h-1.5 rounded-full bg-violet-500 shadow-[0_0_6px_rgba(139,92,246,0.6)] animate-pulse transition-colors'
   if (isConnecting.value || needsSelection.value) return 'w-1.5 h-1.5 rounded-full bg-yellow-400 shadow-[0_0_6px_rgba(250,204,21,0.6)] animate-pulse transition-colors'
   return 'w-1.5 h-1.5 rounded-full bg-zinc-400 transition-colors'
 })
 
 const statusText = computed(() => {
   if (isConnected.value)  return t('conn.online')
+  if (directPlay.value) return t('conn.directPlay')
   if (isConnecting.value) return t('conn.detecting')
   if (needsSelection.value) return t('conn.selectHintShort')
   return t('conn.offline')
@@ -27,6 +29,7 @@ const statusText = computed(() => {
 
 const statusTextClass = computed(() => {
   if (isConnected.value)  return 'text-[8px] font-black uppercase tracking-widest text-zinc-900 mt-0.5 transition-colors'
+  if (directPlay.value) return 'text-[8px] font-black uppercase tracking-widest text-violet-600 mt-0.5 transition-colors'
   if (isConnecting.value || needsSelection.value) return 'text-[8px] font-black uppercase tracking-widest text-yellow-600 mt-0.5 transition-colors'
   return 'text-[8px] font-black uppercase tracking-widest text-zinc-500 mt-0.5 transition-colors'
 })

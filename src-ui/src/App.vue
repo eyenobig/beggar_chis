@@ -77,7 +77,13 @@ onMounted(() => {
   }
   // 先等 cfb 路径就绪再 detect，避免启动竞态：路径未好 → detect 空结果 → 一直显示未连接。
   ;(async () => {
-    await useCfbSettings().ensurePathsReady()
+    const settings = useCfbSettings()
+    await settings.ensurePathsReady()
+    // 本地 UDP 事件监听（SkyEmu 退出通知 → 恢复连接）；端口见设置页
+    // 本地 UDP 事件监听（SkyEmu 退出通知 → 恢复连接）；端口见设置页
+    import('@tauri-apps/api/core')
+      .then(({ invoke }) => invoke('start_event_listener', { port: settings.eventPort }))
+      .catch(() => {})
     await useConnection().startWatching()
   })()
   // 老板键：启动即按设置注册全局快捷键（默认 mac ⌘B / Windows Ctrl+B，设置页可改/可关）

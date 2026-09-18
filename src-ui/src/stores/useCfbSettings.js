@@ -72,6 +72,8 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
   const verifyAfter = ref(saved.verifyAfter !== false)
   /** SkyEmu 下热敏纸（刀口+纸面）；关闭后改用底部 banner，toast 仍可见 */
   const thermalPaper = ref(saved.thermalPaper !== false)
+  /** 本地事件监听 UDP 端口（SkyEmu 退出通知等）。改端口会自动重启监听。 */
+  const eventPort = ref(Number(saved.eventPort) > 0 ? Number(saved.eventPort) : 47623)
   /** 主栏上方卡带舞台；关闭后不占窗口顶部，识别结果仍保留 */
   const cartridgeStage = ref(saved.cartridgeStage !== false)
   /** Logs 打开时的卡带贴纸架；可单独关闭 */
@@ -176,6 +178,7 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
       unlockPpb: unlockPpb.value,
       verifyAfter: verifyAfter.value,
       thermalPaper: thermalPaper.value,
+      eventPort: eventPort.value,
       cartridgeStage: cartridgeStage.value,
       cartridgeStickers: cartridgeStickers.value,
     }),
@@ -239,6 +242,7 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
     unlockPpb,
     verifyAfter,
     thermalPaper,
+    eventPort,
     cartridgeStage,
     cartridgeStickers,
     cfbBinPath,
