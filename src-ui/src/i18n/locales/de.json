@@ -182,7 +182,7 @@
     "thermalPaper": "Thermopapier-Hinweise",
     "thermalPaperHint": "Zeigt Messer und Thermopapier unter SkyEmu. Aus: Hinweise als unteres Banner.",
     "chipErase": "Vollständiges Löschen beim Brennen",
-    "eventPort": "Ereignis-Port",
+    "eventPort": "cfb-Listen-Port",
     "eventPortHint": "Lokaler UDP-Port (nur 127.0.0.1): empfängt SkyEmu-Exit-Meldungen, um die Verbindung automatisch wiederherzustellen. Bei Konflikt ändern.",
     "chipEraseHint": "Löscht den ganzen Flash vor dem Brennen (langsamer, gründlich); aus = nur die ROM-Sektoren (schneller). Betrifft nur das Brennen; die Löschen-Taste löscht immer alles.",
     "unlockPpb": "Unlock PPB before burn",

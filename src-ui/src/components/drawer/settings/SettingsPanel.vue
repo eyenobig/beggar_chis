@@ -431,9 +431,10 @@ function toggleManualVoltage() {
           <input
             v-model.number="eventPort"
             type="number"
+            inputmode="numeric"
             min="1"
             max="65535"
-            class="w-24 rounded-md border border-white/10 bg-zinc-800/60 px-2 py-1 text-right text-xs text-zinc-100 outline-none focus:border-zinc-500"
+            class="w-24 rounded-md border border-white/10 bg-zinc-800/60 px-2 py-1 text-center text-xs text-zinc-100 outline-none focus:border-zinc-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
         </div>
         <div class="flex min-h-11 items-center justify-between gap-4 py-2.5 text-xs font-semibold text-zinc-300">

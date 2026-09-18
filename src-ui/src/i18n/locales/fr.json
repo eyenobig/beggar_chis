@@ -182,7 +182,7 @@
     "thermalPaper": "Toasts papier thermique",
     "thermalPaperHint": "Affiche le cutter et le papier sous SkyEmu. Désactivé : bannière en bas pour garder le feedback.",
     "chipErase": "Effacement complet à l'écriture",
-    "eventPort": "Port d'événements",
+    "eventPort": "Port d'écoute cfb",
     "eventPortHint": "Port UDP local (127.0.0.1 uniquement) : reçoit les notifications de sortie de SkyEmu pour restaurer la connexion. À changer en cas de conflit.",
     "chipEraseHint": "Efface toute la Flash avant écriture (lent, complet) ; désactivé = seuls les secteurs du ROM (rapide). Concerne uniquement l'écriture ; le bouton Effacer est toujours complet.",
     "unlockPpb": "Unlock PPB before burn",

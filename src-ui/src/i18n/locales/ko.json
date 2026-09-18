@@ -182,7 +182,7 @@
     "thermalPaper": "감열지 알림",
     "thermalPaperHint": "SkyEmu 아래에 칼날과 감열지를 표시합니다. 끄면 하단 배너로 알립니다.",
     "chipErase": "굽기 시 전체 지우기",
-    "eventPort": "이벤트 수신 포트",
+    "eventPort": "cfb 수신 포트",
     "eventPortHint": "로컬 UDP 포트(127.0.0.1 전용): SkyEmu 종료 알림을 받아 연결을 자동 복구합니다. 충돌 시 변경하세요.",
     "chipEraseHint": "굽기 전 Flash 전체를 지움(느리지만 완전). 끄면 ROM 범위만 지움(빠름). 굽기에만 적용되며 지우기 버튼은 항상 전체 지움.",
     "unlockPpb": "Unlock PPB before burn",

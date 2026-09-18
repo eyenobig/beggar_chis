@@ -182,7 +182,7 @@
     "thermalPaper": "Avisos en papel térmico",
     "thermalPaperHint": "Muestra el corte y el papel bajo SkyEmu. Si se desactiva, los avisos van a un banner inferior.",
     "chipErase": "Borrado completo al grabar",
-    "eventPort": "Puerto de eventos",
+    "eventPort": "Puerto de escucha cfb",
     "eventPortHint": "Puerto UDP local (solo 127.0.0.1): recibe avisos de salida de SkyEmu para restaurar la conexión. Cámbialo si hay conflicto.",
     "chipEraseHint": "Borra toda la Flash antes de grabar (lento, exhaustivo); desactivado = solo los sectores del ROM (rápido). Aplica solo a Grabar; el botón Borrar siempre es completo.",
     "unlockPpb": "Unlock PPB before burn",

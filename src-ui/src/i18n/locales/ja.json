@@ -182,7 +182,7 @@
     "thermalPaper": "感熱紙トースト",
     "thermalPaperHint": "SkyEmu の下にカッターと感熱紙を表示。オフ時は下部バナーで通知します。",
     "chipErase": "書き込み時に全消去",
-    "eventPort": "イベント受信ポート",
+    "eventPort": "cfb リッスンポート",
     "eventPortHint": "ローカル UDP ポート（127.0.0.1 のみ）：SkyEmu 終了通知を受けて接続を自動復帰します。競合時は変更してください。",
     "chipEraseHint": "書き込み前に Flash 全体を消去（遅いが完全）。オフなら ROM 範囲のみ消去（速い）。書き込みにのみ適用、消去ボタンは常に全消去。",
     "unlockPpb": "Unlock PPB before burn",
