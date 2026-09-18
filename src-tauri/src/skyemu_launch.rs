@@ -150,22 +150,6 @@ fn launch_serial_port() -> String {
     "AUTO".to_string()
 }
 
-fn normalize_serial_port(port: &str) -> String {
-    let p = port.trim();
-    if p.is_empty() || p.eq_ignore_ascii_case("AUTO") {
-        return "AUTO".to_string();
-    }
-    #[cfg(windows)]
-    {
-        // SkyEmu 开串口会自己加 \\.\ ；配置里只写 COM7，避免双重前缀。
-        const WIN_DEV_PREFIX: &str = r"\\.\";
-        if let Some(rest) = p.strip_prefix(WIN_DEV_PREFIX) {
-            return rest.to_string();
-        }
-    }
-    p.to_string()
-}
-
 /// 清理残留的 SkyEmu 进程 (孤儿: 上次会话退出后仍占用串口)。
 fn kill_stale_skyemu() {
     #[cfg(windows)]
