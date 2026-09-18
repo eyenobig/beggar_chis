@@ -36,12 +36,6 @@ async function downloadCfb() {
   await downloadCfbBin()
   await refreshCfbVersion()
 }
-// 事件监听端口：变更即保存并由 Rust 重启监听（同端口幂等）
-watch(eventPort, (p) => {
-  const port = Number(p) > 0 && Number(p) < 65536 ? Number(p) : 47623
-  invoke('start_event_listener', { port }).catch(() => {})
-})
-
 const { records: cachedCartridges } = storeToRefs(cartridgeCache)
 const { currentPlatform, skyEmuPath } = storeToRefs(emulator)
 const {
@@ -59,6 +53,12 @@ const {
   bossKeyEnabled,
   bossKeyShortcut,
 } = storeToRefs(settings)
+
+// 事件监听端口：变更即保存并由 Rust 重启监听（同端口幂等）
+watch(eventPort, (p) => {
+  const port = Number(p) > 0 && Number(p) < 65536 ? Number(p) : 47623
+  invoke('start_event_listener', { port }).catch(() => {})
+})
 
 // ---- 老板键：开关即时生效；录制按钮捕获下一个组合键（需至少一个修饰键） ----
 watch(bossKeyEnabled, () => settings.applyBossKey())
