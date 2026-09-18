@@ -234,7 +234,9 @@
     "downloadFail": "다운로드 실패",
     "skyemuNoPackage": "이 플랫폼용 SkyEmu 패키지가 없습니다",
     "verifyNoOutput": "cfb version 출력이 없습니다",
-    "wordProgram": "워드"
+    "wordProgram": "워드",
+    "uiScale": "UI 배율",
+    "uiScaleHint": "UI 전체를 확대/축소합니다. 창 크기도 함께 조정됩니다."
   },
   "help": {
     "verifyTitle": "Verification",

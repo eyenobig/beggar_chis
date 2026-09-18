@@ -234,7 +234,9 @@
     "downloadFail": "Ошибка загрузки",
     "skyemuNoPackage": "Нет пакета SkyEmu для этой платформы",
     "verifyNoOutput": "cfb version не вернул вывод",
-    "wordProgram": "слово"
+    "wordProgram": "слово",
+    "uiScale": "Масштаб UI",
+    "uiScaleHint": "Увеличение или уменьшение всего интерфейса; размер окна меняется соответственно."
   },
   "help": {
     "verifyTitle": "Verification",

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import AppLayout from './layouts/AppLayout.vue'
 import EmulatorWidget from './components/EmulatorWidget.vue'
 import { useConnection } from './stores/useConnection'
+import { applyUiScale } from './services/uiScale'
 import { useCartData } from './stores/useCartData'
 import { useEmulator } from './stores/useEmulator'
 import { useCfbSettings } from './stores/useCfbSettings'
@@ -79,11 +80,13 @@ onMounted(() => {
   ;(async () => {
     const settings = useCfbSettings()
     await settings.ensurePathsReady()
-    // 本地 UDP 事件监听（SkyEmu 退出通知 → 恢复连接）；端口见设置页
-    // 本地 UDP 事件监听（SkyEmu 退出通知 → 恢复连接）；端口见设置页
+    // 本地 UDP 事件监听（SkyEmu 退出通知 → 恢复连接）；Rust setup 已用默认端口启动，
+    // 这里按保存的端口再同步一次（用户改过端口时生效）
     import('@tauri-apps/api/core')
       .then(({ invoke }) => invoke('start_event_listener', { port: settings.eventPort }))
       .catch(() => {})
+    // UI 整体缩放（窗口显示前应用，避免视觉跳变）
+    applyUiScale(settings.uiScale)
     await useConnection().startWatching()
   })()
   // 老板键：启动即按设置注册全局快捷键（默认 mac ⌘B / Windows Ctrl+B，设置页可改/可关）

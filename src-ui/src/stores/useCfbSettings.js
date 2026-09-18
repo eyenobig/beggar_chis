@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { applyLocalePreference, getLocalePreference, i18n } from '../i18n'
 import { ensureCfbPaths, resolveCfbBinary, installDir } from '../services/toolchain'
 import { getLocalPaths, getLocalSettings, patchLocalConfig } from '../services/localConfig'
+import { normalizeUiScale } from '../services/uiScale'
 
 const inTauri =
   typeof window !== 'undefined' &&
@@ -74,6 +75,8 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
   const thermalPaper = ref(saved.thermalPaper !== false)
   /** 本地事件监听 UDP 端口（SkyEmu 退出通知等）。改端口会自动重启监听。 */
   const eventPort = ref(Number(saved.eventPort) > 0 ? Number(saved.eventPort) : 47623)
+  /** UI 整体缩放档位（0.9~1.5）；应用时同步等比调整窗口尺寸。 */
+  const uiScale = ref(normalizeUiScale(saved.uiScale))
   /** 主栏上方卡带舞台；关闭后不占窗口顶部，识别结果仍保留 */
   const cartridgeStage = ref(saved.cartridgeStage !== false)
   /** Logs 打开时的卡带贴纸架；可单独关闭 */
@@ -179,6 +182,7 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
       verifyAfter: verifyAfter.value,
       thermalPaper: thermalPaper.value,
       eventPort: eventPort.value,
+      uiScale: uiScale.value,
       cartridgeStage: cartridgeStage.value,
       cartridgeStickers: cartridgeStickers.value,
     }),
@@ -243,6 +247,7 @@ export const useCfbSettings = defineStore('cfbSettings', () => {
     verifyAfter,
     thermalPaper,
     eventPort,
+    uiScale,
     cartridgeStage,
     cartridgeStickers,
     cfbBinPath,

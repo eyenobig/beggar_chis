@@ -234,7 +234,9 @@
     "downloadFail": "下载失败",
     "skyemuNoPackage": "当前平台没有可用的 SkyEmu 安装包",
     "verifyNoOutput": "cfb version 无输出",
-    "wordProgram": "单字"
+    "wordProgram": "单字",
+    "uiScale": "UI 缩放",
+    "uiScaleHint": "整体放大或缩小界面，窗口尺寸同步调整。"
   },
   "help": {
     "verifyTitle": "校验说明",

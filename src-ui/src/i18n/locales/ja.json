@@ -234,7 +234,9 @@
     "downloadFail": "ダウンロードに失敗しました",
     "skyemuNoPackage": "このプラットフォーム用の SkyEmu パッケージがありません",
     "verifyNoOutput": "cfb version の出力がありません",
-    "wordProgram": "ワード"
+    "wordProgram": "ワード",
+    "uiScale": "UI 拡大率",
+    "uiScaleHint": "UI 全体を拡大/縮小します。ウィンドウサイズも連動します。"
   },
   "help": {
     "verifyTitle": "Verification",

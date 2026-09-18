@@ -234,7 +234,9 @@
     "downloadFail": "Download failed",
     "skyemuNoPackage": "No SkyEmu package for this platform",
     "verifyNoOutput": "cfb version produced no output",
-    "wordProgram": "word"
+    "wordProgram": "word",
+    "uiScale": "UI scale",
+    "uiScaleHint": "Zoom the whole UI in or out; the window resizes accordingly."
   },
   "help": {
     "verifyTitle": "Verification",

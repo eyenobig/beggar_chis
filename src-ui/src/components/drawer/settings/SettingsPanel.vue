@@ -11,6 +11,7 @@ import { useSkyEmuDownload } from '../../../composables/useSkyEmuDownload'
 import { useCfbRuleDownload } from '../../../composables/useCfbRuleDownload'
 import { useToolchainVersions } from '../../../composables/useToolchainVersions'
 import { useCfbSettings } from '../../../stores/useCfbSettings'
+import { applyUiScale, UI_SCALE_OPTIONS } from '../../../services/uiScale'
 import { useEmulator } from '../../../stores/useEmulator'
 import { useLogStore } from '../../../stores/useLogStore'
 import { useCartridgeCache } from '../../../stores/useCartridgeCache'
@@ -41,6 +42,7 @@ const { currentPlatform, skyEmuPath } = storeToRefs(emulator)
 const {
   language,
   eventPort,
+  uiScale,
   voltageAuto,
   manualVoltage,
   chipErase,
@@ -105,6 +107,13 @@ const languageOptions = computed(() => [
   { value: 'auto', label: t('settings.langAuto') },
   ...Object.entries(SUPPORTED).map(([value, label]) => ({ value, label })),
 ])
+
+/** UI 整体缩放档位（窗口尺寸同比调整，见 services/uiScale） */
+const uiScaleOptions = UI_SCALE_OPTIONS.map((value) => ({
+  value,
+  label: `${Math.round(value * 100)}%`,
+}))
+watch(uiScale, (s) => applyUiScale(s))
 
 const saving = ref(false)
 const verifying = ref(false)
@@ -350,6 +359,14 @@ function toggleManualVoltage() {
           <SettingHint :text="$t('settings.languageHint')" />
         </span>
         <UiSelect v-model="language" :options="languageOptions" />
+      </div>
+
+      <div class="space-y-1.5">
+        <span class="flex items-center gap-1 text-[11px] font-bold text-zinc-400">
+          {{ $t('settings.uiScale') }}
+          <SettingHint :text="$t('settings.uiScaleHint')" />
+        </span>
+        <UiSelect v-model="uiScale" :options="uiScaleOptions" />
       </div>
 
       <div v-if="isGbFamily" class="space-y-2">

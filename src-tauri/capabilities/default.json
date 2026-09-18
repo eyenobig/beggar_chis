@@ -95,6 +95,7 @@
     "allow-file-size",
     "allow-toolchain",
     "allow-bosskey",
-    "allow-screenshot"
+    "allow-screenshot",
+    "core:webview:allow-set-webview-zoom"
   ]
 }
