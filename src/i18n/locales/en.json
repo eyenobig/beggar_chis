@@ -23,7 +23,10 @@
     "selected": "Selected",
     "selectHint": "Multiple flashers detected — tap one to use",
     "selectHintShort": "Select device",
-    "busy": "Busy"
+    "busy": "Busy",
+    "permHint": "Burners found but the serial ports cannot be opened (default Linux restriction). Click below and enter your login password in the system dialog — effective immediately, no reboot.",
+    "fixPerms": "Fix serial permission",
+    "permFixing": "Waiting for authorization… (enter your password)"
   },
   "bookmark": {
     "logs": "Logs",

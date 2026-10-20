@@ -23,7 +23,10 @@
     "selected": "已选",
     "selectHint": "检测到多台烧录器，请点击选择要使用的设备",
     "selectHintShort": "请选择设备",
-    "busy": "占用中"
+    "busy": "占用中",
+    "permHint": "检测到烧录器但串口无权限打开（Linux 默认限制）。点下方按钮，在系统密码框输入登录密码即可，免重启立即生效。",
+    "fixPerms": "一键修复串口权限",
+    "permFixing": "等待系统授权…（请输入登录密码）"
   },
   "bookmark": {
     "logs": "日志",

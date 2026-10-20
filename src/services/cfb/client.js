@@ -26,6 +26,8 @@ function withBurnArgs(args) {
 
 export const cfbClient = Object.freeze({
   detect: (onEvent) => executeCfb(['detect'], onEvent),
+  // 走 streamCfb（无 30s 超时）：pkexec 密码框可能等用户输入很久。
+  installUdev: (onEvent, onChild) => streamCfb(['udev'], onEvent, onChild),
   selectPort: (port, onEvent) => executeCfb(['select', '--port', port], onEvent),
   disconnect: (onEvent) => executeCfb(['disconnect'], onEvent),
   setVoltage: (voltage, onEvent) =>

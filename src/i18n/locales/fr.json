@@ -23,7 +23,10 @@
     "selected": "Sélectionné",
     "selectHint": "Plusieurs graveurs détectés — touchez celui à utiliser",
     "selectHintShort": "Choisir appareil",
-    "busy": "Occupé"
+    "busy": "Occupé",
+    "permHint": "Programmeurs détectés mais les ports série ne peuvent pas être ouverts (restriction Linux par défaut). Cliquez ci-dessous et saisissez votre mot de passe dans la boîte de dialogue système — effet immédiat, sans redémarrage.",
+    "fixPerms": "Corriger les droits série",
+    "permFixing": "En attente d'autorisation… (saisissez votre mot de passe)"
   },
   "bookmark": {
     "logs": "Journaux",

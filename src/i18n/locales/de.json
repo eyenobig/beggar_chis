@@ -23,7 +23,10 @@
     "selected": "Gewählt",
     "selectHint": "Mehrere Brenner erkannt — tippen Sie auf das gewünschte Gerät",
     "selectHintShort": "Gerät wählen",
-    "busy": "Belegt"
+    "busy": "Belegt",
+    "permHint": "Brenner erkannt, aber die seriellen Ports lassen sich nicht öffnen (Linux-Standardeinschränkung). Klicke unten und gib im Systemdialog dein Login-Passwort ein — sofort wirksam, ohne Neustart.",
+    "fixPerms": "Seriell-Berechtigung reparieren",
+    "permFixing": "Warte auf Autorisierung… (Passwort eingeben)"
   },
   "bookmark": {
     "logs": "Protokoll",
