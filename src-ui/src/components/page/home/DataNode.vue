@@ -6,6 +6,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useCartData } from '../../../stores/useCartData'
 import { useEmulator } from '../../../stores/useEmulator'
+import { useConnection } from '../../../stores/useConnection'
 import { gameCodeOf, romTitleOf } from '../../drawer/logs/rom/romFields'
 
 const props = defineProps({ kind: { type: String, required: true } }) // 'rom' | 'save'
@@ -13,6 +14,7 @@ const { t } = useI18n()
 const cart = useCartData()
 const { romFile, saveFile, cartInfo, cartReading, opRunning } = storeToRefs(cart)
 const emu = useEmulator()
+const conn = useConnection()
 const { logsOpen, activeTab } = storeToRefs(emu)
 
 /** 识别点击后短时忽略卡片点击，避免 disabled/穿透误开 ROM */
@@ -37,7 +39,9 @@ async function onIdentify(event) {
   await cart.readCart()
 }
 
-const identifyBusy = computed(() => opRunning.value || cartReading.value)
+const identifyBusy = computed(
+  () => opRunning.value || cartReading.value || conn.directPlay,
+)
 
 const isRom = computed(() => props.kind === 'rom')
 const dropped = computed(() => (isRom.value ? romFile.value : saveFile.value))

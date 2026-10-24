@@ -1,36 +1,31 @@
 /**
- * UI 整体缩放：等比调整内容渲染（webview zoom）+ 窗口尺寸。
+ * UI 整体缩放：在根节点施加 CSS zoom，等比放大布局像素。
  *
- * 基准尺寸 = tauri.conf.json 的初始窗口（376×780 逻辑像素）。
- * 缩放后窗口必须同比放大，否则固定窗口内容会被裁切。
- * setZoom 需 ACL `core:webview:allow-set-webview-zoom`；失败时静默（仅窗口缩放无效但布局仍可用）。
+ * 关键约束：窗口尺寸由 useWindowSync 独占（测量根容器 CSS 尺寸 → setSize）。
+ * 因此绝不能用 webview setZoom + 手动 setSize——zoom 不改变 CSS 布局像素，
+ * ResizeObserver 量到的仍是原始尺寸，会立刻把窗口改回去，缩放永远不生效。
+ * CSS zoom 让布局整体放大，useWindowSync 自动跟随（含抽屉展开等状态宽度）。
  */
-import { inTauri } from './cfb'
+export const UI_SCALE_MIN = 0.75
+export const UI_SCALE_MAX = 2
+export const UI_SCALE_STEP = 0.05
 
-export const UI_SCALE_BASE = { w: 376, h: 780 }
+const round2 = (n) => Math.round(n * 100) / 100
 
-/** 允许的档位（与设置页下拉一致）。 */
-export const UI_SCALE_OPTIONS = [0.9, 1, 1.1, 1.2, 1.25, 1.5]
-
+/** 夹到范围内并按步进吸附（消浮点尘埃）；非法值回退 1。 */
 export function normalizeUiScale(v) {
   const n = Number(v)
-  return UI_SCALE_OPTIONS.includes(n) ? n : 1
+  if (!Number.isFinite(n)) return 1
+  const snapped = Math.round((n - UI_SCALE_MIN) / UI_SCALE_STEP) * UI_SCALE_STEP + UI_SCALE_MIN
+  return round2(Math.min(UI_SCALE_MAX, Math.max(UI_SCALE_MIN, snapped)))
 }
 
-/** 应用缩放：zoom 内容 + 等比放大窗口。幂等；非 Tauri 环境静默跳过。 */
-export async function applyUiScale(scale) {
+/** 应用缩放：根节点 CSS zoom；窗口尺寸交由 useWindowSync 跟随。幂等，浏览器 dev 同样生效。 */
+export function applyUiScale(scale) {
   const s = normalizeUiScale(scale)
-  if (!inTauri) return
-  try {
-    const [{ getCurrentWebview }, { getCurrentWindow, LogicalSize }] = await Promise.all([
-      import('@tauri-apps/api/webview'),
-      import('@tauri-apps/api/window'),
-    ])
-    await getCurrentWebview().setZoom(s).catch(() => {})
-    await getCurrentWindow().setSize(
-      new LogicalSize(Math.round(UI_SCALE_BASE.w * s), Math.round(UI_SCALE_BASE.h * s)),
-    )
-  } catch {
-    /* 缩放失败不阻塞启动 */
-  }
+  if (typeof document === 'undefined') return
+  document.documentElement.style.zoom = s === 1 ? '' : String(s)
+  // zoom 不改变布局 px，根容器的 ResizeObserver 不会触发；
+  // 显式通知 EmulatorWidget 重测根容器并把窗口调到 布局尺寸 × zoom
+  window.dispatchEvent(new CustomEvent('ui-scale-applied'))
 }

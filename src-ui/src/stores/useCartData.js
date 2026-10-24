@@ -278,6 +278,18 @@ export const useCartData = defineStore('cart', () => {
     }
   })
 
+  // 识别快照持久化：DirectPlay 会话中面板保持展示，刷新后由会话恢复流程载入
+  watch(
+    cartInfo,
+    (v) => {
+      try {
+        if (v) localStorage.setItem('cartSnapshot', JSON.stringify(v))
+        else localStorage.removeItem('cartSnapshot')
+      } catch { /* 存储不可用时静默 */ }
+    },
+    { deep: false },
+  )
+
   let _readSeq = 0
   let _readInFlight = null
   let _opChild = null // 当前烧录/导出/擦除的 cfb 子进程 handle，用于中止
@@ -299,6 +311,12 @@ export const useCartData = defineStore('cart', () => {
   }
 
   async function pickRomFile() {
+    // DirectPlay 会话中串口由 SkyEmu 独占：禁止选择/上传 ROM
+    if (conn.directPlay) {
+      const msg = t('toast.sessionBlocked')
+      toast.error(msg)
+      return null
+    }
     if (!inTauri) {
       toast.error(t('toast.desktopOnlyRom'))
       return null
@@ -385,6 +403,13 @@ export const useCartData = defineStore('cart', () => {
       return false
     }
     if (c.kind === 'rom') {
+      // DirectPlay 会话中禁止上传 ROM（串口被 SkyEmu 独占，烧录不可用）
+      if (conn.directPlay) {
+        const msg = t('toast.sessionBlocked')
+        toast.error(msg)
+        logStore.addLog(msg, 'warn')
+        return false
+      }
       // 按当前平台筛选：ROM 平台须与当前选择一致；不匹配则拒绝，不自动切平台。
       if (c.mbc !== platformIsMbc(emu.currentPlatform)) {
         toast.error(
@@ -454,6 +479,8 @@ export const useCartData = defineStore('cart', () => {
       }
       return
     }
+    // DirectPlay 会话中串口由 SkyEmu 独占：静默跳过（面板保留上次识别信息，不清空）
+    if (conn.directPlay) return
     if (_readInFlight) return _readInFlight
     _readInFlight = _readCartImpl(opts).finally(() => {
       _readInFlight = null
@@ -620,6 +647,14 @@ export const useCartData = defineStore('cart', () => {
   async function burn() {
     const f = romFile.value
     if (!f || opRunning.value) return
+
+    // DirectPlay 会话中串口由 SkyEmu 独占：拒绝烧录
+    if (conn.directPlay) {
+      const msg = t('toast.sessionBlocked')
+      toast.error(msg)
+      logStore.addLog(msg, 'warn')
+      return
+    }
 
     // 载入后平台可能已被切换（手动 toggle / 识别卡带自动切）：烧录前重新校验，
     // 防止 --mbc 标志与 ROM/平台不一致导致错总线烧录（校验必炸且可能烧坏邻区）。
@@ -816,6 +851,13 @@ export const useCartData = defineStore('cart', () => {
 
   async function erase() {
     if (opRunning.value) return
+    // DirectPlay 会话中串口由 SkyEmu 独占：拒绝擦除
+    if (conn.directPlay) {
+      const msg = t('toast.sessionBlocked')
+      toast.error(msg)
+      logStore.addLog(msg, 'warn')
+      return
+    }
 
     const toolchain = await ensureToolchainReady()
     if (!toolchain.ok) {
@@ -935,6 +977,13 @@ export const useCartData = defineStore('cart', () => {
 
   async function dump() {
     if (opRunning.value) return
+    // DirectPlay 会话中串口由 SkyEmu 独占：拒绝导出
+    if (conn.directPlay) {
+      const msg = t('toast.sessionBlocked')
+      toast.error(msg)
+      logStore.addLog(msg, 'warn')
+      return
+    }
     const exportDir = await chooseExportDirectory(t('logs.exportRomPick'))
     if (!exportDir) return
 

@@ -63,6 +63,32 @@ export const useLogStore = defineStore('log', () => {
   /** @type {Record<string, number>} */
   const liveProgressIds = Object.create(null)
 
+  // 日志持久化：cfb 操作历史跨刷新保留（上限 200 条，防抖 500ms 写入）
+  const LOGS_STORAGE_KEY = 'cfbLogs'
+  const PERSIST_MAX = 200
+  let persistTimer = 0
+  function schedulePersist() {
+    if (persistTimer) return
+    persistTimer = setTimeout(() => {
+      persistTimer = 0
+      try {
+        const entries = logs.value
+          .slice(-PERSIST_MAX)
+          .map(({ id, timestamp, timeStr, message, type, count, elapsed, isTotal, isProgress }) => ({
+            id, timestamp, timeStr, message, type, count, elapsed, isTotal, isProgress,
+          }))
+        localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify(entries))
+      } catch { /* 存储不可用时静默 */ }
+    }, 500)
+  }
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOGS_STORAGE_KEY) || '[]')
+    if (Array.isArray(saved) && saved.length) {
+      logs.value = saved.filter((l) => l && typeof l.message === 'string' && VALID_TYPES.has(l.type))
+      nextLogId = logs.value.reduce((m, l) => Math.max(m, Number(l.id) || 0), 0) + 1
+    }
+  } catch { /* 快照损坏则从空日志开始 */ }
+
   function clearLiveProgress(phase) {
     if (phase === LIVE_TOTAL_KEY) {
       delete liveProgressIds[LIVE_TOTAL_KEY]
@@ -108,6 +134,7 @@ export const useLogStore = defineStore('log', () => {
       existing.isTotal = key === LIVE_TOTAL_KEY
       existing.isProgress = key === LIVE_PROGRESS_KEY
       liveProgressIds[key] = existing.id
+      schedulePersist()
       ensureTotalAtBottom()
       hasUnread.value = true
       return existing.id
@@ -128,6 +155,7 @@ export const useLogStore = defineStore('log', () => {
     liveProgressIds[key] = entry.id
     ensureTotalAtBottom()
     hasUnread.value = true
+    schedulePersist()
     return entry.id
   }
 
@@ -159,6 +187,7 @@ export const useLogStore = defineStore('log', () => {
     ) {
       last.count++
       hasUnread.value = true
+      schedulePersist()
       return last.id
     }
 
@@ -208,6 +237,9 @@ export const useLogStore = defineStore('log', () => {
     logs.value = []
     hasUnread.value = false
     for (const k of Object.keys(liveProgressIds)) delete liveProgressIds[k]
+    try {
+      localStorage.removeItem(LOGS_STORAGE_KEY)
+    } catch { /* 忽略 */ }
   }
 
   return {

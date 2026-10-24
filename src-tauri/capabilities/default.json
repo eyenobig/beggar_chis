@@ -96,6 +96,7 @@
     "allow-toolchain",
     "allow-bosskey",
     "allow-screenshot",
+    "allow-skyemu-session",
     "core:webview:allow-set-webview-zoom"
   ]
 }

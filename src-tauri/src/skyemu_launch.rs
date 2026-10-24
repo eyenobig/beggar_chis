@@ -253,6 +253,39 @@ mod tests {
 }
 
 
+/// 进程存活检查（Windows 无 waitpid，用任务管理器思路: 检查进程存在）。
+#[cfg(windows)]
+fn pid_alive(pid: u32) -> bool {
+    std::process::Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {pid}"), "/NH"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains(&pid.to_string()))
+        .unwrap_or(true)
+}
+
+#[cfg(not(windows))]
+fn pid_alive(pid: u32) -> bool {
+    std::path::Path::new(&format!("/proc/{pid}")).exists()
+}
+
+
+/// 设置页「串口权限授权」状态查询：Linux 检查 udev 规则是否已安装；
+/// macOS/Windows 无持久授权态（状态由前端按串口可打开性动态判定）。
+#[tauri::command]
+pub async fn serial_auth_status() -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "linux")]
+    {
+        let installed = std::fs::read_to_string("/etc/udev/rules.d/99-chisflash.rules")
+            .map(|s| s.contains("chisflash-burner") && s.contains("0483") && s.contains("0721"))
+            .unwrap_or(false);
+        return Ok(serde_json::json!({ "platform": "linux", "authorized": installed }));
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        return Ok(serde_json::json!({ "platform": "other", "authorized": null }));
+    }
+}
+
 /// 监控 SkyEmu 进程, 退出后自动 cfb detect (恢复 chis-flasher 对烧录器的控制)。
 /// 前端在 launch 成功后调用, 传入 spawn 返回的 pid。
 #[tauri::command]
@@ -262,18 +295,9 @@ pub async fn skyemu_watch_exit(
 ) -> Result<(), String> {
     log_printf(&format!("watching SkyEmu pid {pid} for exit..."));
     tauri::async_runtime::spawn_blocking(move || {
-        // 轮询等待进程退出 (Windows 无 waitpid, 用任务管理器思路: 检查进程存在)
+        // 轮询等待进程退出
         loop {
-            #[cfg(windows)]
-            let alive = std::process::Command::new("tasklist")
-                .args(["/FI", &format!("PID eq {pid}"), "/NH"])
-                .output()
-                .map(|o| String::from_utf8_lossy(&o.stdout).contains(&pid.to_string()))
-                .unwrap_or(true);
-            #[cfg(not(windows))]
-            let alive = std::path::Path::new(&format!("/proc/{pid}")).exists();
-
-            if !alive {
+            if !pid_alive(pid) {
                 log_printf(&format!("SkyEmu (pid {pid}) exited; notifying frontend..."));
                 break;
             }

@@ -26,7 +26,9 @@ function withBurnArgs(args) {
 export const cfbClient = Object.freeze({
   detect: (onEvent) => executeCfb(['detect'], onEvent),
   // 走 streamCfb（无 30s 超时）：pkexec 密码框可能等用户输入很久。
-  installUdev: (onEvent, onChild) => streamCfb(['udev'], onEvent, onChild),
+  // forceSidecar：串口修复是客户端自身能力（udev/释放占用随应用版本实现），
+  // 必须用内置 sidecar——用户配置的 cfbBinPath 引擎可能较旧而没有对应分支。
+  installUdev: (onEvent, onChild) => streamCfb(['udev'], onEvent, onChild, { forceSidecar: true }),
   selectPort: (port, onEvent) => executeCfb(['select', '--port', port], onEvent),
   disconnect: (onEvent) => executeCfb(['disconnect'], onEvent),
   setVoltage: (voltage, onEvent) =>

@@ -6,12 +6,14 @@ import { useI18n } from 'vue-i18n'
 import { Download, Flame, Square, Trash2 } from '@lucide/vue'
 import { useCartData } from '../../../stores/useCartData'
 import { useCfbSettings } from '../../../stores/useCfbSettings'
+import { useConnection } from '../../../stores/useConnection'
 import UiSelect from '../../ui/UiSelect.vue'
 
 const { t } = useI18n()
 const cart = useCartData()
 const settings = useCfbSettings()
 const { romFile, flashInfo, opRunning, opKind, opResult, confirm, preferMbc } = storeToRefs(cart)
+const { directPlay } = storeToRefs(useConnection())
 
 /** 擦除范围：仅 GB/GBC 卡显示（GBA 无隐藏头部区）。彻底=连开机窗一起清。 */
 const eraseModeOptions = [
@@ -28,7 +30,9 @@ const isRomOp = computed(() => opRunning.value && ROM_OPS.includes(opKind.value)
 /** 擦除为破坏性整片操作：与存档区同款二次确认状态 */
 const isDangerConfirm = computed(() => confirm.value === 'erase')
 /** 有 ROM 即可点；未连接/未识别时 burn() 内 toast 并引导选口，避免按钮灰着「无法使用」。 */
-const canBurn = computed(() => !opRunning.value && !!romFile.value)
+const canBurn = computed(() => !opRunning.value && !!romFile.value && !directPlay.value)
+/** SkyEmu 会话中串口被独占：导出/擦除同样不可用 */
+const opBlocked = computed(() => opRunning.value || directPlay.value)
 
 /** 完成后左上角显示结果；仅 ROM 操作结果；点击还原 */
 const showResult = ref(false)
@@ -156,7 +160,7 @@ function dismissResult() {
         data-no-drag
         type="button"
         class="inline-flex h-7 items-center justify-center gap-0.5 rounded-md bg-white text-[9px] font-black text-zinc-950 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-30"
-        :disabled="opRunning || !flashInfo"
+        :disabled="opBlocked || !flashInfo"
         @click="cart.dump()"
         :title="t('rom.ops.exportRomTitle')"
       >
@@ -167,7 +171,7 @@ function dismissResult() {
         data-no-drag
         type="button"
         class="inline-flex h-7 items-center justify-center gap-0.5 rounded-md bg-white text-[9px] font-black text-zinc-950 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-30"
-        :disabled="opRunning || !flashInfo"
+        :disabled="opBlocked || !flashInfo"
         @click="cart.requestConfirm('erase')"
       >
         <Trash2 class="h-3 w-3 text-red-400" />

@@ -11,7 +11,7 @@ const conn = useConnection()
 const { cartReading, opRunning } = storeToRefs(cart)
 
 const disabled = computed(
-  () => opRunning.value || cartReading.value || !conn.isConnected,
+  () => opRunning.value || cartReading.value || !conn.isConnected || conn.directPlay,
 )
 
 async function onIdentify() {

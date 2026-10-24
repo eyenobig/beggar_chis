@@ -11,15 +11,17 @@ import { useSkyEmuDownload } from '../../../composables/useSkyEmuDownload'
 import { useCfbRuleDownload } from '../../../composables/useCfbRuleDownload'
 import { useToolchainVersions } from '../../../composables/useToolchainVersions'
 import { useCfbSettings } from '../../../stores/useCfbSettings'
-import { applyUiScale, UI_SCALE_OPTIONS } from '../../../services/uiScale'
+import { applyUiScale, UI_SCALE_MAX, UI_SCALE_MIN, UI_SCALE_STEP } from '../../../services/uiScale'
 import { useEmulator } from '../../../stores/useEmulator'
 import { useLogStore } from '../../../stores/useLogStore'
 import { useCartridgeCache } from '../../../stores/useCartridgeCache'
+import { useConnection } from '../../../stores/useConnection'
 import { useToast } from '../../../stores/useToast'
 import { useDragScroll } from '../../../composables/useDragScroll'
 import SettingHint from '../../settings/SettingHint.vue'
 import ToolchainPathField from '../../settings/ToolchainPathField.vue'
 import UiSelect from '../../ui/UiSelect.vue'
+import UiSlider from '../../ui/UiSlider.vue'
 import UiSwitch from '../../ui/UiSwitch.vue'
 
 const { scrollBind } = useDragScroll()
@@ -38,6 +40,8 @@ async function downloadCfb() {
   await refreshCfbVersion()
 }
 const { records: cachedCartridges } = storeToRefs(cartridgeCache)
+const conn = useConnection()
+const { fixingPerms, permFixPhase } = storeToRefs(conn)
 const { currentPlatform, skyEmuPath } = storeToRefs(emulator)
 const {
   language,
@@ -100,6 +104,7 @@ function onRecordKey(e) {
 onMounted(() => {
   window.addEventListener('keydown', onRecordKey, true)
   refreshCfbVersion()
+  refreshAuthStatus()
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', onRecordKey, true))
 
@@ -108,16 +113,67 @@ const languageOptions = computed(() => [
   ...Object.entries(SUPPORTED).map(([value, label]) => ({ value, label })),
 ])
 
-/** UI 整体缩放档位（窗口尺寸同比调整，见 services/uiScale） */
-const uiScaleOptions = UI_SCALE_OPTIONS.map((value) => ({
-  value,
-  label: `${Math.round(value * 100)}%`,
-}))
-watch(uiScale, (s) => applyUiScale(s))
+/** UI 缩放滑块（0.75~2，CSS zoom 放大布局，窗口由 useWindowSync 跟随，见 services/uiScale） */
+const uiScalePercent = computed(() => `${Math.round(uiScale.value * 100)}%`)
+// 拖动中只更新标签（update:modelValue），松手/点击落定（commit）才应用：
+// 滑块在被缩放的界面里，边拖边缩放会让它在指针下移动导致错位
+function onUiScaleCommit() {
+  applyUiScale(uiScale.value)
+}
 
 const saving = ref(false)
 const verifying = ref(false)
 const isGbFamily = computed(() => currentPlatform.value === 'gbc')
+
+// 串口权限授权（三平台，仿 Linux udev 流程）：动作由 cfb udev 按平台分流。
+// phase：none=端口正常；fixed/installed=已修复；prompt=等待提权授权；canceled/failed=失败。
+const uaP = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+const isLinuxP = /Linux/.test(uaP)
+const isMacP = /Mac/.test(uaP) && !/iPhone|iPad/.test(uaP)
+
+const serialFixLabel = computed(() =>
+  fixingPerms.value ? t('conn.permFixing') : t('settings.serialAuthReauth'),
+)
+const serialFixHint = computed(() => {
+  const phase = permFixPhase.value
+  if (fixingPerms.value && phase) return t(`conn.permPhase.${phase}`)
+  return isLinuxP
+    ? t('settings.serialAuthDescLinux')
+    : isMacP
+      ? t('settings.serialAuthDescMac')
+      : t('settings.serialAuthDescWin')
+})
+
+// 授权状态徽章：Linux 看 udev 规则是否已装；mac/win 看烧录器串口当前是否可打开
+const authAuthorized = ref(null) // null=未知（非 linux 由串口探测决定）
+const permBlockedNow = computed(() => conn.burners.some((d) => d.open === false))
+const authBadgeOk = computed(() =>
+  isLinuxP ? authAuthorized.value === true : !permBlockedNow.value,
+)
+
+async function refreshAuthStatus() {
+  if (!isLinuxP || !inTauri) return
+  try {
+    const r = await invoke('serial_auth_status')
+    authAuthorized.value = r?.authorized === true
+  } catch {
+    authAuthorized.value = null
+  }
+}
+
+async function onSerialFix() {
+  if (fixingPerms.value) return
+  const ok = await conn.fixSerialPerms()
+  const phase = permFixPhase.value
+  if (ok && phase === 'none') {
+    toast.info(t('conn.permFixNone'))
+  } else if (ok) {
+    toast.success(t('conn.permFixDone'))
+  } else {
+    toast.error(conn.lastError || t('conn.permFixFail'))
+  }
+  await refreshAuthStatus()
+}
 
 const voltageLabel = computed(() =>
   voltageAuto.value ? t('settings.voltageAutoLabel') : manualVoltage.value,
@@ -260,11 +316,40 @@ function toggleManualVoltage() {
 </script>
 
 <template>
-  <div
-    data-drawer-scroll
-    class="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar px-5 py-4 space-y-5 text-zinc-200 [touch-action:pan-y]"
-    v-bind="scrollBind"
-  >
+    <div
+      data-drawer-scroll
+      class="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar px-5 py-4 space-y-5 text-zinc-200 [touch-action:pan-y]"
+      v-bind="scrollBind"
+    >
+      <!-- 串口权限授权（三平台，样式与位置对齐 Linux 版） -->
+      <section class="space-y-3">
+        <h3 class="text-[11px] font-black uppercase tracking-widest text-zinc-400">{{ $t('settings.serialAuth') }}</h3>
+        <div class="space-y-2">
+          <div class="flex min-h-9 items-center justify-between gap-3 py-1">
+            <span class="text-[11px] font-bold text-zinc-300">{{ $t('settings.serialAuthStatus') }}</span>
+            <div class="flex items-center gap-2">
+              <span
+                class="rounded border px-1.5 py-0.5 text-[9px] font-bold"
+                :class="authBadgeOk
+                  ? 'border-green-500/50 text-green-400'
+                  : 'border-amber-400/60 text-amber-300'"
+              >{{ authBadgeOk ? $t('settings.serialAuthBadgeOk') : $t('settings.serialAuthBadgeNo') }}</span>
+              <button
+                data-no-drag
+                type="button"
+                class="rounded-md border border-amber-400/60 px-2.5 py-1 text-[10px] font-bold text-amber-300
+                       hover:bg-amber-400/10 active:scale-95 transition-all disabled:opacity-60"
+                :disabled="fixingPerms || !inTauri"
+                @click="onSerialFix"
+              >
+                {{ serialFixLabel }}
+              </button>
+            </div>
+          </div>
+          <p class="text-[9px] leading-snug text-zinc-500">{{ serialFixHint }}</p>
+        </div>
+      </section>
+
     <section class="space-y-3">
       <div class="flex items-center justify-between gap-2">
         <h3 class="text-[11px] font-black uppercase tracking-widest text-zinc-400">{{ $t('settings.toolchain') }}</h3>
@@ -307,6 +392,7 @@ function toggleManualVoltage() {
           @pick="pickRuleDir"
           @download="downloadRule"
         />
+        <!-- 串口授权修复：样式与位置复刻连接弹窗的 Linux 授权卡片（深色抽屉适配） -->
       </div>
     </section>
 
@@ -361,12 +447,23 @@ function toggleManualVoltage() {
         <UiSelect v-model="language" :options="languageOptions" />
       </div>
 
-      <div class="space-y-1.5">
-        <span class="flex items-center gap-1 text-[11px] font-bold text-zinc-400">
-          {{ $t('settings.uiScale') }}
-          <SettingHint :text="$t('settings.uiScaleHint')" />
-        </span>
-        <UiSelect v-model="uiScale" :options="uiScaleOptions" />
+      <div class="space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <span class="flex items-center gap-1 text-[11px] font-bold text-zinc-400">
+            {{ $t('settings.uiScale') }}
+            <SettingHint :text="$t('settings.uiScaleHint')" />
+          </span>
+          <span class="text-[10px] font-bold tabular-nums text-emerald-400">{{ uiScalePercent }}</span>
+        </div>
+        <UiSlider
+          v-model="uiScale"
+          :min="UI_SCALE_MIN"
+          :max="UI_SCALE_MAX"
+          :step="UI_SCALE_STEP"
+          ticks
+          :label="$t('settings.uiScale')"
+          @commit="onUiScaleCommit"
+        />
       </div>
 
       <div v-if="isGbFamily" class="space-y-2">

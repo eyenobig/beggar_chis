@@ -36,10 +36,20 @@ export const useConnection = defineStore('connection', () => {
   const isConnected = computed(() => connected.value && !!selectedPort.value)
   const isConnecting = computed(() => detecting.value && !connected.value)
 
-  // Linux 串口权限被挡：有烧录器但全部打不开（open=false）。cfb udev 可一键修复。
-  const isLinux = typeof navigator !== 'undefined' && /Linux/.test(navigator.userAgent)
+  // 串口被挡（有烧录器但全部打不开 open=false）一键修复：
+  // Linux → 权限不足，cfb udev 一键装规则；macOS → 串口被其他程序占用，一键释放；
+  // Windows → 被残留进程占用（SkyEmu / 卡死的 cfb），一键结束（排除会话中——
+  // directPlay 时 SkyEmu 持有串口是设计使然，绝不能在弹窗里把它杀掉）。
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+  const isLinux = /Linux/.test(ua)
+  const isMac = /Mac/.test(ua) && !/iPhone|iPad/.test(ua)
+  const isWindows = /Windows/.test(ua)
   const permBlocked = computed(
-    () => isLinux && burners.value.length > 0 && burners.value.every((d) => d.open === false),
+    () =>
+      (isLinux || isMac || isWindows) &&
+      !directPlay.value &&
+      burners.value.length > 0 &&
+      burners.value.every((d) => d.open === false),
   )
   const fixingPerms = ref(false)
   const permFixPhase = ref('') // prompt | installed | already | canceled | manual | failed
@@ -287,8 +297,9 @@ export const useConnection = defineStore('connection', () => {
   }
 
   /**
-   * 一键修复 Linux 串口权限：跑 `cfb udev`（pkexec 弹系统密码框安装 udev 规则，
-   * uaccess 授权当前桌面用户，免重登免拔插）。成功后自动重新 detect 接上烧录器。
+   * 一键修复烧录器串口（三平台，强制内置 sidecar）：
+   * Linux 装udev 规则（pkexec 密码框）；macOS 释放占用 + 提权修设备节点；
+   * Windows 释放占用 + UAC 提权修设备状态。成功后自动重新 detect 接上烧录器。
    */
   async function fixSerialPerms() {
     if (!inTauri || fixingPerms.value) return false
@@ -301,7 +312,8 @@ export const useConnection = defineStore('connection', () => {
         else if (ev.type === 'error') lastError.value = ev.message
       })
       const ok = res.code === 0
-      if (ok) await detect() // 规则已 trigger，立即重连
+      if (!ok && !lastError.value) lastError.value = res.error || ''
+      if (ok) await detect() // 规则已 trigger / 设备已修复，立即重连
       return ok
     } catch (e) {
       lastError.value = String(e?.message || e)

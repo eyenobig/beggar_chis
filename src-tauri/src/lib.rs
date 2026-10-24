@@ -43,6 +43,7 @@ pub fn run() {
             event_listener::poll_events,
             skyemu_launch::launch_skyemu,
             skyemu_launch::skyemu_watch_exit,
+            skyemu_launch::serial_auth_status,
             toolchain::git_head_sha,
             toolchain::git_pull,
             toolchain::rebuild_cfb_sidecar,

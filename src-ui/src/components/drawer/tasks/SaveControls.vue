@@ -5,11 +5,13 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { CheckCircle2, Download, Square, Trash2, Upload } from '@lucide/vue'
 import { useCartData } from '../../../stores/useCartData'
+import { useConnection } from '../../../stores/useConnection'
 import UiSelect from '../../ui/UiSelect.vue'
 
 const { t } = useI18n()
 const cart = useCartData()
 const { saveFile, saveType, flashInfo, opRunning, opKind, opResult, confirm, preferMbc } = storeToRefs(cart)
+const { directPlay } = storeToRefs(useConnection())
 
 const saveTypeOptions = computed(() => preferMbc.value
   ? [
@@ -27,9 +29,9 @@ const saveTypeOptions = computed(() => preferMbc.value
 const SAVE_OPS = ['saveDump', 'saveWrite', 'saveVerify', 'saveErase']
 const isSaveOp = computed(() => opRunning.value && SAVE_OPS.includes(opKind.value))
 /** 有存档即可点；未连接/未识别时由 saveWrite/saveVerify 内 toast，避免按钮灰着「无法使用」。 */
-const canWrite = computed(() => !opRunning.value && !!saveFile.value)
-const canVerify = computed(() => !opRunning.value && !!saveFile.value)
-const canDump = computed(() => !opRunning.value && !!flashInfo.value)
+const canWrite = computed(() => !opRunning.value && !!saveFile.value && !directPlay.value)
+const canVerify = computed(() => !opRunning.value && !!saveFile.value && !directPlay.value)
+const canDump = computed(() => !opRunning.value && !!flashInfo.value && !directPlay.value)
 const isDangerConfirm = computed(() => confirm.value === 'saveWrite' || confirm.value === 'saveErase')
 
 const showResult = ref(false)

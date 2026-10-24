@@ -1,9 +1,13 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
-import { currentMonitor, getCurrentWindow, LogicalSize, PhysicalPosition } from '@tauri-apps/api/window'
+import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
 
 /**
  * 根容器尺寸 → Tauri 窗口大小。
  * 卡带/吐纸靠 padding 预留，测量必须含 padding；只应用最新一次 setSize。
+ *
+ * 窗口位置完全由用户手动控制：setSize 只改大小、锚定左上角，绝不自动挪位——
+ * 任何"保证可见"的钳制都会在用户故意把窗口拖出屏幕（如 200% 缩放时够到底部
+ * 设置项）时把窗口拽回去，已按用户要求移除。
  */
 export function useWindowSync(elRef, deps = []) {
   let ro = null
@@ -11,30 +15,6 @@ export function useWindowSync(elRef, deps = []) {
   let seq = 0
   let debounceTimer = 0
   let pending = null
-
-  async function ensureVisible(appWindow) {
-    try {
-      const [position, size, monitor] = await Promise.all([
-        appWindow.outerPosition(),
-        appWindow.outerSize(),
-        currentMonitor(),
-      ])
-      if (!monitor) return
-      const area = monitor.workArea || { position: monitor.position, size: monitor.size }
-      const minY = area.position.y
-      const maxY = area.position.y + area.size.height
-      // 窗口高于工作区时无法完整显示，优先保证顶部（卡带）可见
-      const targetY = Math.min(
-        Math.max(position.y, minY),
-        Math.max(minY, maxY - Math.min(size.height, area.size.height)),
-      )
-      if (targetY !== position.y) {
-        await appWindow.setPosition(new PhysicalPosition(position.x, targetY))
-      }
-    } catch (e) {
-      if (window.__TAURI_INTERNALS__) console.warn('[useWindowSync:visible]', e)
-    }
-  }
 
   async function syncSize(width, height, token) {
     if (token !== seq) return
@@ -44,10 +24,6 @@ export function useWindowSync(elRef, deps = []) {
     } catch (e) {
       if (window.__TAURI_INTERNALS__) console.error('[useWindowSync]', e)
     }
-    if (token !== seq) return
-    await new Promise((resolve) => requestAnimationFrame(resolve))
-    if (token !== seq) return
-    await ensureVisible(appWindow)
   }
 
   function queueSize(width, height) {
@@ -66,7 +42,7 @@ export function useWindowSync(elRef, deps = []) {
 
   /** 显式计入 padding，避免 WebView 把 border-box 量矮导致裁切白卡片/吐纸 */
   function measureRoot(el) {
-    if (!el) return { width: 0, height: 0 }
+    if (!el) return { width: 0, height: 0, zoom: 1 }
     const style = getComputedStyle(el)
     const padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
     const padY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0)
@@ -82,16 +58,19 @@ export function useWindowSync(elRef, deps = []) {
       flowRight = Math.max(flowRight, child.offsetLeft + child.offsetWidth)
     }
 
-    const width = Math.max(el.offsetWidth, Math.ceil(rect.width), Math.ceil(flowRight + padX))
-    const height = Math.max(el.offsetHeight, Math.ceil(rect.height), Math.ceil(flowBottom + padY))
+    // CSS zoom（UI 缩放）下 gBCR 返回的是缩放后的客户端 px，offset*/padding 是本地 px；
+    // 统一归一到本地 px 再乘 zoom，窗口逻辑尺寸 = 布局尺寸 × zoom
+    const zoom = parseFloat(document.documentElement.style.zoom) || 1
+    const width = Math.max(el.offsetWidth, Math.ceil(rect.width / zoom), Math.ceil(flowRight + padX))
+    const height = Math.max(el.offsetHeight, Math.ceil(rect.height / zoom), Math.ceil(flowBottom + padY))
 
-    return { width, height }
+    return { width, height, zoom }
   }
 
   function push() {
     if (!elRef.value || paused.value) return
-    const { width, height } = measureRoot(elRef.value)
-    queueSize(width, height)
+    const { width, height, zoom } = measureRoot(elRef.value)
+    queueSize(Math.round(width * zoom), Math.round(height * zoom))
   }
 
   onMounted(() => {

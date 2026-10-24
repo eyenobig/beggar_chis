@@ -93,14 +93,16 @@ class DirectCfbCommand {
 /**
  * 构造本次调用要使用的命令对象：配置了 `cfbBinPath` 时走直连二进制模式
  * （解析已有可执行文件 + `DirectCfbCommand`），否则保持内置 sidecar 行为完全不变。
+ * `forceSidecar`：客户端自身能力（如 udev 权限修复）强制走内置 sidecar——
+ * 这些能力与应用版本绑定，用户配置的 cfb 引擎可能较旧而没有对应实现。
  * 两种模式都注入 CFB_RULE_DIR，把设置页的 rule 数据目录绑定到 cfb。
  * 注意：plugin-shell v2 的 Command 没有 .env() 方法，sidecar 只能在构造 options 里传 env。
  */
-async function createCommand(args) {
+async function createCommand(args, { forceSidecar = false } = {}) {
   const settings = useCfbSettings()
   const finalArgs = [...settings.withGlobalArgs(args), '--json']
   const ruleDir = cfbRuleDirEnv()
-  if (settings.cfbBinPath) {
+  if (!forceSidecar && settings.cfbBinPath) {
     const binPath = await resolveDirectBinary(settings.cfbBinPath)
     return new DirectCfbCommand(binPath, finalArgs, ruleDir)
   }
@@ -156,14 +158,14 @@ export async function executeCfb(args, onEvent) {
   })
 }
 
-export async function streamCfb(args, onEvent, onChild) {
+export async function streamCfb(args, onEvent, onChild, opts = {}) {
   if (!inTauri) throw new Error('cfb is only available in Tauri runtime. Use npm run dev.')
   return withCfbLock(async () => {
     const logs = []
     let buffer = ''
 
     try {
-      const command = await createCommand(args)
+      const command = await createCommand(args, opts)
 
       command.stdout.on('data', (chunk) => {
         buffer += String(chunk)

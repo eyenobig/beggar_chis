@@ -21,6 +21,15 @@ const {
 } = storeToRefs(conn)
 const { closeDialog, connect, disconnect, detect, pickDevice, fixSerialPerms } = conn
 
+// 平台区分修复提示：Linux 权限不足（装 udev 规则）/ macOS 端口被占用 / Windows 被残留进程占用
+const isMac = /Mac/i.test(navigator.userAgent) && !/iPhone|iPad/i.test(navigator.userAgent)
+const isWin = /Windows/i.test(navigator.userAgent)
+const permHint = computed(() => {
+  if (isMac) return t('conn.permHintMac')
+  if (isWin) return t('conn.permHintWin')
+  return t('conn.permHint')
+})
+
 const errorText = computed(() => {
   if (!lastError.value) return ''
   if (lastError.value === 'select_required') return t('conn.selectHint')
@@ -140,7 +149,7 @@ function deviceMeta(d) {
             class="rounded-lg border border-amber-200 bg-amber-50/80 px-2.5 py-2 space-y-1.5"
           >
             <div class="text-[10px] leading-snug text-amber-700 font-semibold">
-              {{ $t('conn.permHint') }}
+              {{ permHint }}
             </div>
             <button
               data-no-drag

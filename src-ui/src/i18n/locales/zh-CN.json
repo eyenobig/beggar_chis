@@ -29,7 +29,23 @@
     "busy": "占用中",
     "permHint": "检测到烧录器但串口无权限打开（Linux 默认限制）。点下方按钮，在系统密码框输入登录密码即可，免重启立即生效。",
     "fixPerms": "一键修复串口权限",
-    "permFixing": "等待系统授权…（请输入登录密码）"
+    "permFixing": "等待系统授权…（请输入登录密码）",
+    "permHintMac": "检测到串口无法打开：一键修复将先结束占用进程，必要时弹出系统密码框修复设备访问权限，立即生效",
+    "permHintWin": "检测到串口无法打开：一键修复将先结束占用进程，必要时通过 UAC 提权修复设备状态，立即生效",
+    "permFixNone": "串口状态正常，无需修复",
+    "permFixDone": "串口修复完成，已重新连接",
+    "permFixFail": "串口修复未完成",
+    "permPhase": {
+      "checking": "正在检查串口状态…",
+      "prompt": "等待系统授权…",
+      "installed": "已修复",
+      "fixed": "已释放占用",
+      "canceled": "已取消",
+      "failed": "修复失败",
+      "none": "无需修复",
+      "manual": "需要手动处理",
+      "skipped": "当前平台无需此修复"
+    }
   },
   "bookmark": {
     "logs": "日志",
@@ -151,7 +167,14 @@
     "serialReturned": "SkyEmu 已退出，串口控制已恢复。",
     "pickDest": "选择 SkyEmu 保存路径",
     "fail": "启动失败",
-    "directPlayLog": "启动 SkyEmu DirectPlay · {port} · {rom}"
+    "directPlayLog": "启动 SkyEmu DirectPlay · {port} · {rom}",
+    "refreshBlocked": "SkyEmu 会话中，已阻止刷新",
+    "closeSkyEmu": "关闭 SkyEmu",
+    "noSession": "当前没有 SkyEmu 会话",
+    "closing": "正在关闭 SkyEmu…",
+    "sessionRestored": "已恢复 SkyEmu 会话状态（刷新前会话仍在进行）",
+    "alreadyClosed": "SkyEmu 已关闭或未在运行",
+    "closeFail": "关闭 SkyEmu 失败"
   },
   "settings": {
     "title": "设置",
@@ -239,7 +262,17 @@
     "verifyNoOutput": "cfb version 无输出",
     "wordProgram": "单字",
     "uiScale": "UI 缩放",
-    "uiScaleHint": "整体放大或缩小界面，窗口尺寸同步调整。"
+    "uiScaleHint": "整体放大或缩小界面，窗口尺寸同步调整。",
+    "serialFix": "串口授权修复",
+    "serialFixDesc": "烧录器串口打不开时的一键修复：释放占用 / 权限规则 / 设备状态（按平台自动选择，可能弹出系统授权框）",
+    "serialAuth": "串口权限授权",
+    "serialAuthStatus": "授权状态",
+    "serialAuthBadgeOk": "已授权",
+    "serialAuthBadgeNo": "未授权",
+    "serialAuthReauth": "重新授权",
+    "serialAuthDescLinux": "Linux 默认限制串口访问。点击重新授权会弹出系统密码框安装 udev 规则，免重启立即生效。",
+    "serialAuthDescMac": "macOS 串口被其他程序占用或设备节点权限异常时，点击重新授权会先结束占用进程，必要时弹出系统密码框修复，立即生效。",
+    "serialAuthDescWin": "Windows 串口被其他程序占用或设备状态异常时，点击重新授权会先结束占用进程，必要时弹出 UAC 提权修复设备状态，立即生效。"
   },
   "help": {
     "verifyTitle": "校验说明",
@@ -329,7 +362,8 @@
     "shopInvalidLink": "无效的商店链接",
     "shopRefresh": "刷新",
     "shopOpenHome": "打开 GBMake 首页",
-    "shopEmpty": "当前没有启用烧录器推荐"
+    "shopEmpty": "当前没有启用烧录器推荐",
+    "sessionBlocked": "SkyEmu 会话中，串口由模拟器占用"
   },
   "logs": {
     "empty": "暂无日志",

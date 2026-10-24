@@ -29,7 +29,23 @@
     "busy": "Busy",
     "permHint": "Burners found but the serial ports cannot be opened (default Linux restriction). Click below and enter your login password in the system dialog — effective immediately, no reboot.",
     "fixPerms": "Fix serial permission",
-    "permFixing": "Waiting for authorization… (enter your password)"
+    "permFixing": "Waiting for authorization… (enter your password)",
+    "permHintMac": "Serial port won't open: the one-click fix releases holding apps first, then repairs device access via the system password dialog — effective immediately",
+    "permHintWin": "Serial port won't open: the one-click fix releases holding apps first, then repairs device state via UAC elevation — effective immediately",
+    "permFixNone": "Serial port is healthy — nothing to repair",
+    "permFixDone": "Serial port repaired and reconnected",
+    "permFixFail": "Serial repair did not complete",
+    "permPhase": {
+      "checking": "Checking serial port state…",
+      "prompt": "Waiting for system authorization…",
+      "installed": "Repaired",
+      "fixed": "Holders released",
+      "canceled": "Canceled",
+      "failed": "Repair failed",
+      "none": "Nothing to repair",
+      "manual": "Manual steps required",
+      "skipped": "Not needed on this platform"
+    }
   },
   "bookmark": {
     "logs": "Logs",
@@ -151,7 +167,14 @@
     "serialReturned": "SkyEmu exited; serial control restored.",
     "pickDest": "Choose SkyEmu save folder",
     "fail": "Launch failed",
-    "directPlayLog": "SkyEmu DirectPlay · {port} · {rom}"
+    "directPlayLog": "SkyEmu DirectPlay · {port} · {rom}",
+    "refreshBlocked": "SkyEmu session active — refresh blocked",
+    "closeSkyEmu": "Close SkyEmu",
+    "noSession": "No active SkyEmu session",
+    "closing": "Closing SkyEmu…",
+    "sessionRestored": "SkyEmu session state restored (session still running)",
+    "alreadyClosed": "SkyEmu already closed or not running",
+    "closeFail": "Failed to close SkyEmu"
   },
   "settings": {
     "title": "Settings",
@@ -239,7 +262,17 @@
     "verifyNoOutput": "cfb version produced no output",
     "wordProgram": "word",
     "uiScale": "UI scale",
-    "uiScaleHint": "Zoom the whole UI in or out; the window resizes accordingly."
+    "uiScaleHint": "Zoom the whole UI in or out; the window resizes accordingly.",
+    "serialFix": "Serial access repair",
+    "serialFixDesc": "One-click repair when the burner serial port won't open: release holders / permission rules / device state (per platform, may prompt for system authorization)",
+    "serialAuth": "Serial port authorization",
+    "serialAuthStatus": "Status",
+    "serialAuthBadgeOk": "Authorized",
+    "serialAuthBadgeNo": "Not authorized",
+    "serialAuthReauth": "Re-authorize",
+    "serialAuthDescLinux": "Linux restricts serial access by default. Re-authorize to install the udev rule via the system password dialog — effective immediately, no re-login.",
+    "serialAuthDescMac": "macOS: if the serial port is held by another app or node permissions are wrong, re-authorize releases holders first and repairs node permissions via the system password dialog.",
+    "serialAuthDescWin": "Windows: if the serial port is held by another app or the device state is abnormal, re-authorize releases holders first and repairs device state via UAC elevation."
   },
   "help": {
     "verifyTitle": "Verification",
@@ -329,7 +362,8 @@
     "shopInvalidLink": "Invalid shop link",
     "shopRefresh": "Refresh",
     "shopOpenHome": "Open GBMake home",
-    "shopEmpty": "No flasher recommendations enabled"
+    "shopEmpty": "No flasher recommendations enabled",
+    "sessionBlocked": "SkyEmu session active — serial is held by the emulator"
   },
   "logs": {
     "empty": "No logs yet",

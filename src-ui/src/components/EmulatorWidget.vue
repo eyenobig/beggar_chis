@@ -3,13 +3,16 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { getCurrentWindow, LogicalPosition } from '@tauri-apps/api/window'
 import { useEmulator } from '../stores/useEmulator'
+import { useConnection } from '../stores/useConnection'
 import { useWindowSync } from '../composables/useWindowSync'
 import { useCartData } from '../stores/useCartData'
 import { useTaskProgress } from '../stores/useTaskProgress'
 import { useToast } from '../stores/useToast'
 import { useCfbSettings } from '../stores/useCfbSettings'
 import { inTauri } from '../services/cfb'
+import { applyUiScale, normalizeUiScale, UI_SCALE_STEP } from '../services/uiScale'
 import WidgetHeader from './WidgetHeader.vue'
 import PlatformToggle from './PlatformToggle.vue'
 import HomePage from './page/home/HomePage.vue'
@@ -22,6 +25,8 @@ import RomCartridgeSlider from './drawer/logs/rom/RomCartridgeSlider.vue'
 const emu = useEmulator()
 const { t } = useI18n()
 const { logsOpen, shopOpen, settingsOpen, helpOpen, romShelfCollapsed } = storeToRefs(emu)
+const conn = useConnection()
+const { directPlay } = storeToRefs(conn)
 const { drawerOpen: tasksOpen } = storeToRefs(useTaskProgress())
 const { addLog, closeDrawers } = emu
 const cart = useCartData()
@@ -29,7 +34,7 @@ const { flashInfo, opRunning, opKind } = storeToRefs(cart)
 const { handleDrop } = cart
 const toastStore = useToast()
 const { paperHeight: toastPaperHeight } = storeToRefs(toastStore)
-const { thermalPaper, cartridgeStage, cartridgeStickers } = storeToRefs(useCfbSettings())
+const { thermalPaper, cartridgeStage, cartridgeStickers, uiScale } = storeToRefs(useCfbSettings())
 
 const root = ref(null)
 const homepageDropZone = ref(null)
@@ -75,9 +80,67 @@ const frameWidth = computed(() => {
   return 348 + BOOKMARK_W
 })
 
-useWindowSync(root, [cartridgeTopInset, toastBottomInset, frameWidth, thermalPaper])
+const { resync: resyncWindow } = useWindowSync(root, [cartridgeTopInset, toastBottomInset, frameWidth, thermalPaper])
+
+/** UI 缩放应用后重测窗口：zoom 不改变布局 px，ResizeObserver 对 zoom 变化不触发 */
+function onUiScaleApplied() {
+  resyncWindow()
+}
+
+/** Alt+方向键微调窗口位置（逻辑像素步进，支持负坐标） */
+async function moveWindowBy(dx, dy) {
+  if (!inTauri) return
+  try {
+    const w = getCurrentWindow()
+    const [pos, scale] = await Promise.all([w.outerPosition(), w.scaleFactor()])
+    await w.setPosition(
+      new LogicalPosition(
+        Math.round(pos.x / scale) + dx,
+        Math.round(pos.y / scale) + dy,
+      ),
+    )
+  } catch (err) {
+    console.warn('[moveWindowBy]', err)
+  }
+}
 
 function handleKeydown(event) {
+  // SkyEmu 会话中拦截刷新（F5 / Ctrl+R / Ctrl+Shift+R）：刷新会丢会话状态，
+  // 且串口在 SkyEmu 手里，刷新后的 detect 只会报占用
+  if (
+    directPlay.value &&
+    (event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r'))
+  ) {
+    event.preventDefault()
+    event.stopPropagation()
+    toastStore.error(t('launch.refreshBlocked'))
+    return
+  }
+  // 快捷键调缩放（与滑块同一 commit 通道）：Ctrl+Shift+U 放大 / Ctrl+Shift+D 缩小
+  if (event.ctrlKey && event.shiftKey && (event.code === 'KeyU' || event.code === 'KeyD')) {
+    event.preventDefault()
+    const step = event.code === 'KeyU' ? UI_SCALE_STEP : -UI_SCALE_STEP
+    const next = normalizeUiScale(uiScale.value + step)
+    if (next !== uiScale.value) {
+      uiScale.value = next
+      applyUiScale(next)
+      toastStore.success(`UI ${Math.round(next * 100)}%`)
+    }
+    return
+  }
+  // Alt+方向键：手动微调窗口位置。窗口比屏幕高时（如 200% 缩放），鼠标拖拽
+  // 受光标停在屏幕边缘的物理限制推不到顶，键盘可移到任意位置（含负坐标）
+  if (event.altKey && event.key.startsWith('Arrow')) {
+    event.preventDefault()
+    const delta = {
+      ArrowUp: [0, -60],
+      ArrowDown: [0, 60],
+      ArrowLeft: [-60, 0],
+      ArrowRight: [60, 0],
+    }[event.key]
+    moveWindowBy(...delta)
+    return
+  }
   if (event.key !== 'Escape') return
   if (tasksOpen.value) {
     tasksOpen.value = false
@@ -95,8 +158,10 @@ let unlistenDrop = null
 function isOverHomepage(position) {
   const el = homepageDropZone.value
   if (!el || !position) return false
-  const scaleFactor = window.devicePixelRatio || 1
-  const point = typeof position.toLogical === 'function'
+  // Tauri 给物理像素；CSS zoom（UI 缩放）会放大 gBCR 矩形，需按 DPI×zoom 归一
+  const scaleFactor =
+    (window.devicePixelRatio || 1) * (parseFloat(document.documentElement.style.zoom) || 1)
+  const point = typeof position.toLogical === "function"
     ? position.toLogical(scaleFactor)
     : { x: position.x / scaleFactor, y: position.y / scaleFactor }
   const rect = el.getBoundingClientRect()
@@ -106,6 +171,7 @@ function isOverHomepage(position) {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
+  window.addEventListener('ui-scale-applied', onUiScaleApplied)
   await nextTick()
   addLog(t('logs.systemInit'))
   if (inTauri) {
@@ -125,6 +191,7 @@ onMounted(async () => {
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('ui-scale-applied', onUiScaleApplied)
   unlistenDrop?.()
 })
 </script>

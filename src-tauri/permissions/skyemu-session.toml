@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-skyemu-session"
+description = "Allow the settings-page serial authorization status query (Linux udev rule state)."
+commands.allow = ["serial_auth_status"]
