@@ -1,36 +1,42 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Chis Flasher",
+  "mainBinaryName": "chis-flasher",
   "version": "0.4.2",
   "identifier": "com.z.chis-flasher",
   "build": {
     "beforeDevCommand": "npm run ensure:cfb && npm run vite:single",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build:web",
     "frontendDist": "../dist"
   },
   "app": {
     "withGlobalTauri": true,
+    "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "Chis Flasher",
+        "title": "Chis Flasher / 烧丐",
         "width": 376,
         "height": 780,
         "resizable": false,
         "maximizable": false,
         "decorations": false,
         "transparent": true,
+        "visible": false,
         "shadow": false,
         "skipTaskbar": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' tauri: asset: http://asset.localhost https://asset.localhost; img-src 'self' data: https: blob: tauri: asset: http://asset.localhost https://asset.localhost; connect-src 'self' https://payload.gbmake.com https://g.gbmake.com https://admin.gbmake.com https://assets.gbmake.com https://api.github.com https://github.com http://localhost:* https://localhost:* ws://localhost:* ipc: http://ipc.localhost https://ipc.localhost http://ipc.localhost/* https://ipc.localhost/* tauri:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "targets": [
+      "nsis"
+    ],
     "externalBin": [
       "binaries/cfb"
     ],
@@ -40,6 +46,36 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "template": "nsis/installer.nsi",
+        "displayLanguageSelector": true,
+        "languages": [
+          "SimpChinese",
+          "English",
+          "TradChinese",
+          "Japanese",
+          "Korean",
+          "French",
+          "German",
+          "Spanish",
+          "PortugueseBR"
+        ]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk3REIzMjQwREQyM0ZEREEKUldUYS9TUGRRRExibHcvQ1dlbGN0a0NZRjBQeHQ1OEFXdkRiaCs1WGpYQjhjalhJUUdialdKYzQK",
+      "endpoints": [
+        "https://github.com/eyenobig/beggar_chis/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

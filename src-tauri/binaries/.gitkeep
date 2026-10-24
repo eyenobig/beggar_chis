@@ -1,1 +1,2 @@
-# sidecar 由 `npm run build:cfb`（子模块 chis-burner-cmd）生成
+# sidecar: ensure:cfb — local source via CFB_LOCAL_DIR / local-paths.json (default ../chis-burner-cmd), else GitHub Release
+# force release download: npm run build:cfb:github (eyenobig/chis-burner-cmd)

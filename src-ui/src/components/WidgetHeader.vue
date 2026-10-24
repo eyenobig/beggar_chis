@@ -1,0 +1,70 @@
+<script setup>
+import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
+import { Triangle } from '@lucide/vue'
+import { useConnection, shortPort } from '../stores/useConnection'
+import WindowControls from './window/WindowControls.vue'
+import ConnectionDialog from './dialog/ConnectionDialog.vue'
+
+const { t } = useI18n()
+const conn = useConnection()
+const { isConnected, isConnecting, dialogOpen, selectedPort, needsSelection } = storeToRefs(conn)
+const { openDialog } = conn
+
+const dotClass = computed(() => {
+  if (isConnected.value)  return 'w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)] animate-pulse transition-colors'
+  if (isConnecting.value || needsSelection.value) return 'w-1.5 h-1.5 rounded-full bg-yellow-400 shadow-[0_0_6px_rgba(250,204,21,0.6)] animate-pulse transition-colors'
+  return 'w-1.5 h-1.5 rounded-full bg-zinc-400 transition-colors'
+})
+
+const statusText = computed(() => {
+  if (isConnected.value)  return t('conn.online')
+  if (isConnecting.value) return t('conn.detecting')
+  if (needsSelection.value) return t('conn.selectHintShort')
+  return t('conn.offline')
+})
+
+const statusTextClass = computed(() => {
+  if (isConnected.value)  return 'text-[8px] font-black uppercase tracking-widest text-zinc-900 mt-0.5 transition-colors'
+  if (isConnecting.value || needsSelection.value) return 'text-[8px] font-black uppercase tracking-widest text-yellow-600 mt-0.5 transition-colors'
+  return 'text-[8px] font-black uppercase tracking-widest text-zinc-500 mt-0.5 transition-colors'
+})
+</script>
+
+<template>
+  <header class="flex items-center justify-between px-5 py-4 border-b border-zinc-100 bg-white shrink-0 z-10 relative">
+
+    <!-- 连接状态：与 cfb detect 绑定；点击弹出设备列表 -->
+    <button
+      data-no-drag
+      @click="openDialog"
+      class="flex items-center gap-2 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 px-2.5 py-1.5 rounded-full transition-all active:scale-95 cursor-pointer max-w-[200px]"
+    >
+      <div :class="dotClass"></div>
+      <span class="flex flex-col items-start min-w-0">
+        <span :class="statusTextClass">{{ statusText }}</span>
+        <span
+          v-if="selectedPort"
+          class="text-[8px] font-semibold text-zinc-500 truncate max-w-full leading-tight"
+          :title="selectedPort"
+        >{{ shortPort(selectedPort) }}</span>
+      </span>
+    </button>
+
+
+    <!-- 窗口控制 (widget 内部右上角，始终跟随 widget 不受 drawer 影响) -->
+    <span
+      aria-hidden="true"
+      class="pointer-events-none absolute left-1/2 top-1/2 inline-flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center text-zinc-400"
+    >
+      <Triangle class="h-2.5 w-3 rotate-180 scale-x-[1.55] fill-current" :stroke-width="1.5" />
+    </span>
+
+    <WindowControls />
+
+    <!-- 连接设备弹窗 -->
+    <ConnectionDialog v-if="dialogOpen" />
+
+  </header>
+</template>

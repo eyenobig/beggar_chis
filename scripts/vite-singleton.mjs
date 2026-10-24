@@ -31,6 +31,13 @@ async function isBeggarChisVite(host) {
   }
 }
 
+const proxyOverride =
+  process.env.CHIS_TEMP_PROD_API === '1' ||
+  process.env.CHIS_TEMP_PROD_API === 'true' ||
+  Boolean(process.env.VITE_PAYLOAD_PROXY_TARGET) ||
+  Boolean(process.env.VITE_API_PROXY_TARGET) ||
+  Boolean(process.env.VITE_STICKER_PROXY_TARGET)
+
 const openHosts = []
 for (const host of LOOPBACKS) {
   if (await portIsOpen(host)) openHosts.push(host)
@@ -38,6 +45,13 @@ for (const host of LOOPBACKS) {
 if (openHosts.length > 0) {
   for (const host of openHosts) {
     if (await isBeggarChisVite(host)) {
+      if (proxyOverride) {
+        console.error(
+          `[vite:single] Port ${PORT} 上已有 Vite，但本次带了代理覆盖（临时生产/PROXY_TARGET）。` +
+            `旧进程的 proxy target 不会更新。请先停掉 :${PORT} 再启动，或用 npm run dev:prod-api（会自动清端口）。`,
+        )
+        process.exit(1)
+      }
       console.log(`[vite:single] Reusing beggar_chis dev server at ${DEV_URL}`)
       process.exit(0)
     }

@@ -1,0 +1,227 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  /* 勿写死 height:100%：会把子级压回「旧窗口高」，裁掉卡带 padding / 吐纸 / 白卡片底 */
+  min-height: 100%;
+  height: auto;
+  overflow: hidden;
+  background: transparent;
+}
+
+/* 桌宠舞台：跟内容增高，窗口再按根节点 border-box 同步 */
+#pet-stage {
+  width: 100%;
+  min-height: 100%;
+  height: auto;
+  overflow: visible;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+#pet-stage:active {
+  cursor: grabbing;
+}
+
+/* 字体工具类 */
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* 隐藏滚动条 */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* 桌宠级微缩容器主阴影与质感 */
+.widget-container {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(24, 24, 27, 0.16);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.18),
+    0 3px 8px rgba(0, 0, 0, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+  border-radius: 24px;
+  /* 圆角裁切白卡片本体；Toast 在卡片外绝对定位，不依赖此处 visible */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* 平台切换动效 */
+.platform-toggle { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* GB&GBC 激活态：Prismatic Edge —— 白底 + 低饱和度彩虹描边（渐变角度缓慢旋转）
+   + 柔和投影；悬浮时描边加粗、投影加深。完全参照 premium 原型 case 2；白底配深色字。
+   彩虹在指示器(下层)，悬浮事件来自按钮(上层)，用 :has(.gbc-btn:hover) 捕获。 */
+@property --edge-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.gbc-prismatic {
+  /* 兜底：老 WKWebView（macOS 12 / Safari 15）不支持 @property，var(--edge-angle)
+     解析为空会让整条 background 失效（白底+彩边全没）。显式声明静态角度保住颜色；
+     新浏览器里 edge-spin 动画照常覆盖此值，行为不变。 */
+  --edge-angle: 135deg;
+  /* 双背景：padding-box 铺白、border-box 铺旋转彩虹 → 透明 border 露出彩边 */
+  background:
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    linear-gradient(var(--edge-angle), #ff7a9e, #7a9eff, #9eff7a, #ffc27a) border-box;
+  border: 1.5px solid transparent;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  animation: edge-spin 12s linear infinite;
+}
+
+/* 悬浮：描边加粗 + 投影加深 */
+.platform-row:has(.gbc-btn:hover) .gbc-prismatic {
+  border-width: 2.5px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* GBA 激活态：同款描边按钮，靛蓝灰色板（indigo↔slate）替换彩虹。 */
+.gba-edge {
+  --edge-angle: 135deg; /* 同 gbc-prismatic：@property 不支持时的静态兜底 */
+  background:
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    linear-gradient(var(--edge-angle), #4F46E5, #818CF8, #94A3B8, #6366F1) border-box;
+  border: 1.5px solid transparent;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  animation: edge-spin 12s linear infinite;
+}
+.platform-row:has(.gba-btn:hover) .gba-edge {
+  border-width: 2.5px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* 存档操作按钮：同款棱光描边结构，语义色由 --save-edge-c* 注入
+   常态慢速 edge-spin；hover 轻微弹跳 + 柔和描边亮度脉冲（不用加速扫光） */
+.save-edge {
+  --edge-angle: 135deg; /* 同 gbc-prismatic：@property 不支持时的静态兜底 */
+  background:
+    linear-gradient(#ffffff, #ffffff) padding-box,
+    linear-gradient(
+      var(--edge-angle),
+      var(--save-edge-c1),
+      var(--save-edge-c2),
+      var(--save-edge-c3),
+      var(--save-edge-c4)
+    ) border-box;
+  border: 1.5px solid transparent;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  animation: edge-spin 12s linear infinite;
+  transition:
+    border-width 0.2s ease,
+    transform 0.35s cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+.save-edge:hover:not(:disabled) {
+  border-width: 2.5px;
+  transform: scale(1.05);
+  animation:
+    edge-spin 12s linear infinite,
+    save-edge-glow 1.8s ease-in-out infinite;
+}
+/* 导出 · Pokémon Blue */
+.save-edge-blue {
+  --save-edge-c1: #2A75BB;
+  --save-edge-c2: #3D8FD4;
+  --save-edge-c3: #5BA3E0;
+  --save-edge-c4: #0070B8;
+  color: #0070B8;
+}
+/* 验证 · Pokémon Green */
+.save-edge-green {
+  --save-edge-c1: #4DAD5B;
+  --save-edge-c2: #5FBE6D;
+  --save-edge-c3: #78C984;
+  --save-edge-c4: #3E9B4A;
+  color: #3E9B4A;
+}
+/* 烧录/覆盖 · Pokémon Red */
+.save-edge-red {
+  --save-edge-c1: #E6392B;
+  --save-edge-c2: #EF5245;
+  --save-edge-c3: #F56B5F;
+  --save-edge-c4: #DA1F2A;
+  color: #DA1F2A;
+}
+
+@keyframes edge-spin {
+  to { --edge-angle: 360deg; }
+}
+/* hover 描边亮度呼吸：用 currentColor 跟随蓝/绿/红语义色 */
+@keyframes save-edge-glow {
+  0%, 100% {
+    box-shadow:
+      0 5px 14px rgba(0, 0, 0, 0.06),
+      0 0 0 2px color-mix(in srgb, currentColor 18%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 7px 16px rgba(0, 0, 0, 0.08),
+      0 0 0 4px color-mix(in srgb, currentColor 28%, transparent),
+      0 0 12px color-mix(in srgb, currentColor 32%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gbc-prismatic,
+  .gba-edge,
+  .save-edge { animation: none; }
+  .save-edge:hover:not(:disabled) {
+    transform: none;
+    animation: none;
+    box-shadow:
+      0 5px 14px rgba(0, 0, 0, 0.06),
+      0 0 0 3px color-mix(in srgb, currentColor 22%, transparent);
+  }
+}
+
+/* 进度条宽度过渡 */
+.flash-progress { transition: width 0.1s linear; }
+
+/* 启动加载斜纹动画 */
+.progress-stripe {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.15) 25%, transparent 25%,
+    transparent 50%, rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent
+  );
+  background-size: 1rem 1rem;
+  animation: progressStripes 1s linear infinite;
+}
+
+@keyframes progressStripes {
+  from { background-position: 1rem 0; }
+  to   { background-position: 0 0; }
+}
+
+/* 微操按钮点按缩放 */
+.micro-btn { transition: all 0.1s; }
+.micro-btn:active { transform: scale(0.92); }
+
+/* 书签侧边栏垂直文字 */
+.writing-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+/* 侧边终端抽屉动效 */
+.drawer-transition {
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}

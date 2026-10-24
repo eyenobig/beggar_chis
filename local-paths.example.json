@@ -1,5 +1,7 @@
 {
-  "_comment": "Dev build-script paths only (npm run build:cfb:local). Settings toolchain uses runtime bin paths, not these.",
-  "cfbSourceDir": "Z:/Project/chis-burner-cmd",
-  "ruleSourceDir": "Z:/Project/chis-burner-cmd/vendor/chis-burner-rule"
+  "_comment": "Dev-only build paths (gitignored as local-paths.json). Runtime UI state uses the same partition names in localStorage via src/services/localConfig.js (paths/settings/cache/locale) — do not put caches here; Rust debug may rewrite this file.",
+  "paths": {
+    "cfbSourceDir": "../chis-burner-cmd",
+    "ruleSourceDir": "../chis-burner-cmd/vendor/chis-burner-rule"
+  }
 }

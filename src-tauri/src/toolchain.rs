@@ -1,7 +1,16 @@
-//! 工具链管理：运行时二进制 / rule 数据路径探测、打包首次下载，以及直连模式下的
+//! 工具链管理：运行时二进制 / rule 数据路径、打包首次下载，以及直连模式下的
 //! 二进制解析与执行。设置页配置的是 **可执行文件或 bins 目录**（平台相关产物），
-//! 不是 cmd/rule 源码树。开发者构建用的源码路径写在 gitignored 的
-//! `local-paths.json`，与 Settings 工具链引用分离。
+//! 不是 cmd/rule 源码树。
+//!
+//! ## 与前端 `src/services/toolchain` 对齐
+//!
+//! SkyEmu / cfb / rule 共享同一套「获取 → 定位路径」生命周期；差异只在执行层：
+//! - **cfb**：本模块 + [`crate::toolchain_update`]（ensure / spawn）
+//! - **rule**：本模块路径探测（`profiles/`）；远程 zip 暂未启用
+//! - **SkyEmu**：前端 download + [`crate::skyemu_launch`]（DirectPlay）
+//!
+//! 源码 / GitHub 默认值见 [`crate::cfb_config`]（与 `scripts/cfb-config.mjs` 对齐）。
+//! Settings `cfbBinPath` 与构建用源码路径分离。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -14,12 +23,7 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
-use crate::download;
-
-/// 打包版默认拉取的 GitHub tag（与近期可用带资产发布对齐）。
-const TOOLCHAIN_TAG: &str = "v0.3.3";
-const CFB_REPO: &str = "eyenobig/chis-burner-cmd";
-const RULE_REPO: &str = "eyenobig/chis-burner-rule";
+use crate::cfb_config;
 
 fn run(cmd: &str, args: &[&str]) -> Result<String, String> {
     let out = Command::new(cmd)
@@ -83,32 +87,105 @@ pub fn detect_default_rule_dir() -> Option<String> {
     detect_dev_rule_data_dir()
 }
 
-/// 同级 `chis-burner-cmd` 源码根（仅供 local-paths.json / 构建脚本，不进 Settings）。
-fn detect_dev_cfb_source_dir() -> Option<PathBuf> {
-    let candidate = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()? // beggar_chis
-        .parent()? // Project
-        .join("chis-burner-cmd");
-    if candidate.join("Cargo.toml").exists() {
-        Some(candidate)
+/// 开发态：本机刚 sync 的 SkyEmu（windows-x64 / linux-x64 / mine 构建）。
+#[tauri::command]
+pub fn detect_default_skyemu() -> Option<String> {
+    detect_dev_skyemu()
+}
+
+fn skyemu_bin_name() -> &'static str {
+    if cfg!(windows) {
+        "SkyEmu.exe"
     } else {
-        None
+        "SkyEmu"
     }
 }
 
+/// 开发态候选：Windows sync 目录、Linux cmake 目录、mine 本地构建。
+fn dev_skyemu_candidates(project: &Path, name: &str) -> Vec<PathBuf> {
+    let sky = project.join("skyemu");
+    let mine = sky.join("skyemu-compare").join("mine").join("build");
+    vec![
+        sky.join("build").join("windows-x64").join(name),
+        sky.join("build").join("linux-x64").join(name),
+        sky.join("build").join("bin").join(name),
+        mine.join("dp").join("bin").join("Release").join(name),
+        mine.join("bin").join(name),
+    ]
+}
+
+fn detect_dev_skyemu() -> Option<String> {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let beggar = manifest.parent()?;
+    let project = beggar.parent()?;
+    dev_skyemu_candidates(project, skyemu_bin_name())
+        .into_iter()
+        .find(|p| p.is_file())
+        .map(|p| p.display().to_string())
+}
+
+fn cfb_bin_name() -> &'static str {
+    if cfg!(windows) {
+        "cfb.exe"
+    } else {
+        "cfb"
+    }
+}
+
+/// `cargo build --release` 默认落 `target/release`；显式 `--target` 才落 `target/<triple>/`。
+/// 两份都在时取修改时间更新的，避免旧 triple 目录里的版本覆盖当前版本。
+fn local_release_cfb_candidates(source: &Path) -> [PathBuf; 2] {
+    let name = cfb_bin_name();
+    let triple = current_triple();
+    [
+        source.join("target").join("release").join(name),
+        source.join("target").join(triple).join("release").join(name),
+    ]
+}
+
+fn newest_existing_file(paths: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
+    paths.into_iter().filter(|p| p.is_file()).max_by_key(|p| {
+        p.metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+    })
+}
+
+fn paths_same_file(a: &Path, b: &Path) -> bool {
+    let norm = |p: &Path| p.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+    norm(a) == norm(b)
+}
+
+/// 已持久化的路径若是源码 `target/` 里的旧产物，改指同批候选里更新的那份。
+fn newer_local_release_if_stale(current: &Path) -> Option<PathBuf> {
+    let source = cfb_config::resolve_local_cfb_source()?;
+    let target_root = source.join("target");
+    let cur = current.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+    let root = target_root.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+    if !cur.starts_with(&root) {
+        return None;
+    }
+    let newest = newest_existing_file(local_release_cfb_candidates(&source))?;
+    if paths_same_file(&newest, current) {
+        return None;
+    }
+    Some(newest)
+}
+
 /// 开发态探测已构建 cfb **可执行文件**（绝不返回源码根目录）。
-/// 优先级：`target/<triple>/release` → `target/release` → 同路径 debug → 本 app sidecar。
+/// 优先级：本地源码 `target/` 里最新的 release → debug → 本 app sidecar。
 fn detect_dev_cfb_bin() -> Option<String> {
     let triple = current_triple();
-    let bin_name = if cfg!(windows) { "cfb.exe" } else { "cfb" };
-    if let Some(source) = detect_dev_cfb_source_dir() {
-        let candidates = [
-            source.join("target").join(triple).join("release").join(bin_name),
-            source.join("target").join("release").join(bin_name),
-            source.join("target").join(triple).join("debug").join(bin_name),
-            source.join("target").join("debug").join(bin_name),
+    if let Some(source) = cfb_config::resolve_local_cfb_source() {
+        if let Some(p) = newest_existing_file(local_release_cfb_candidates(&source)) {
+            return Some(p.display().to_string());
+        }
+        let name = cfb_bin_name();
+        let debug = [
+            source.join("target").join("debug").join(name),
+            source.join("target").join(triple).join("debug").join(name),
         ];
-        if let Some(p) = candidates.into_iter().find(|p| p.is_file()) {
+        if let Some(p) = newest_existing_file(debug) {
             return Some(p.display().to_string());
         }
     }
@@ -116,21 +193,9 @@ fn detect_dev_cfb_bin() -> Option<String> {
     find_bin_in_dir(&sidecar_dir, triple).map(|p| p.display().to_string())
 }
 
+/// 开发态 rule 数据目录（仅认 `cfb_config::resolve_rule_source_dir`）。
 fn detect_dev_rule_data_dir() -> Option<String> {
-    let project = Path::new(env!("CARGO_MANIFEST_DIR")).parent()?.parent()?;
-    let nested = project
-        .join("chis-burner-cmd")
-        .join("vendor")
-        .join("chis-burner-rule");
-    if nested.join("profiles").exists() {
-        return Some(nested.display().to_string());
-    }
-    let sibling = project.join("chis-burner-rule");
-    if sibling.join("profiles").exists() {
-        Some(sibling.display().to_string())
-    } else {
-        None
-    }
+    cfb_config::resolve_rule_source_dir().map(|p| p.display().to_string())
 }
 
 /// 前端 bootstrap 返回值：cfb 可执行文件（或 bins 目录）+ rule 数据目录。
@@ -143,9 +208,9 @@ pub struct ToolchainPaths {
     pub rule_dir: Option<String>,
 }
 
-/// 路径为空时由前端调用：debug 探测本机已构建二进制；release 下载平台产物到 app data。
+/// 路径为空时由前端调用：debug 探测本地源 / sidecar；release 下载到 app data。
 /// 幂等：已存在则跳过下载。返回路径给前端写入 localStorage。
-/// debug 另写 gitignored 的 `local-paths.json`（**源码**路径，供 `npm run build:cfb:local`）。
+/// debug 另写 gitignored 的 `local-paths.json`（**源码**路径，供 `ensure:cfb` 本地编）。
 #[tauri::command]
 pub async fn bootstrap_toolchain_paths(app: AppHandle) -> Result<ToolchainPaths, String> {
     if cfg!(debug_assertions) {
@@ -159,24 +224,28 @@ pub async fn bootstrap_toolchain_paths(app: AppHandle) -> Result<ToolchainPaths,
 }
 
 /// 开发态把 **源码** 路径写入仓库根 `local-paths.json`（构建脚本用，与 Settings bin 引用无关）。
+/// 使用 `paths` 分区（与前端 localConfig 同风格）；仍兼容读扁平键。
 fn write_build_local_paths_json() {
-    let Some(cfb) = detect_dev_cfb_source_dir() else {
+    let Some(cfb) = cfb_config::resolve_local_cfb_source() else {
         return;
     };
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent();
-    let Some(root) = root else { return };
+    let Some(root) = cfb_config::repo_root() else {
+        return;
+    };
     let file = root.join("local-paths.json");
-    let mut map = serde_json::Map::new();
-    map.insert(
+    let mut paths = serde_json::Map::new();
+    paths.insert(
         "cfbSourceDir".into(),
         serde_json::Value::String(cfb.display().to_string().replace('\\', "/")),
     );
-    if let Some(rule) = detect_dev_rule_data_dir() {
-        map.insert(
+    if let Some(rule) = cfb_config::resolve_rule_source_dir() {
+        paths.insert(
             "ruleSourceDir".into(),
-            serde_json::Value::String(rule.replace('\\', "/")),
+            serde_json::Value::String(rule.display().to_string().replace('\\', "/")),
         );
     }
+    let mut map = serde_json::Map::new();
+    map.insert("paths".into(), serde_json::Value::Object(paths));
     let Ok(text) = serde_json::to_string_pretty(&serde_json::Value::Object(map)) else {
         return;
     };
@@ -199,98 +268,114 @@ async fn ensure_release_toolchain(app: &AppHandle) -> Result<ToolchainPaths, Str
         .app_data_dir()
         .map_err(|e| format!("无法解析 app data 目录: {e}"))?
         .join("toolchain");
-    let cmd_dir = base.join("cmd");
     let rule_dir = base.join("rule");
-    std::fs::create_dir_all(&cmd_dir).map_err(|e| format!("创建 cmd 目录失败: {e}"))?;
-    std::fs::create_dir_all(&rule_dir).map_err(|e| format!("创建 rule 目录失败: {e}"))?;
-
     let triple = current_triple();
-    let asset_name = if cfg!(windows) {
-        format!("cfb-{triple}.exe")
-    } else {
-        format!("cfb-{triple}")
+
+    // 1) 最高优先级：安装器在安装时让用户选的路径，写入 $INSTDIR\paths.json（与主 exe 同级）。
+    //    读到且文件存在 → 直接用，跳过 GitHub 下载与历史记录。
+    //    rule 路径无条件采用用户选择（安装时 rule 目录可能为空，profiles 尚未放入）。
+    if let Some(installed) = read_installer_paths() {
+        if let Some(cfb) = &installed.cfb_bin {
+            if Path::new(cfb).is_file() {
+                return Ok(ToolchainPaths {
+                    cfb_bin: Some(cfb.clone()),
+                    rule_dir: installed.rule_dir.clone(),
+                });
+            }
+        }
+    }
+
+    // 2) GitHub 最新版（SHA 校验、原子切换 current.json）；拉不到回退打包 sidecar。
+    let bin_path = match crate::toolchain_update::ensure_latest_cfb(app, triple).await {
+        Ok(path) => path,
+        Err(err) => match bundled_sidecar(app, triple) {
+            Some(path) => {
+                eprintln!("[toolchain] GitHub cfb 拉取失败({err})，回退打包 sidecar: {}", path.display());
+                path
+            }
+            None => return Err(err),
+        },
     };
-    let bin_path = cmd_dir.join(&asset_name);
-    if !bin_path.exists() {
-        let url = format!(
-            "https://github.com/{CFB_REPO}/releases/download/{TOOLCHAIN_TAG}/{asset_name}"
-        );
-        download::download_file_silent(&url, &bin_path.to_string_lossy())
-            .await
-            .map_err(|e| format!("下载 cfb 失败: {e}"))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&bin_path)
-                .map_err(|e| format!("读取权限失败: {e}"))?
-                .permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&bin_path, perms)
-                .map_err(|e| format!("设置可执行权限失败: {e}"))?;
-        }
-    }
 
-    if !rule_dir.join("profiles").exists() {
-        let zip_path = base.join("rule.zip");
-        let url = format!(
-            "https://github.com/{RULE_REPO}/archive/refs/tags/{TOOLCHAIN_TAG}.zip"
-        );
-        download::download_file_silent(&url, &zip_path.to_string_lossy())
-            .await
-            .map_err(|e| format!("下载 rule 失败: {e}"))?;
-        let extract_tmp = base.join("rule-extract");
-        if extract_tmp.exists() {
-            let _ = std::fs::remove_dir_all(&extract_tmp);
-        }
-        let zip_s = zip_path.to_string_lossy().to_string();
-        let tmp_s = extract_tmp.to_string_lossy().to_string();
-        tokio::task::spawn_blocking(move || download::extract_zip_sync(&zip_s, &tmp_s))
-            .await
-            .map_err(|e| format!("解压任务失败: {e}"))??;
-        let nested = find_rule_root(&extract_tmp)
-            .ok_or_else(|| "解压后未找到 rule（缺少 profiles 目录）".to_string())?;
-        if rule_dir.exists() {
-            let _ = std::fs::remove_dir_all(&rule_dir);
-        }
-        std::fs::rename(&nested, &rule_dir).or_else(|_| copy_dir_recursive(&nested, &rule_dir))?;
-        let _ = std::fs::remove_dir_all(&extract_tmp);
-        let _ = std::fs::remove_file(&zip_path);
-    }
+    // 无安装器 paths.json 的安装形态（如 mac DMG 拖装）：确保 app-data rule 目录存在并
+    // 始终返回——客户端据此填充设置页的 rule 数据目录并注入 CFB_RULE_DIR。
+    // profiles 缺省为空目录 → cfb 读不到外部 json，照常使用内置 profile；用户往
+    // rule/profiles/ 放自定义 profile 后即生效。
+    let _ = std::fs::create_dir_all(&rule_dir);
 
-    // Settings 存具体可执行文件路径（平台相关），与一般 bin 引用一致。
     Ok(ToolchainPaths {
         cfb_bin: Some(bin_path.display().to_string()),
         rule_dir: Some(rule_dir.display().to_string()),
     })
 }
 
-fn find_rule_root(dir: &Path) -> Option<PathBuf> {
-    if dir.join("profiles").exists() {
-        return Some(dir.to_path_buf());
-    }
-    let entries = std::fs::read_dir(dir).ok()?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() && path.join("profiles").exists() {
-            return Some(path);
-        }
-    }
-    None
+/// 安装器（自定义 NSIS 模板）写入的 `paths.json`：与主 exe 同级，含用户在安装向导选的
+/// cfb/rule 路径。schema: `{ "cfbBinPath": "...", "ruleDataDir": "..." }`。
+#[derive(serde::Deserialize)]
+struct InstallerPaths {
+    #[serde(rename = "cfbBinPath", default)]
+    cfb_bin: Option<String>,
+    #[serde(rename = "ruleDataDir", default)]
+    rule_dir: Option<String>,
 }
 
-fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(dst).map_err(|e| format!("创建目录失败: {e}"))?;
-    for entry in std::fs::read_dir(src).map_err(|e| format!("读取目录失败: {e}"))? {
-        let entry = entry.map_err(|e| format!("读取目录项失败: {e}"))?;
-        let from = entry.path();
-        let to = dst.join(entry.file_name());
-        if from.is_dir() {
-            copy_dir_recursive(&from, &to)?;
-        } else {
-            std::fs::copy(&from, &to).map_err(|e| format!("拷贝失败: {e}"))?;
+fn read_installer_paths() -> Option<InstallerPaths> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let file = dir.join("paths.json");
+    let text = std::fs::read_to_string(&file).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// 启动 SkyEmu / 直连 spawn 用的同一份 cfb：设置页路径 → 开发探测 → 打包 sidecar。
+/// 不再拷一份到 SkyEmu 目录。
+pub(crate) fn resolve_runtime_cfb(app: &AppHandle, hinted: Option<&str>) -> Option<String> {
+    if let Some(p) = resolve_cfb_hint(hinted) {
+        return Some(p);
+    }
+    if let Some(p) = detect_dev_cfb_bin() {
+        return Some(p);
+    }
+    bundled_sidecar(app, current_triple()).map(|p| p.display().to_string())
+}
+
+fn resolve_cfb_hint(hinted: Option<&str>) -> Option<String> {
+    let raw = hinted.map(str::trim).filter(|s| !s.is_empty())?;
+    resolve_cfb_binary(raw.to_string()).ok()
+}
+
+/// 解析打包进安装包的 cfb sidecar（tauri.conf.json `externalBin: binaries/cfb`）。
+/// NSIS 把 sidecar 重命名为 `cfb.exe`（Windows）/ `cfb`（其它）放进 $INSTDIR，
+/// 故优先找重命名后的短名，再找 `cfb-{triple}` 形式。
+fn bundled_sidecar(app: &AppHandle, triple: &str) -> Option<PathBuf> {
+    let mut names: Vec<String> = if cfg!(windows) {
+        vec!["cfb.exe".into(), format!("cfb-{triple}.exe"), "cfb".into()]
+    } else {
+        vec!["cfb".into(), format!("cfb-{triple}"), "cfb.exe".into()]
+    };
+    let _ = &mut names;
+    let mut candidates = Vec::new();
+    if let Ok(res) = app.path().resource_dir() {
+        for n in &names {
+            candidates.push(res.join(n));
         }
     }
-    Ok(())
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            for n in &names {
+                candidates.push(dir.join(n));
+            }
+        }
+    }
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// 安装目录（主 exe 的父目录 = NSIS $INSTDIR）。供前端判断路径是否安装器写入。
+#[tauri::command]
+pub fn install_dir() -> Option<String> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|p| p.display().to_string()))
 }
 
 fn current_triple() -> &'static str {
@@ -408,6 +493,15 @@ pub fn rebuild_cfb_sidecar(cfb_dir: String, rule_dir: Option<String>) -> Result<
 #[derive(Default)]
 pub struct CfbChildren(Arc<Mutex<HashMap<u32, CommandChild>>>);
 
+impl CfbChildren {
+    /// 退出清理: 杀掉全部子进程并清空表 (释放串口等资源)。
+    pub fn kill_all(&self) {
+        for (_, child) in self.0.lock().unwrap().drain() {
+            let _ = child.kill();
+        }
+    }
+}
+
 /// 转发给前端的流式事件（对应 `streamCfb` 里对 `stdout`/`stderr`/`close` 的监听）。
 #[derive(Clone, Serialize)]
 #[serde(tag = "event", content = "payload")]
@@ -470,6 +564,9 @@ pub fn resolve_cfb_binary(cfb_path: String) -> Result<String, String> {
     let triple = current_triple();
 
     if path.is_file() {
+        if let Some(newer) = newer_local_release_if_stale(path) {
+            return Ok(newer.display().to_string());
+        }
         return Ok(path.display().to_string());
     }
 
@@ -481,16 +578,19 @@ pub fn resolve_cfb_binary(cfb_path: String) -> Result<String, String> {
         // 兼容旧 Settings：曾把源码根目录当作工具链路径。
         let manifest = path.join("Cargo.toml");
         if manifest.is_file() {
+            if let Some(p) = newest_existing_file(local_release_cfb_candidates(path)) {
+                return Ok(p.display().to_string());
+            }
             if let Ok(target_dir) = cargo_target_dir(&manifest.to_string_lossy()) {
-                let bin_name = if cfg!(windows) { "cfb.exe" } else { "cfb" };
+                let bin_name = cfb_bin_name();
                 let candidates = [
+                    PathBuf::from(&target_dir).join("release").join(bin_name),
                     PathBuf::from(&target_dir)
                         .join(triple)
                         .join("release")
                         .join(bin_name),
-                    PathBuf::from(&target_dir).join("release").join(bin_name),
                 ];
-                if let Some(p) = candidates.into_iter().find(|p| p.is_file()) {
+                if let Some(p) = newest_existing_file(candidates) {
                     return Ok(p.display().to_string());
                 }
                 return Err(format!(
@@ -509,16 +609,19 @@ pub fn resolve_cfb_binary(cfb_path: String) -> Result<String, String> {
 }
 
 /// 一次性执行已解析出的 cfb 二进制（对应前端 `executeCfb`），收集完整 stdout/stderr。
+/// `rule_dir`：设置页的 rule 数据目录 → 注入 `CFB_RULE_DIR`，cfb 据此加载外部 profiles。
 #[tauri::command]
 pub async fn cfb_exec(
     app: AppHandle,
     bin_path: String,
     args: Vec<String>,
+    rule_dir: Option<String>,
 ) -> Result<CfbExecOutput, String> {
-    let output = app
-        .shell()
-        .command(&bin_path)
-        .args(args)
+    let mut command = app.shell().command(&bin_path).args(args);
+    if let Some(dir) = rule_dir.as_deref().map(str::trim).filter(|d| !d.is_empty()) {
+        command = command.env("CFB_RULE_DIR", dir);
+    }
+    let output = command
         .output()
         .await
         .map_err(|e| format!("执行 {bin_path} 失败: {e}"))?;
@@ -531,18 +634,21 @@ pub async fn cfb_exec(
 
 /// 流式执行（对应前端 `streamCfb`）：逐行把 stdout/stderr 经 `Channel` 推给前端，
 /// 返回 pid 供 [`cfb_kill_process`] 中止；进程退出后自动从 [`CfbChildren`] 里移除。
+/// `rule_dir` 同 `cfb_exec`：注入 `CFB_RULE_DIR` 绑定设置页的 rule 数据目录。
 #[tauri::command]
 pub fn cfb_spawn(
     app: AppHandle,
     children: State<'_, CfbChildren>,
     bin_path: String,
     args: Vec<String>,
+    rule_dir: Option<String>,
     on_event: Channel<CfbStreamEvent>,
 ) -> Result<u32, String> {
-    let (mut rx, child) = app
-        .shell()
-        .command(&bin_path)
-        .args(args)
+    let mut command = app.shell().command(&bin_path).args(args);
+    if let Some(dir) = rule_dir.as_deref().map(str::trim).filter(|d| !d.is_empty()) {
+        command = command.env("CFB_RULE_DIR", dir);
+    }
+    let (mut rx, child) = command
         .spawn()
         .map_err(|e| format!("启动 {bin_path} 失败: {e}"))?;
     let pid = child.pid();
@@ -576,6 +682,19 @@ pub fn cfb_spawn(
 }
 
 /// 中止 [`cfb_spawn`] 启动的子进程（对应前端「中断」按钮）。
+/// SkyEmu 退出后自动 detect: 让应用恢复烧录器在线状态。
+#[tauri::command]
+pub async fn cfb_detect_after_skyemu(app: tauri::AppHandle) {
+    let Some(bin) = resolve_runtime_cfb(&app, None) else {
+        return;
+    };
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        let _ = std::process::Command::new(bin)
+            .args(["--lang", "en", "detect"])
+            .output();
+    }).await;
+}
+
 #[tauri::command]
 pub fn cfb_kill_process(children: State<'_, CfbChildren>, pid: u32) -> Result<(), String> {
     if let Some(child) = children.0.lock().unwrap().remove(&pid) {
@@ -589,13 +708,44 @@ mod tests {
     use super::*;
 
     #[test]
-    fn detects_sibling_chis_burner_cmd_source() {
-        let dir = detect_dev_cfb_source_dir().expect("chis-burner-cmd should exist beside beggar_chis");
+    fn detects_configured_chis_burner_cmd_source() {
+        let Some(dir) = cfb_config::resolve_local_cfb_source() else {
+            // CI / 仅克隆本仓时配置路径可能无 Cargo.toml；跳过。
+            return;
+        };
         assert!(
             dir.join("Cargo.toml").exists(),
             "detected cfb source missing Cargo.toml: {}",
             dir.display()
         );
+    }
+
+    #[test]
+    fn detect_dev_cfb_bin_skips_stale_triple_release() {
+        let Some(source) = cfb_config::resolve_local_cfb_source() else {
+            return;
+        };
+        let name = cfb_bin_name();
+        let host = source.join("target").join("release").join(name);
+        let triple = source
+            .join("target")
+            .join(current_triple())
+            .join("release")
+            .join(name);
+        if !host.is_file() || !triple.is_file() {
+            return;
+        }
+        let Some(got) = detect_dev_cfb_bin() else {
+            return;
+        };
+        let host_t = host.metadata().and_then(|m| m.modified()).ok();
+        let triple_t = triple.metadata().and_then(|m| m.modified()).ok();
+        if host_t > triple_t {
+            assert!(
+                paths_same_file(Path::new(&got), &host),
+                "host target/release 更新时应选它（避免旧 triple 目录的 0.3.6），实际: {got}"
+            );
+        }
     }
 
     #[test]
@@ -619,7 +769,7 @@ mod tests {
             !path.is_dir(),
             "detect_dev_cfb_bin must not return a directory: {bin}"
         );
-        if let Some(source) = detect_dev_cfb_source_dir() {
+        if let Some(source) = cfb_config::resolve_local_cfb_source() {
             assert_ne!(
                 path,
                 source.as_path(),
@@ -629,8 +779,35 @@ mod tests {
     }
 
     #[test]
+    fn resolve_stale_triple_file_upgrades_to_newer_host_release() {
+        let Some(source) = cfb_config::resolve_local_cfb_source() else {
+            return;
+        };
+        let name = cfb_bin_name();
+        let host = source.join("target").join("release").join(name);
+        let triple = source
+            .join("target")
+            .join(current_triple())
+            .join("release")
+            .join(name);
+        if !host.is_file() || !triple.is_file() {
+            return;
+        }
+        let host_t = host.metadata().and_then(|m| m.modified()).ok();
+        let triple_t = triple.metadata().and_then(|m| m.modified()).ok();
+        if !(host_t > triple_t) {
+            return;
+        }
+        let got = resolve_cfb_binary(triple.display().to_string()).expect("应能解析旧 triple 路径");
+        assert!(
+            paths_same_file(Path::new(&got), &host),
+            "指向旧 triple cfb 时应改到更新的 target/release: {got}"
+        );
+    }
+
+    #[test]
     fn resolve_source_dir_to_built_exe_when_present() {
-        let Some(source) = detect_dev_cfb_source_dir() else {
+        let Some(source) = cfb_config::resolve_local_cfb_source() else {
             return;
         };
         let Ok(resolved) = resolve_cfb_binary(source.display().to_string()) else {
@@ -644,7 +821,9 @@ mod tests {
 
     #[test]
     fn detects_rule_profiles() {
-        let dir = detect_dev_rule_data_dir().expect("chis-burner-rule should exist (vendor or sibling)");
+        let Some(dir) = detect_dev_rule_data_dir() else {
+            return;
+        };
         assert!(
             Path::new(&dir).join("profiles").exists(),
             "detected rule dir missing profiles: {dir}"
@@ -655,5 +834,55 @@ mod tests {
     fn resolve_accepts_missing_gracefully() {
         let err = resolve_cfb_binary("/no/such/cfb/path".into()).unwrap_err();
         assert!(err.contains("不存在") || err.contains("未找到") || err.contains("未配置"));
+    }
+
+    #[test]
+    fn resolve_cfb_hint_empty_is_none() {
+        assert!(resolve_cfb_hint(None).is_none(), "空 hint 不能当路径");
+        assert!(resolve_cfb_hint(Some("")).is_none());
+        assert!(resolve_cfb_hint(Some("   ")).is_none());
+    }
+
+    #[test]
+    fn resolve_cfb_hint_missing_is_none() {
+        assert!(
+            resolve_cfb_hint(Some("/no/such/cfb.exe")).is_none(),
+            "不存在的 hint 应回落到探测/sidecar，不能硬用"
+        );
+    }
+
+    #[test]
+    fn detect_dev_skyemu_is_exe_when_present() {
+        let Some(bin) = detect_dev_skyemu() else {
+            return;
+        };
+        let path = Path::new(&bin);
+        assert!(path.is_file(), "detect_dev_skyemu 必须是文件: {bin}");
+        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        assert!(
+            name.eq_ignore_ascii_case("SkyEmu.exe") || name.eq_ignore_ascii_case("SkyEmu"),
+            "意外的 SkyEmu 文件名: {bin}"
+        );
+    }
+
+    #[test]
+    fn dev_skyemu_candidates_cover_linux_and_windows() {
+        let hits = dev_skyemu_candidates(Path::new("/proj"), "SkyEmu");
+        let joined: Vec<String> = hits
+            .iter()
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .collect();
+        assert!(
+            joined.iter().any(|p| p.ends_with("skyemu/build/linux-x64/SkyEmu")),
+            "必须包含 Linux cmake 同步目录: {joined:?}"
+        );
+        assert!(
+            joined.iter().any(|p| p.ends_with("skyemu/build/windows-x64/SkyEmu")),
+            "必须包含 Windows sync 目录: {joined:?}"
+        );
+        assert!(
+            joined.iter().any(|p| p.contains("skyemu-compare/mine/build")),
+            "必须包含 mine 本地构建: {joined:?}"
+        );
     }
 }

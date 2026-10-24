@@ -4,24 +4,34 @@
   "version": "0.4.2",
   "license": "GPL-3.0-only",
   "type": "module",
+  "compatibility": {
+    "cmd": "0.5.1",
+    "rule": "0.3.5"
+  },
   "scripts": {
     "dev": "tauri dev",
+    "dev:prod-api": "node scripts/dev-prod-api.mjs",
     "vite": "vite",
     "vite:single": "node scripts/vite-singleton.mjs",
-    "build": "vite build",
+    "build:web": "vite build",
+    "build:prod-api": "node scripts/build-prod-api.mjs",
+    "build": "tauri build && node scripts/copy-bundle.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
-    "build:cfb": "npm run build:cfb:local",
-    "build:cfb:local": "node scripts/build-cfb.mjs",
     "build:cfb:github": "node scripts/download-cfb-release.mjs",
-    "ensure:cfb": "node scripts/ensure-cfb.mjs",
-    "dev:refresh-cfb": "npm run build:cfb:local && tauri dev"
+    "check:platform": "node scripts/check-platform.mjs",
+    "check:sidecar-bind": "node scripts/check-sidecar-bind.mjs",
+    "check:compat": "node scripts/check-compatibility.mjs",
+    "ensure:cfb": "node scripts/ensure-cfb.mjs"
   },
   "dependencies": {
     "@lucide/vue": "^1.25.0",
     "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-opener": "^2.5.4",
+    "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.5",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "pinia": "^3.0.4",
     "vue": "^3.5.13",
     "vue-i18n": "^10.0.5"
@@ -31,7 +41,8 @@
     "@tauri-apps/cli": "^2",
     "@vitejs/plugin-vue": "^5.2.1",
     "autoprefixer": "^10.5.0",
-    "postcss": "^8.5.15",
+    "playwright": "^1.62.1",
+    "postcss": "^8.5.25",
     "tailwindcss": "^3.4.19",
     "vite": "^6.0.7"
   }

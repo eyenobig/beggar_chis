@@ -1,0 +1,81 @@
+# Build Linux (beggar_chis / chis-flasher)
+
+# 用途: 手动触发, 只构建 Linux x64 便携版并上传 Artifact (不发 Release)。
+# 正式多平台 Release 走 release.yml (tag 触发, 需要 TAURI_SIGNING_PRIVATE_KEY secret)。
+# 本流程是我们在 WSL chis-test 里验证过的同款构建 (tauri build --bundles appimage,deb)。
+
+name: Build Linux (portable)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: build-linux-portable-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux deps (Tauri v2)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libsoup-3.0-dev libjavascriptcoregtk-4.1-dev \
+            libayatana-appindicator3-dev libxdo-dev libssl-dev \
+            libudev-dev pkg-config patchelf
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      - name: Frontend deps
+        run: npm ci --no-audit --no-fund
+
+      # 指向本仓库构建出的 cfb (同 commit), 不下载历史 release
+      - name: Build Linux cfb sidecar
+        run: |
+          git submodule update --init chis-burner-cmd 2>/dev/null || true
+          if [ -d chis-burner-cmd ]; then
+            cd chis-burner-cmd
+            cargo build --release
+            mkdir -p ../src-tauri/binaries
+            cp target/release/cfb ../src-tauri/binaries/cfb-x86_64-unknown-linux-gnu
+            cd ..
+          else
+            echo "::error::chis-burner-cmd 子模块缺失"
+            exit 1
+          fi
+
+      - name: Tauri build (AppImage + deb, 无需签名 secret)
+        run: |
+          npm run tauri build -- --target x86_64-unknown-linux-gnu --bundles appimage,deb
+
+      - name: Collect portable artifacts
+        run: |
+          mkdir -p dist
+          cp src-tauri/target/release/tauri-app dist/chis-flasher-linux-x64
+          find src-tauri/target/release/bundle -name "*.AppImage" -exec cp {} dist/ \;
+          find src-tauri/target/release/bundle -name "*.deb" -exec cp {} dist/ \;
+          ls -la dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chis-flasher-linux-x64
+          path: dist/

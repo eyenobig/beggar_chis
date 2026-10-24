@@ -1,0 +1,6 @@
+[[permission]]
+identifier = "allow-screenshot"
+description = "Allow capturing the app window to a PNG on the desktop via the Cmd/Ctrl+P in-app shortcut."
+commands.allow = [
+  "screenshot_window",
+]
