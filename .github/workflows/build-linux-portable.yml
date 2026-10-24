@@ -70,9 +70,9 @@ jobs:
       - name: Collect portable artifacts
         run: |
           mkdir -p dist
-          cp src-tauri/target/release/tauri-app dist/chis-flasher-linux-x64
-          find src-tauri/target/release/bundle -name "*.AppImage" -exec cp {} dist/ \;
-          find src-tauri/target/release/bundle -name "*.deb" -exec cp {} dist/ \;
+          cp src-tauri/target/x86_64-unknown-linux-gnu/release/chis-flasher dist/chis-flasher-linux-x64
+          find src-tauri/target/x86_64-unknown-linux-gnu/release/bundle -name "*.AppImage" -exec cp {} dist/ \;
+          find src-tauri/target/x86_64-unknown-linux-gnu/release/bundle -name "*.deb" -exec cp {} dist/ \;
           ls -la dist/
 
       - uses: actions/upload-artifact@v4

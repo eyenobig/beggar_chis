@@ -16,8 +16,10 @@ const {
   isConnecting,
   lastError,
   detecting,
+  permBlocked,
+  fixingPerms,
 } = storeToRefs(conn)
-const { closeDialog, connect, disconnect, detect, pickDevice } = conn
+const { closeDialog, connect, disconnect, detect, pickDevice, fixSerialPerms } = conn
 
 const errorText = computed(() => {
   if (!lastError.value) return ''
@@ -130,6 +132,26 @@ function deviceMeta(d) {
           <!-- 错误/排查信息 -->
           <div v-if="errorText" class="text-[10px] text-red-500 break-all px-1 pt-1">
             {{ errorText }}
+          </div>
+
+          <!-- Linux 串口权限一键修复：cfb udev（pkexec 弹系统密码框装 udev 规则） -->
+          <div
+            v-if="permBlocked"
+            class="rounded-lg border border-amber-200 bg-amber-50/80 px-2.5 py-2 space-y-1.5"
+          >
+            <div class="text-[10px] leading-snug text-amber-700 font-semibold">
+              {{ $t('conn.permHint') }}
+            </div>
+            <button
+              data-no-drag
+              type="button"
+              :disabled="fixingPerms"
+              @click="fixSerialPerms"
+              class="w-full py-1.5 rounded-lg bg-amber-500 text-white text-[10px] font-bold
+                     hover:bg-amber-400 active:scale-95 transition-all disabled:opacity-60"
+            >
+              {{ fixingPerms ? $t('conn.permFixing') : $t('conn.fixPerms') }}
+            </button>
           </div>
         </div>
 

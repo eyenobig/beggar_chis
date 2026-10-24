@@ -36,6 +36,14 @@ export const useConnection = defineStore('connection', () => {
   const isConnected = computed(() => connected.value && !!selectedPort.value)
   const isConnecting = computed(() => detecting.value && !connected.value)
 
+  // Linux 串口权限被挡：有烧录器但全部打不开（open=false）。cfb udev 可一键修复。
+  const isLinux = typeof navigator !== 'undefined' && /Linux/.test(navigator.userAgent)
+  const permBlocked = computed(
+    () => isLinux && burners.value.length > 0 && burners.value.every((d) => d.open === false),
+  )
+  const fixingPerms = ref(false)
+  const permFixPhase = ref('') // prompt | installed | already | canceled | manual | failed
+
   /**
    * Windows 常把同一 USB 烧录器枚举成多个 COM（同 serial）——真正的幽灵口。
    * 但同型号克隆烧录器出厂 serial 也常相同（如都是 "6"），它们是独立物理设备，不该合并。
@@ -278,6 +286,31 @@ export const useConnection = defineStore('connection', () => {
     // 保留为空壳，兼容旧调用方（App.vue 等不再主动停用监听）。
   }
 
+  /**
+   * 一键修复 Linux 串口权限：跑 `cfb udev`（pkexec 弹系统密码框安装 udev 规则，
+   * uaccess 授权当前桌面用户，免重登免拔插）。成功后自动重新 detect 接上烧录器。
+   */
+  async function fixSerialPerms() {
+    if (!inTauri || fixingPerms.value) return false
+    fixingPerms.value = true
+    lastError.value = ''
+    permFixPhase.value = ''
+    try {
+      const res = await cfbClient.installUdev((ev) => {
+        if (ev.type === 'udev') permFixPhase.value = ev.phase
+        else if (ev.type === 'error') lastError.value = ev.message
+      })
+      const ok = res.code === 0
+      if (ok) await detect() // 规则已 trigger，立即重连
+      return ok
+    } catch (e) {
+      lastError.value = String(e?.message || e)
+      return false
+    } finally {
+      fixingPerms.value = false
+    }
+  }
+
   return {
     devices,
     burners,
@@ -290,6 +323,9 @@ export const useConnection = defineStore('connection', () => {
     needsSelection,
     isConnected,
     isConnecting,
+    permBlocked,
+    fixingPerms,
+    permFixPhase,
     detect,
     selectPort,
     pickDevice,
@@ -301,5 +337,6 @@ export const useConnection = defineStore('connection', () => {
     closeDialog,
     startWatching,
     stopWatching,
+    fixSerialPerms,
   }
 })

@@ -4,7 +4,7 @@
  * It does not access cartridge hardware.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { detectTriple, repoRoot, sidecarFileName } from './cfb-config.mjs'
 
@@ -69,7 +69,11 @@ const report = {
 
 if (process.env.CFB_TAURI_OUTPUT === '1') {
   const outputDir = join(root, 'src-tauri', 'target', target, 'release')
-  const appPath = join(outputDir, windows ? 'tauri-app.exe' : 'tauri-app')
+  // 二进制名跟 tauri.conf.json 的 mainBinaryName 走（Tauri 2 会按它重命名产物），
+  // 不要写死 —— 写死 tauri-app 曾让 2026-09-17 起的 master CI 全红。
+  const tauriConf = JSON.parse(readFileSync(join(root, 'src-tauri', 'tauri.conf.json'), 'utf8'))
+  const appBin = tauriConf.mainBinaryName || 'tauri-app'
+  const appPath = join(outputDir, windows ? `${appBin}.exe` : appBin)
   const bundledSidecarPath = join(outputDir, windows ? 'cfb.exe' : 'cfb')
   assertFile(appPath, 'Tauri application')
   assertFile(bundledSidecarPath, 'Tauri output sidecar')

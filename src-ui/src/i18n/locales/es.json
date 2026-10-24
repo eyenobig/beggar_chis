@@ -26,7 +26,10 @@
     "selected": "Seleccionado",
     "selectHint": "Varios grabadores detectados — toca el que quieras usar",
     "selectHintShort": "Elegir dispositivo",
-    "busy": "Ocupado"
+    "busy": "Ocupado",
+    "permHint": "Grabadoras detectadas pero los puertos serie no se pueden abrir (restricción por defecto de Linux). Pulsa el botón e introduce tu contraseña en el diálogo del sistema; surte efecto al instante, sin reiniciar.",
+    "fixPerms": "Reparar permisos de serie",
+    "permFixing": "Esperando autorización… (introduce tu contraseña)"
   },
   "bookmark": {
     "logs": "Registros",

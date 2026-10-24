@@ -42,19 +42,19 @@ jobs:
           - name: Windows x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            app: tauri-app.exe
+            app: chis-flasher.exe
           - name: macOS ARM64
             os: macos-latest
             target: aarch64-apple-darwin
-            app: tauri-app
+            app: chis-flasher
           - name: macOS Intel (cross on ARM)
             os: macos-latest
             target: x86_64-apple-darwin
-            app: tauri-app
+            app: chis-flasher
           - name: Linux x64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            app: tauri-app
+            app: chis-flasher
 
     runs-on: ${{ matrix.os }}
     steps:
