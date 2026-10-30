@@ -13,7 +13,7 @@ on:
 
 env:
   CFB_GITHUB_REPO: eyenobig/chis-burner-cmd
-  CFB_RELEASE_TAG: ${{ inputs.cfb_tag || vars.CFB_RELEASE_TAG || 'v0.5.2' }}
+  CFB_RELEASE_TAG: ${{ inputs.cfb_tag || vars.CFB_RELEASE_TAG || 'v0.5.3' }}
   VITE_API_BASE_URL: ${{ secrets.API_BASE_URL }}
 
 jobs:
@@ -125,6 +125,11 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
+      - name: Wait for pinned CFB release assets
+        run: node scripts/wait-cfb-release.mjs
+        env:
+          CFB_GITHUB_TOKEN: ${{ secrets.CFB_RELEASE_TOKEN || github.token }}
+
       - name: Download released cfb sidecar
         run: npm run build:cfb:github
         env:
@@ -146,9 +151,10 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Chis Flasher / 烧丐 ${{ github.ref_name }}
           releaseBody: |
+            升级 cfb 0.5.3：合入 PR #2，修复 GBA 擦后首包写入卡死。
             修复识别超时后 cfb 未退出造成的串口占用，修正连接状态与占口重试。
             新增设置 → 工具链 → cfb 手动修复，支持修复后重连和结果提示。
-            Compatibility: app/client 0.4.3, cfb 0.5.2, embedded rule 0.3.5 (unchanged-compatible).
+            Compatibility: app/client 0.4.4, cfb 0.5.3, embedded rule 0.3.5 (unchanged-compatible).
 
             Windows x64 installer (NSIS) · macOS ARM64/Intel (DMG) · Linux x64 GUI (AppImage / deb).
 

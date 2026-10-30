@@ -1,11 +1,11 @@
 {
   "name": "chis-flasher",
   "private": true,
-  "version": "0.4.3",
+  "version": "0.4.4",
   "license": "GPL-3.0-only",
   "type": "module",
   "compatibility": {
-    "cmd": "0.5.2",
+    "cmd": "0.5.3",
     "rule": "0.3.5"
   },
   "scripts": {

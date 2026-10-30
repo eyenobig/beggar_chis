@@ -16,7 +16,7 @@ permissions:
 
 env:
   CFB_GITHUB_REPO: eyenobig/chis-burner-cmd
-  CFB_RELEASE_TAG: ${{ vars.CFB_RELEASE_TAG || 'v0.5.2' }}
+  CFB_RELEASE_TAG: ${{ vars.CFB_RELEASE_TAG || 'v0.5.3' }}
 
 jobs:
   frontend:
@@ -87,6 +87,11 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Wait for pinned CFB release assets
+        run: node scripts/wait-cfb-release.mjs
+        env:
+          CFB_GITHUB_TOKEN: ${{ secrets.CFB_RELEASE_TOKEN || github.token }}
 
       - name: Download released CFB sidecar
         run: npm run build:cfb:github
