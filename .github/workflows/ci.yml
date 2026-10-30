@@ -91,6 +91,7 @@ jobs:
       - name: Wait for pinned CFB release assets
         run: node scripts/wait-cfb-release.mjs
         env:
+          CFB_TARGET: ${{ matrix.target }}
           CFB_GITHUB_TOKEN: ${{ secrets.CFB_RELEASE_TOKEN || github.token }}
 
       - name: Download released CFB sidecar
