@@ -155,6 +155,12 @@
   },
   "settings": {
     "toolchain": "Toolchain",
+    "cfbRepair": "cfb 수동 복구",
+    "cfbRepairAction": "지금 복구",
+    "cfbRepairRunning": "복구 중…",
+    "cfbRepairHint": "직렬 접근을 복구하고 연결을 다시 검색합니다. 시스템 승인이 필요할 수 있습니다. Windows에서는 cfb와 SkyEmu가 종료되므로 다른 기록 및 DirectPlay 세션을 먼저 종료하세요.",
+    "cfbRepairBusy": "현재 작업이 끝나고 DirectPlay를 종료한 후 복구하세요.",
+    "cfbRepairNoConnection": "복구는 완료됐지만 연결되지 않았습니다. USB를 확인하고 다시 검색하세요.",
     "cfbPath": "cfb executable",
     "rulePath": "rule data folder",
     "cfbPathPick": "Choose cfb executable",

@@ -1,9 +1,11 @@
 // 烧录器连接状态（Pinia store）：插入烧录器自动连接，拔出自动断开。
-// 「连接」= cfb detect + select；「断开」= cfb disconnect。
+// 「连接」= detect 确认端口可打开 + select；「断开」= cfb disconnect。
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { cfbClient, inTauri } from '../services/cfb'
 import { useCfbSettings } from './useCfbSettings'
+import { useTaskProgress } from './useTaskProgress'
+import { i18n } from '../i18n'
 
 /** 展示用口名精简（仅显示，传给 cfb 的仍是原始路径）：
  *  /dev/cu.usbmodem11201 → USB 11201；/dev/cu.usbserial-1234 → USB 1234；
@@ -32,6 +34,9 @@ export const useConnection = defineStore('connection', () => {
   const burners = computed(() => dedupeBurners(devices.value.filter((d) => d.burner)))
   const needsSelection = computed(
     () => burners.value.length > 1 && !selectedPort.value,
+  )
+  const selectedPortReady = computed(() =>
+    burners.value.some((d) => d.port === selectedPort.value && d.open === true),
   )
   const isConnected = computed(() => connected.value && !!selectedPort.value)
   const isConnecting = computed(() => detecting.value && !connected.value)
@@ -120,7 +125,7 @@ export const useConnection = defineStore('connection', () => {
   async function selectPort(port) {
     if (!inTauri || !port) return false
     let ok = false
-    await cfbClient.selectPort(port, (ev) => {
+    const result = await cfbClient.selectPort(port, (ev) => {
       if (ev.type === 'selected' && ev.port) {
         selectedPort.value = ev.port
         settings.setPreferredPort(ev.port)
@@ -129,6 +134,11 @@ export const useConnection = defineStore('connection', () => {
         lastError.value = ev.message
       }
     })
+    if (result.error) {
+      lastError.value = result.error
+      ok = false
+    }
+    if (!ok) connected.value = false
     return ok
   }
 
@@ -143,12 +153,12 @@ export const useConnection = defineStore('connection', () => {
       lastError.value = 'cfb is only available in Tauri runtime. Use npm run dev.'
       return false
     }
-    if (detecting.value) return burners.value.length > 0 && !!selectedPort.value
+    if (detecting.value) return isConnected.value
     detecting.value = true
     lastError.value = ''
     const found = []
     try {
-      await cfbClient.detect((ev) => {
+      const result = await cfbClient.detect((ev) => {
         if (ev.type === 'port') {
           found.push({
             port: ev.port,
@@ -163,40 +173,42 @@ export const useConnection = defineStore('connection', () => {
           lastError.value = ev.message
         }
       })
+      if (result.error || lastError.value) throw new Error(lastError.value || result.error)
       const unique = dedupeBurners(found.filter((d) => d.burner))
+      let selected = false
       // 列表仍展示 detect 原始结果，选择逻辑按去重后的烧录器数量
       devices.value = found
       if (unique.length === 0) {
         selectedPort.value = null
       } else if (unique.length === 1) {
-        await selectPort(unique[0].port)
+        selected = await selectPort(unique[0].port)
       } else {
         const preferred =
           settings.preferredPort && unique.find((d) => d.port === settings.preferredPort)
         const stillSelected =
           selectedPort.value && unique.find((d) => d.port === selectedPort.value)
         if (preferred) {
-          await selectPort(preferred.port)
+          selected = await selectPort(preferred.port)
         } else if (stillSelected) {
           // 会话内已选且仍在线：保持，并同步 CLI select / preferred
-          await selectPort(stillSelected.port)
+          selected = await selectPort(stillSelected.port)
         } else {
           // 多台且无偏好：留空等用户手动选，不自动选。
           selectedPort.value = null
         }
       }
+      // select 只记住端口；必须以 detect 的实际打开结果确认连接。
+      const ready = selected && selectedPortReady.value
+      connected.value = autoConnect.value && ready
+      return ready
     } catch (e) {
       lastError.value = String(e?.message || e)
+      devices.value = []
+      connected.value = false
+      return false
     } finally {
       detecting.value = false
     }
-    // detect 只负责选口；连接态与 autoConnect 对齐，避免「已选 COM 却显示未连接」。
-    if (autoConnect.value && selectedPort.value) {
-      connected.value = true
-    } else if (!selectedPort.value) {
-      connected.value = false
-    }
-    return burners.value.length > 0 && !!selectedPort.value
   }
 
   function openDialog() {
@@ -207,14 +219,14 @@ export const useConnection = defineStore('connection', () => {
     dialogOpen.value = false
   }
 
-  /** 点选设备行：select 并视为已连接。 */
+  /** 点选设备后重新确认端口可用，不能把记住端口当作连接成功。 */
   async function pickDevice(port) {
     if (!port || detecting.value) return false
     lastError.value = ''
     const ok = await selectPort(port)
     if (ok) {
       autoConnect.value = true
-      connected.value = true
+      return detect()
     }
     return ok
   }
@@ -226,9 +238,22 @@ export const useConnection = defineStore('connection', () => {
       settings.setPreferredPort(port)
     }
     if (!selectedPort.value) return false
+    const device = devices.value.find((d) => d.port === selectedPort.value)
+    if (device) device.open = true
+    else devices.value.push({ port: selectedPort.value, burner: true, open: true })
+    lastError.value = ''
     autoConnect.value = true
     connected.value = true
     return true
+  }
+
+  /** 端口打开失败或命令失去响应：保留所选端口与原因，供连接弹窗重试。 */
+  function markUnavailable(error) {
+    lastError.value = String(error || '')
+    connected.value = false
+    for (const device of devices.value) {
+      if (device.port === selectedPort.value) device.open = false
+    }
   }
 
   async function connect() {
@@ -236,18 +261,8 @@ export const useConnection = defineStore('connection', () => {
       lastError.value = 'select_required'
       return false
     }
-    // 已有选中口：只刷新列表并确认仍在线；否则走 detect 自动选（单机）
-    let ok = false
-    if (selectedPort.value) {
-      const stillThere = devices.value.some((d) => d.port === selectedPort.value)
-      if (!stillThere) {
-        ok = await detect()
-      } else {
-        ok = await selectPort(selectedPort.value)
-      }
-    } else {
-      ok = await detect()
-    }
+    autoConnect.value = true
+    const ok = await detect()
     if (needsSelection.value) {
       lastError.value = 'select_required'
       connected.value = false
@@ -277,11 +292,6 @@ export const useConnection = defineStore('connection', () => {
     await detect()
     if (burners.value.length === 0) {
       autoConnect.value = true
-      if (connected.value) connected.value = false
-    } else if (autoConnect.value && selectedPort.value) {
-      connected.value = true
-    } else if (!selectedPort.value) {
-      connected.value = false
     }
   }
 
@@ -303,6 +313,10 @@ export const useConnection = defineStore('connection', () => {
    */
   async function fixSerialPerms() {
     if (!inTauri || fixingPerms.value) return false
+    if (directPlay.value || useTaskProgress().runningCount > 0) {
+      lastError.value = i18n.global.t('settings.cfbRepairBusy')
+      return false
+    }
     fixingPerms.value = true
     lastError.value = ''
     permFixPhase.value = ''
@@ -342,6 +356,7 @@ export const useConnection = defineStore('connection', () => {
     selectPort,
     pickDevice,
     markConnected,
+    markUnavailable,
     connect,
     disconnect,
     handleDeviceChange,

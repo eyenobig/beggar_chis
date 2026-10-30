@@ -155,6 +155,12 @@
   },
   "settings": {
     "toolchain": "Toolchain",
+    "cfbRepair": "Reparación de cfb",
+    "cfbRepairAction": "Reparar",
+    "cfbRepairRunning": "Reparando…",
+    "cfbRepairHint": "Repara el acceso serie y detecta la conexión de nuevo. Puede solicitar autorización del sistema. En Windows se cerrarán cfb y SkyEmu; termine antes otras grabaciones o sesiones DirectPlay.",
+    "cfbRepairBusy": "Espere a que termine la tarea y salga de DirectPlay antes de reparar.",
+    "cfbRepairNoConnection": "Reparación terminada, pero sin conexión. Compruebe USB y vuelva a detectar.",
     "cfbPath": "cfb executable",
     "rulePath": "rule data folder",
     "cfbPathPick": "Choose cfb executable",

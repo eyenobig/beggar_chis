@@ -18,10 +18,10 @@ const detail = computed(() => buildRomFields(cartInfo.value))
 /** 无字段数据时的状态文案，填入 Game Name 行，保持与有数据时相同的标题+值布局 */
 const statusHint = computed(() => {
   if (conn.needsSelection) return t('conn.selectHint')
+  if (cartError.value) return cartError.value
   if (!conn.isConnected) return t('rom.hint.connect')
   if (cartReading.value) return t('rom.hint.reading')
   if (detail.value || flashInfo.value) return null
-  if (cartError.value) return cartError.value
   return t('rom.hint.empty')
 })
 

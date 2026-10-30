@@ -12,7 +12,7 @@ export const inTauri =
 // 的 `Command.create(program, args)` 在非 sidecar 模式下要求 `program` 精确匹配
 // capabilities 里静态声明的 scope 条目，无法表达 `cfbBinPath` 这种运行时才知道的
 // 任意绝对路径。因此这里不使用 `Command.create`，而是改为 invoke 后端自定义命令
-// （`resolve_cfb_binary` / `cfb_exec` / `cfb_spawn` / `cfb_kill_process`），并包一层
+// （`resolve_cfb_binary` / `cfb_spawn` / `cfb_kill_process`），并包一层
 // `DirectCfbCommand` 适配器，对外暴露与 plugin-shell `Command` 相同的接口。
 //
 // 直连模式只解析已存在的可执行文件（或 bins 目录内的平台产物），不在应用内自动 cargo build；
@@ -53,7 +53,7 @@ function cfbRuleDirEnv() {
   return dir || null
 }
 
-/** 模拟 plugin-shell `Command` 接口的直连执行器，底层为 cfb_exec/cfb_spawn/cfb_kill_process。 */
+/** 模拟 plugin-shell `Command` 接口的直连执行器，底层为 cfb_spawn/cfb_kill_process。 */
 class DirectCfbCommand {
   constructor(binPath, args, ruleDir = null) {
     this.binPath = binPath
@@ -70,11 +70,6 @@ class DirectCfbCommand {
   on(evt, cb) {
     if (evt === 'close') this._close.push(cb)
     else if (evt === 'error') this._error.push(cb)
-  }
-
-  async execute() {
-    const out = await invoke('cfb_exec', { binPath: this.binPath, args: this.args, ruleDir: this.ruleDir })
-    return { stdout: out.stdout, stderr: out.stderr, code: out.code }
   }
 
   async spawn() {
@@ -122,9 +117,13 @@ function emitLine(line, onEvent) {
 
 /** 全局串行化 cfb 调用，避免 UI 并发 info/detect/burn 抢同一 COM。 */
 let _cfbChain = Promise.resolve()
+let _cfbUnreleased = null
 
-function withCfbLock(fn) {
-  const run = _cfbChain.then(fn, fn)
+function withCfbLock(fn, recovery = false) {
+  const guarded = () => _cfbUnreleased && !recovery
+    ? { logs: [], code: -1, error: _cfbUnreleased.error, errorKind: 'process' }
+    : fn()
+  const run = _cfbChain.then(guarded, guarded)
   // 吞掉链上错误，避免一次失败永久卡住后续调用。
   _cfbChain = run.then(
     () => undefined,
@@ -134,74 +133,91 @@ function withCfbLock(fn) {
 }
 
 export async function executeCfb(args, onEvent) {
-  if (!inTauri) throw new Error('cfb is only available in Tauri runtime. Use npm run dev.')
-  return withCfbLock(async () => {
-    try {
-      const command = await createCommand(args)
-      const output = await Promise.race([
-        command.execute(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`cfb timeout: ${args.join(' ')}`)), 30000),
-        ),
-      ])
-      for (const line of String(output.stdout || '').split(/\r?\n/)) emitLine(line, onEvent)
-      const stderr = String(output.stderr || '').trim()
-      const code = output.code ?? -1
-      return {
-        logs: stderr ? stderr.split(/\r?\n/) : [],
-        code,
-        error: code !== 0 ? stderr || `cfb exited with code ${code}` : undefined,
-      }
-    } catch (error) {
-      return { logs: [], code: -1, error: String(error?.message || error) }
-    }
-  })
+  return runCfb(args, onEvent, null, { timeoutMs: 30000, buffered: true })
 }
 
 export async function streamCfb(args, onEvent, onChild, opts = {}) {
+  return runCfb(args, onEvent, onChild, opts)
+}
+
+/** 短命令也必须 spawn：保留进程句柄，超时后先终止并等待退出，再释放串行锁。 */
+async function runCfb(args, onEvent, onChild, { timeoutMs = 0, buffered = false, recovery = false, ...opts } = {}) {
   if (!inTauri) throw new Error('cfb is only available in Tauri runtime. Use npm run dev.')
   return withCfbLock(async () => {
     const logs = []
-    let buffer = ''
+    const output = []
+    const state = { closed: false, failed: false, error: '' }
+    let child = null
+    let timer = null
+    let cleanupTimer = null
+    let closeProcess
+    const closed = new Promise((resolve) => { closeProcess = resolve })
 
     try {
       const command = await createCommand(args, opts)
 
-      command.stdout.on('data', (chunk) => {
-        buffer += String(chunk)
-        const lines = buffer.split(/\r?\n/)
-        buffer = lines.pop() || ''
-        for (const line of lines) emitLine(line, onEvent)
+      // plugin-shell 默认按行发送（不含换行）；直连模式转发的是同一类事件。
+      command.stdout.on('data', (data) => {
+        if (state.closed || state.failed) return
+        for (const line of String(data).split(/\r?\n/)) {
+          if (buffered) output.push(line)
+          else emitLine(line, onEvent)
+        }
       })
       command.stderr.on('data', (line) => logs.push(String(line).trimEnd()))
-
-      let settled = false
-      const done = new Promise((resolve) => {
-        const finish = (result) => {
-          if (settled) return
-          settled = true
-          resolve(result)
-        }
-        command.on('close', ({ code, signal }) => {
-          emitLine(buffer, onEvent)
-          const stderr = logs.filter(Boolean).join('\n').trim()
-          const exitCode = code ?? -1
-          finish({
-            logs,
-            code: exitCode,
-            error: exitCode !== 0
-              ? stderr || (signal ? `cfb terminated by signal ${signal}` : `cfb exited with code ${exitCode}`)
-              : undefined,
-          })
-        })
-        command.on('error', (error) => finish({ logs, code: -1, error: String(error) }))
+      command.on('close', (result) => {
+        state.closed = true
+        if (_cfbUnreleased === state) _cfbUnreleased = null
+        closeProcess(result)
+      })
+      const failed = new Promise((resolve) => {
+        command.on('error', (error) => resolve({ error: String(error), errorKind: 'process' }))
       })
 
-      const child = await command.spawn()
+      child = await command.spawn()
       onChild?.(child)
-      return await done
+      const waits = [closed, failed]
+      if (timeoutMs > 0 && !state.closed) {
+        waits.push(new Promise((resolve) => {
+          timer = setTimeout(() => resolve({
+            error: `cfb timeout: ${args.join(' ')}`,
+            errorKind: 'timeout',
+          }), timeoutMs)
+        }))
+      }
+      const result = await Promise.race(waits)
+      if (result.error) throw Object.assign(new Error(result.error), { errorKind: result.errorKind })
+      if (buffered) for (const line of output) emitLine(line, onEvent)
+      const stderr = logs.filter(Boolean).join('\n').trim()
+      const code = result.code ?? -1
+      return {
+        logs,
+        code,
+        error: code !== 0
+          ? stderr || (result.signal ? `cfb terminated by signal ${result.signal}` : `cfb exited with code ${code}`)
+          : undefined,
+      }
     } catch (error) {
-      return { logs, code: -1, error: String(error?.message || error) }
+      state.failed = true
+      clearTimeout(timer)
+      let message = String(error?.message || error)
+      if (child && !state.closed) {
+        // kill 请求成功不代表进程已退出；只有 close 才能保证下一条命令不会抢口。
+        Promise.resolve().then(() => child.kill()).catch((err) => logs.push(String(err)))
+        await Promise.race([
+          closed,
+          new Promise((resolve) => { cleanupTimer = setTimeout(resolve, 5000) }),
+        ])
+        if (!state.closed) {
+          state.error = `cfb process ${child.pid} has not exited; restart the app before retrying.`
+          _cfbUnreleased = state
+          message += `; ${state.error}`
+        }
+      }
+      return { logs, code: -1, error: message, errorKind: error?.errorKind || 'process' }
+    } finally {
+      clearTimeout(timer)
+      clearTimeout(cleanupTimer)
     }
-  })
+  }, recovery)
 }

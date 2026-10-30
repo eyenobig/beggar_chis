@@ -16,6 +16,7 @@ import { useEmulator } from '../../../stores/useEmulator'
 import { useLogStore } from '../../../stores/useLogStore'
 import { useCartridgeCache } from '../../../stores/useCartridgeCache'
 import { useConnection } from '../../../stores/useConnection'
+import { useCartData } from '../../../stores/useCartData'
 import { useToast } from '../../../stores/useToast'
 import { useDragScroll } from '../../../composables/useDragScroll'
 import SettingHint from '../../settings/SettingHint.vue'
@@ -41,6 +42,10 @@ async function downloadCfb() {
 }
 const { records: cachedCartridges } = storeToRefs(cartridgeCache)
 const conn = useConnection()
+const cart = useCartData()
+const cfbRepairBlocked = computed(() => cart.opRunning || cart.cartReading || conn.directPlay || conn.detecting)
+const cfbRepairResult = ref('')
+const cfbRepairFailed = ref(false)
 const { fixingPerms, permFixPhase } = storeToRefs(conn)
 const { currentPlatform, skyEmuPath } = storeToRefs(emulator)
 const {
@@ -162,7 +167,7 @@ async function refreshAuthStatus() {
 }
 
 async function onSerialFix() {
-  if (fixingPerms.value) return
+  if (fixingPerms.value || cfbRepairBlocked.value) return
   const ok = await conn.fixSerialPerms()
   const phase = permFixPhase.value
   if (ok && phase === 'none') {
@@ -172,6 +177,24 @@ async function onSerialFix() {
   } else {
     toast.error(conn.lastError || t('conn.permFixFail'))
   }
+  await refreshAuthStatus()
+}
+
+async function onCfbRepair() {
+  if (!inTauri || fixingPerms.value || cfbRepairBlocked.value) return
+  cfbRepairResult.value = ''
+  cfbRepairFailed.value = false
+  clearDirectBinaryCache()
+  const ok = await conn.fixSerialPerms()
+  cfbRepairFailed.value = !ok || !conn.isConnected
+  const message = !ok
+    ? conn.lastError || t('conn.permFixFail')
+    : conn.isConnected ? t('conn.permFixDone') : conn.lastError || t('settings.cfbRepairNoConnection')
+  cfbRepairResult.value = message
+  logStore.addLog(message, cfbRepairFailed.value ? 'warn' : 'success')
+  if (!ok) toast.error(message)
+  else if (conn.isConnected) toast.success(message)
+  else toast.info(message)
   await refreshAuthStatus()
 }
 
@@ -339,7 +362,7 @@ function toggleManualVoltage() {
                 type="button"
                 class="rounded-md border border-amber-400/60 px-2.5 py-1 text-[10px] font-bold text-amber-300
                        hover:bg-amber-400/10 active:scale-95 transition-all disabled:opacity-60"
-                :disabled="fixingPerms || !inTauri"
+                :disabled="fixingPerms || cfbRepairBlocked || !inTauri"
                 @click="onSerialFix"
               >
                 {{ serialFixLabel }}
@@ -392,6 +415,25 @@ function toggleManualVoltage() {
           @pick="pickRuleDir"
           @download="downloadRule"
         />
+        <div class="space-y-2 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
+          <div class="flex items-center justify-between gap-3">
+            <span class="text-[11px] font-bold text-zinc-300">{{ $t('settings.cfbRepair') }}</span>
+            <button
+              data-no-drag
+              type="button"
+              class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-amber-400/60 px-2.5 py-1 text-[10px] font-bold text-amber-300 hover:bg-amber-400/10 disabled:opacity-40"
+              :disabled="!inTauri || fixingPerms || cfbRepairBlocked"
+              @click="onCfbRepair"
+            >
+              <LoaderCircle v-if="fixingPerms" class="h-3.5 w-3.5 animate-spin" />
+              {{ fixingPerms ? $t('settings.cfbRepairRunning') : $t('settings.cfbRepairAction') }}
+            </button>
+          </div>
+          <p class="text-[9px] leading-snug text-zinc-500">{{ $t('settings.cfbRepairHint') }}</p>
+          <p v-if="cfbRepairBlocked" class="text-[9px] text-amber-300">{{ $t('settings.cfbRepairBusy') }}</p>
+          <p v-if="fixingPerms && permFixPhase === 'prompt'" class="text-[9px] text-amber-300">{{ $t('conn.permFixing') }}</p>
+          <p v-if="cfbRepairResult" role="status" class="break-words text-[10px]" :class="cfbRepairFailed ? 'text-amber-300' : 'text-green-400'">{{ cfbRepairResult }}</p>
+        </div>
         <!-- 串口授权修复：样式与位置复刻连接弹窗的 Linux 授权卡片（深色抽屉适配） -->
       </div>
     </section>

@@ -155,6 +155,12 @@
   },
   "settings": {
     "toolchain": "Toolchain",
+    "cfbRepair": "Réparation cfb",
+    "cfbRepairAction": "Réparer",
+    "cfbRepairRunning": "Réparation…",
+    "cfbRepairHint": "Répare l’accès série et relance la détection. Une autorisation système peut être demandée. Sous Windows, cfb et SkyEmu seront fermés. Terminez les autres écritures ou sessions DirectPlay avant de réparer.",
+    "cfbRepairBusy": "Attendez la fin de la tâche et quittez DirectPlay avant de réparer.",
+    "cfbRepairNoConnection": "Réparation terminée, mais graveur non connecté. Vérifiez USB puis relancez la détection.",
     "cfbPath": "cfb executable",
     "rulePath": "rule data folder",
     "cfbPathPick": "Choose cfb executable",

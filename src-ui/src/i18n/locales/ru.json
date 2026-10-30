@@ -155,6 +155,12 @@
   },
   "settings": {
     "toolchain": "Toolchain",
+    "cfbRepair": "Восстановление cfb",
+    "cfbRepairAction": "Восстановить",
+    "cfbRepairRunning": "Восстановление…",
+    "cfbRepairHint": "Восстанавливает доступ к порту и повторяет поиск устройства. Может потребоваться разрешение системы. В Windows процессы cfb и SkyEmu будут закрыты; сначала завершите другие операции записи и сеансы DirectPlay.",
+    "cfbRepairBusy": "Дождитесь завершения задачи и выйдите из DirectPlay перед восстановлением.",
+    "cfbRepairNoConnection": "Восстановление завершено, но устройство не подключено. Проверьте USB и повторите поиск.",
     "cfbPath": "cfb executable",
     "rulePath": "rule data folder",
     "cfbPathPick": "Choose cfb executable",

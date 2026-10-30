@@ -155,6 +155,12 @@
   },
   "settings": {
     "toolchain": "Toolchain",
+    "cfbRepair": "cfb reparieren",
+    "cfbRepairAction": "Jetzt reparieren",
+    "cfbRepairRunning": "Reparatur…",
+    "cfbRepairHint": "Seriellen Zugriff reparieren und Verbindung erneut erkennen. Eine Systemfreigabe kann nötig sein. Unter Windows werden cfb und SkyEmu beendet. Andere Schreib- oder DirectPlay-Sitzungen vorher beenden.",
+    "cfbRepairBusy": "Aktuellen Vorgang abwarten und DirectPlay vor der Reparatur beenden.",
+    "cfbRepairNoConnection": "Reparatur beendet, aber keine Verbindung. USB prüfen und erneut suchen.",
     "cfbPath": "cfb executable",
     "rulePath": "rule data folder",
     "cfbPathPick": "Choose cfb executable",

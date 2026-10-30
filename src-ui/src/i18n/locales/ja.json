@@ -155,6 +155,12 @@
   },
   "settings": {
     "toolchain": "Toolchain",
+    "cfbRepair": "cfb 手動修復",
+    "cfbRepairAction": "修復する",
+    "cfbRepairRunning": "修復中…",
+    "cfbRepairHint": "シリアルアクセスを修復し、接続を再検出します。システム認証が必要な場合があります。Windows では cfb と SkyEmu を終了します。他の書き込みや DirectPlay を先に終了してください。",
+    "cfbRepairBusy": "現在の処理を完了し、DirectPlay を終了してから修復してください。",
+    "cfbRepairNoConnection": "修復は完了しましたが、接続できません。USB を確認して再検出してください。",
     "cfbPath": "cfb executable",
     "rulePath": "rule data folder",
     "cfbPathPick": "Choose cfb executable",

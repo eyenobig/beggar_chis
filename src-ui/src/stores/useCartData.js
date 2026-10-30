@@ -78,7 +78,12 @@ function infoQuality(info) {
 /** USB 重枚举后 COM 号会变，旧 --port 打开失败时应重新 detect。 */
 function isStalePortError(err) {
   const s = String(err || '')
-  return /打开端口|找不到指定的文件|cannot find the file|access is denied|拒绝访问|not found|当前不在线/i.test(s)
+  return /找不到指定的文件|cannot find the file|not found|当前不在线/i.test(s)
+}
+
+/** 串口打不开时，换卡型/电压不能解决；保留错误并停止双模式重试。 */
+function isPortAccessError(err) {
+  return /failed to open port|打开端口|access is denied|拒绝访问|permission denied|resource busy|port .*konnte nicht geöffnet|no se pudo abrir el puerto|impossible d'ouvrir le port|ポート .*を開けません|포트 .*열기 실패|falha ao abrir a porta/i.test(String(err || ''))
 }
 
 /** 瞬时识别失败（接触抖动 / 上电未稳），值得短退避后再试。 */
@@ -518,11 +523,14 @@ export const useCartData = defineStore('cart', () => {
         if (attempt > 0) await sleep(mbc ? 180 * attempt : 150 * attempt)
         info = null
         err = ''
-        const { error } = await cfbClient.readCartridge({ mbc }, (ev) => {
+        const { error, errorKind } = await cfbClient.readCartridge({ mbc }, (ev) => {
           if (ev.type === 'info') info = ev
           else if (ev.type === 'error') err = ev.message || err
         })
         if (error && !err) err = error
+        if (errorKind || isPortAccessError(err)) {
+          return { info: null, err: errorKind ? error : err, mbc, portFailed: true }
+        }
         // 明确平台命中即可停；unknown 弱命中继续重试（尤其 MBC）
         if (infoQuality(info) >= 2) return { info, err, mbc }
         if (infoQuality(info) > 0 && !mbc) return { info, err, mbc }
@@ -535,6 +543,7 @@ export const useCartData = defineStore('cart', () => {
       const firstMbc = preferMbc.value
       let hit = await tryOne(firstMbc)
       if (seq !== _readSeq) return null
+      if (hit.portFailed) return hit
       // 非强身份（无明确 kind+标题）时再试另一模式；GB 卡在 GBA 模式常出现 unknown+CFI。
       if (infoQuality(hit.info) < 3) {
         // 换电压前多等一会：尤其切到 MBC(5V) 需要轨稳定
@@ -542,6 +551,7 @@ export const useCartData = defineStore('cart', () => {
         await sleep(switchingToMbc ? 280 : 160)
         const other = await tryOne(!firstMbc)
         if (seq !== _readSeq) return null
+        if (other.portFailed) return other
         const qOther = infoQuality(other.info)
         const qHit = infoQuality(hit.info)
         if (qOther > qHit) hit = other
@@ -564,10 +574,9 @@ export const useCartData = defineStore('cart', () => {
       if (infoQuality(hit.info) === 0 && isStalePortError(hit.err)) {
         const redetectMsg = t('rom.op.redetectPort')
         showStatus(redetectMsg)
-        await conn.detect()
+        const reconnected = await conn.detect()
         if (seq !== _readSeq) return
-        if (conn.selectedPort) {
-          conn.markConnected(conn.selectedPort)
+        if (reconnected && conn.selectedPort) {
           await sleep(200)
           hit = await tryBothModes()
           if (seq !== _readSeq || !hit) return
@@ -606,6 +615,7 @@ export const useCartData = defineStore('cart', () => {
       } else {
         cartInfo.value = null
         cartError.value = hit.err || t('rom.op.identifyEmpty')
+        if (hit.portFailed) conn.markUnavailable(cartError.value)
         if (!silent) logStore.addLog(cartError.value, 'warn')
         showStatus(
           hit.err ? t('rom.op.identifyFail', { err: hit.err }) : t('rom.op.identifyEmpty'),
@@ -1371,7 +1381,7 @@ export const useCartData = defineStore('cart', () => {
         }, 250)
       } else {
         cartInfo.value = null
-        cartError.value = ''
+        cartError.value = conn.lastError || ''
       }
     },
   )

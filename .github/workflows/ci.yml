@@ -16,7 +16,7 @@ permissions:
 
 env:
   CFB_GITHUB_REPO: eyenobig/chis-burner-cmd
-  CFB_RELEASE_TAG: ${{ vars.CFB_RELEASE_TAG || 'v0.5.0' }}
+  CFB_RELEASE_TAG: ${{ vars.CFB_RELEASE_TAG || 'v0.5.2' }}
 
 jobs:
   frontend:
@@ -29,6 +29,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: node --test scripts/cfb-client.test.mjs
       - run: npm run check:sidecar-bind
       - run: npm run build:web
 
