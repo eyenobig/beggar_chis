@@ -181,7 +181,9 @@ jobs:
           archive="signatures-${RELEASE_TAG}.zip"
           (cd signatures && zip -q "../$archive" ./*.sig)
           gh release upload "$RELEASE_TAG" "$archive" --clobber
-          gh api --paginate "repos/$GH_REPO/releases/tags/$RELEASE_TAG" --jq '.assets[] | select(.name | endswith(".sig")) | .id' |
+          release_id=$(gh api "repos/$GH_REPO/releases" --jq ".[] | select(.tag_name == \"$RELEASE_TAG\") | .id")
+          test -n "$release_id"
+          gh api "repos/$GH_REPO/releases/$release_id" --jq '.assets[] | select(.name | endswith(".sig")) | .id' |
             while read -r asset_id; do
               gh api --method DELETE "repos/$GH_REPO/releases/assets/$asset_id"
             done
