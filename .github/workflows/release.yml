@@ -175,16 +175,17 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          # 草稿发布不能依赖 /releases/tags/<tag>，先从列表解析 ID。
+          release_id=$(gh api --paginate "repos/$GH_REPO/releases" --jq ".[] | select(.tag_name == \"$RELEASE_TAG\") | .id")
+          [[ "$release_id" =~ ^[0-9]+$ ]]
           mkdir signatures
           gh release download "$RELEASE_TAG" --pattern '*.sig' --dir signatures
           test -n "$(find signatures -maxdepth 1 -type f -name '*.sig' -print -quit)"
           archive="signatures-${RELEASE_TAG}.zip"
           (cd signatures && zip -q "../$archive" ./*.sig)
           gh release upload "$RELEASE_TAG" "$archive" --clobber
-          release_id=$(gh api "repos/$GH_REPO/releases" --jq ".[] | select(.tag_name == \"$RELEASE_TAG\") | .id")
-          test -n "$release_id"
-          gh api "repos/$GH_REPO/releases/$release_id" --jq '.assets[] | select(.name | endswith(".sig")) | .id' |
-            while read -r asset_id; do
-              gh api --method DELETE "repos/$GH_REPO/releases/assets/$asset_id"
-            done
-          gh release edit "$RELEASE_TAG" --draft=false --latest
+          asset_ids=$(gh api --paginate "repos/$GH_REPO/releases/$release_id/assets" --jq '.[] | select(.name | endswith(".sig")) | .id')
+          for asset_id in $asset_ids; do
+            gh api --method DELETE "repos/$GH_REPO/releases/assets/$asset_id"
+          done
+          gh api --method PATCH "repos/$GH_REPO/releases/$release_id" -F draft=false -f make_latest=true
