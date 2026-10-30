@@ -69,6 +69,21 @@ jobs:
       - name: Checkout application
         uses: actions/checkout@v4
 
+      # Release 草稿由所有者在推送标签时预建；CI 只负责上传和最终公开。
+      - name: Verify release draft before building
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          release_id=$(gh api --paginate "repos/$GH_REPO/releases" --jq ".[] | select(.tag_name == \"$RELEASE_TAG\" and .draft == true) | .id")
+          if ! [[ "$release_id" =~ ^[0-9]+$ ]]; then
+            echo "::error::Create the $RELEASE_TAG draft release as the repository owner before running this workflow."
+            exit 1
+          fi
+
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
