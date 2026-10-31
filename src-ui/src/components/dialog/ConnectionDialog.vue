@@ -18,41 +18,47 @@ const {
   detecting,
   permBlocked,
   fixingPerms,
+  repairBlocked,
 } = storeToRefs(conn)
 const { closeDialog, connect, disconnect, detect, pickDevice, fixSerialPerms } = conn
 
-// 平台区分修复提示：Linux 权限不足（装 udev 规则）/ macOS 端口被占用 / Windows 被残留进程占用
-const isMac = /Mac/i.test(navigator.userAgent) && !/iPhone|iPad/i.test(navigator.userAgent)
-const isWin = /Windows/i.test(navigator.userAgent)
-const permHint = computed(() => {
-  if (isMac) return t('conn.permHintMac')
-  if (isWin) return t('conn.permHintWin')
-  return t('conn.permHint')
-})
-
+const busy = computed(() => detecting.value || fixingPerms.value)
 const errorText = computed(() => {
   if (!lastError.value) return ''
   if (lastError.value === 'select_required') return t('conn.selectHint')
-  return lastError.value
+  if (/bundled cfb executable|未在目录中找到 cfb|cfb.*路径不存在/i.test(lastError.value)) return t('conn.engineMissing')
+  return t('conn.reconnectHint')
+})
+const showRepair = computed(() => permBlocked.value || (!!lastError.value && !needsSelection.value))
+const primaryAction = computed(() => {
+  if (isConnected.value) return { label: 'conn.disconnect', run: disconnect, disabled: busy.value, disconnect: true }
+  if (showRepair.value) return {
+    label: fixingPerms.value ? 'conn.repairing' : 'conn.repair',
+    run: fixSerialPerms,
+    disabled: fixingPerms.value || repairBlocked.value,
+  }
+  return {
+    label: isConnecting.value ? 'conn.detecting' : 'conn.connect',
+    run: connect,
+    disabled: busy.value || needsSelection.value,
+  }
 })
 
 function rowClass(d) {
   const selected = selectedPort.value === d.port
-  if (selected) return 'border-green-500 bg-green-50 ring-1 ring-green-400 cursor-pointer'
+  if (selected && d.open === false) return 'border-amber-300 bg-amber-50 cursor-pointer'
+  if (selected) return 'border-zinc-300 bg-zinc-50 cursor-pointer'
   if (d.burner) return 'border-green-200 bg-green-50/60 hover:border-green-400 cursor-pointer'
   return 'border-zinc-150 bg-zinc-50 cursor-pointer'
 }
 
 async function onPick(d) {
-  if (detecting.value) return
+  if (busy.value) return
   await pickDevice(d.port)
 }
 
 function deviceMeta(d) {
-  const id = d.vid ? `${d.vid}:${d.pid}` : '—'
-  const sn = d.serial ? ` · SN ${d.serial}` : ''
-  const busy = d.open === false ? ` · ${t('conn.busy')}` : ''
-  return `${id}${sn} · ${d.name}${busy}`
+  return d.open === false ? t('conn.busy') : t('conn.burner')
 }
 </script>
 
@@ -72,6 +78,7 @@ function deviceMeta(d) {
             <button
               data-no-drag
               @click="detect"
+              :disabled="busy"
               class="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 hover:text-zinc-700 transition-colors"
             >
               {{ $t('conn.refresh') }}
@@ -115,22 +122,13 @@ function deviceMeta(d) {
           >
             <div
               class="w-1.5 h-1.5 rounded-full shrink-0"
-              :class="selectedPort === d.port
+              :class="d.open === false ? 'bg-amber-400' : selectedPort === d.port
                 ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]'
                 : d.burner ? 'bg-green-400' : 'bg-zinc-300'"
             ></div>
             <div class="flex-1 min-w-0">
               <div class="text-xs font-semibold text-zinc-800 truncate" :title="d.port">
                 {{ shortPort(d.port) }}
-                <span v-if="d.burner" class="ml-1 text-[9px] font-bold text-green-600">
-                  {{ $t('conn.burner') }}
-                </span>
-                <span
-                  v-if="selectedPort === d.port"
-                  class="ml-1 text-[9px] font-bold text-green-700"
-                >
-                  {{ $t('conn.selected') }}
-                </span>
               </div>
               <div class="text-[10px] text-zinc-400 truncate">
                 {{ deviceMeta(d) }}
@@ -138,50 +136,28 @@ function deviceMeta(d) {
             </div>
           </button>
 
-          <!-- 错误/排查信息 -->
-          <div v-if="errorText" class="text-[10px] text-red-500 break-all px-1 pt-1">
-            {{ errorText }}
-          </div>
-
-          <!-- Linux 串口权限一键修复：cfb udev（pkexec 弹系统密码框装 udev 规则） -->
-          <div
-            v-if="permBlocked"
-            class="rounded-lg border border-amber-200 bg-amber-50/80 px-2.5 py-2 space-y-1.5"
-          >
-            <div class="text-[10px] leading-snug text-amber-700 font-semibold">
-              {{ permHint }}
-            </div>
-            <button
-              data-no-drag
-              type="button"
-              :disabled="fixingPerms"
-              @click="fixSerialPerms"
-              class="w-full py-1.5 rounded-lg bg-amber-500 text-white text-[10px] font-bold
-                     hover:bg-amber-400 active:scale-95 transition-all disabled:opacity-60"
-            >
-              {{ fixingPerms ? $t('conn.permFixing') : $t('conn.fixPerms') }}
-            </button>
-          </div>
+          <p v-if="errorText || permBlocked" role="status" class="text-[11px] leading-relaxed text-zinc-500 px-1 pt-2">
+            {{ errorText || $t('conn.reconnectHint') }}
+          </p>
+          <details v-if="lastError && lastError !== 'select_required'" class="px-1 text-[10px] text-zinc-400">
+            <summary class="cursor-pointer">{{ $t('conn.details') }}</summary>
+            <p class="mt-1 break-words select-text">{{ lastError }}</p>
+          </details>
         </div>
 
-        <!-- 底部：已连接显示「断开连接」，否则显示「连接」 -->
+        <!-- 操作、标签和禁用条件由同一个状态决定。 -->
         <div class="p-3 border-t border-zinc-100 shrink-0">
           <button
-            v-if="isConnected"
             data-no-drag
-            @click="disconnect"
-            class="w-full py-2 rounded-xl bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 active:scale-95 transition-all"
+            type="button"
+            :disabled="primaryAction.disabled"
+            @click="primaryAction.run()"
+            class="w-full py-2 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-50"
+            :class="primaryAction.disconnect
+              ? 'bg-red-50 text-red-600 hover:bg-red-100'
+              : 'bg-zinc-900 text-white hover:bg-zinc-700'"
           >
-            {{ $t('conn.disconnect') }}
-          </button>
-          <button
-            v-else
-            data-no-drag
-            :disabled="isConnecting || needsSelection"
-            @click="connect"
-            class="w-full py-2 rounded-xl bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-700 active:scale-95 transition-all disabled:opacity-50"
-          >
-            {{ isConnecting ? $t('conn.detecting') + '…' : $t('conn.connect') }}
+            {{ $t(primaryAction.label) }}
           </button>
         </div>
       </div>

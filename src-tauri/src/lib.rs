@@ -57,6 +57,7 @@ pub fn run() {
             toolchain::sync_local_paths_json,
             toolchain::install_dir,
             toolchain::resolve_cfb_binary,
+            toolchain::resolve_bundled_cfb,
             toolchain::cfb_exec,
             toolchain::cfb_spawn,
             toolchain::cfb_kill_process

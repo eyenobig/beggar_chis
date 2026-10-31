@@ -13,6 +13,11 @@
     "minimize": "最小化"
   },
   "conn": {
+    "repair": "接続を修復",
+    "repairing": "修復中…",
+    "reconnectHint": "接続できません。修復するか機器を接続し直してください。",
+    "engineMissing": "接続用コンポーネントがありません。修復または再インストールしてください。",
+    "details": "詳細",
     "online": "接続中",
     "detecting": "検出中",
     "offline": "未接続",

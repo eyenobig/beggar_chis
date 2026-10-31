@@ -1,8 +1,7 @@
-// 烧录器连接状态（Pinia store）：插入烧录器自动连接，拔出自动断开。
-// 「连接」= detect 确认端口可打开 + select；「断开」= cfb disconnect。
+// 烧录器连接状态：detect 确认可用端口，select 记住操作目标。
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { cfbClient, inTauri } from '../services/cfb'
+import { cfbClient, inTauri, clearDirectBinaryCache } from '../services/cfb'
 import { useCfbSettings } from './useCfbSettings'
 import { useTaskProgress } from './useTaskProgress'
 import { i18n } from '../i18n'
@@ -20,6 +19,7 @@ export function shortPort(port) {
 
 export const useConnection = defineStore('connection', () => {
   const settings = useCfbSettings()
+  const taskProgress = useTaskProgress()
   const devices = ref([]) // [{port,vid,pid,burner,open,name,serial}]
   const detecting = ref(false)
   const connected = ref(false)
@@ -35,11 +35,13 @@ export const useConnection = defineStore('connection', () => {
   const needsSelection = computed(
     () => burners.value.length > 1 && !selectedPort.value,
   )
-  const selectedPortReady = computed(() =>
-    burners.value.some((d) => d.port === selectedPort.value && d.open === true),
+  const selectedDevice = computed(() => burners.value.find((d) => d.port === selectedPort.value))
+  const selectedPortReady = computed(() => selectedDevice.value?.open === true)
+  const isConnected = computed(() => connected.value && selectedPortReady.value)
+  const isConnecting = computed(() => detecting.value && !isConnected.value)
+  const repairBlocked = computed(() =>
+    taskProgress.runningCount > 0 || directPlay.value || detecting.value,
   )
-  const isConnected = computed(() => connected.value && !!selectedPort.value)
-  const isConnecting = computed(() => detecting.value && !connected.value)
 
   // 串口被挡（有烧录器但全部打不开 open=false）一键修复：
   // Linux → 权限不足，cfb udev 一键装规则；macOS → 串口被其他程序占用，一键释放；
@@ -93,7 +95,8 @@ export const useConnection = defineStore('connection', () => {
         noSerial.push(p)
         continue
       }
-      ;(bySerial.get(sn) || bySerial.set(sn, []).get(sn)).push(p)
+      if (!bySerial.has(sn)) bySerial.set(sn, [])
+      bySerial.get(sn).push(p)
     }
 
     const kept = [...noSerial]
@@ -134,13 +137,20 @@ export const useConnection = defineStore('connection', () => {
         lastError.value = ev.message
       }
     })
-    if (result.error) {
-      lastError.value = result.error
-      ok = false
-    }
-    if (!ok) connected.value = false
-    return ok
+    if (result.error) lastError.value = result.error
+    const success = ok && !result.error
+    if (!success) connected.value = false
+    return success
   }
+
+  /** 单台自动选；多台只沿用偏好或当前选择，避免误选另一台烧录器。 */
+  function preferredDevice() {
+    const available = burners.value
+    if (available.length === 1) return available[0]
+    return available.find((d) => d.port === settings.preferredPort) || selectedDevice.value
+  }
+
+  let detectInFlight = null
 
   /**
    * cfb detect --json，刷新 devices。
@@ -148,12 +158,19 @@ export const useConnection = defineStore('connection', () => {
    * - 1 台：自动 select
    * - N 台：优先 preferred / 当前仍在线的 selected；否则留空等用户点选
    */
-  async function detect() {
+  function detect() {
     if (!inTauri) {
       lastError.value = 'cfb is only available in Tauri runtime. Use npm run dev.'
-      return false
+      return Promise.resolve(false)
     }
-    if (detecting.value) return isConnected.value
+    // 并发检测共享结果，不能把上一次的在线状态当作这次检测结果。
+    if (!detectInFlight) {
+      detectInFlight = detectDevices().finally(() => { detectInFlight = null })
+    }
+    return detectInFlight
+  }
+
+  async function detectDevices() {
     detecting.value = true
     lastError.value = ''
     const found = []
@@ -174,36 +191,15 @@ export const useConnection = defineStore('connection', () => {
         }
       })
       if (result.error || lastError.value) throw new Error(lastError.value || result.error)
-      const unique = dedupeBurners(found.filter((d) => d.burner))
-      let selected = false
-      // 列表仍展示 detect 原始结果，选择逻辑按去重后的烧录器数量
       devices.value = found
-      if (unique.length === 0) {
-        selectedPort.value = null
-      } else if (unique.length === 1) {
-        selected = await selectPort(unique[0].port)
-      } else {
-        const preferred =
-          settings.preferredPort && unique.find((d) => d.port === settings.preferredPort)
-        const stillSelected =
-          selectedPort.value && unique.find((d) => d.port === selectedPort.value)
-        if (preferred) {
-          selected = await selectPort(preferred.port)
-        } else if (stillSelected) {
-          // 会话内已选且仍在线：保持，并同步 CLI select / preferred
-          selected = await selectPort(stillSelected.port)
-        } else {
-          // 多台且无偏好：留空等用户手动选，不自动选。
-          selectedPort.value = null
-        }
-      }
-      // select 只记住端口；必须以 detect 的实际打开结果确认连接。
-      const ready = selected && selectedPortReady.value
+      const target = preferredDevice()
+      const selected = target ? await selectPort(target.port) : false
+      if (!target) selectedPort.value = null
+      const ready = selected && selectedPortReady.value && !lastError.value
       connected.value = autoConnect.value && ready
       return ready
     } catch (e) {
       lastError.value = String(e?.message || e)
-      devices.value = []
       connected.value = false
       return false
     } finally {
@@ -219,7 +215,7 @@ export const useConnection = defineStore('connection', () => {
     dialogOpen.value = false
   }
 
-  /** 点选设备后重新确认端口可用，不能把记住端口当作连接成功。 */
+  /** 点选后重新检测实际可用性。 */
   async function pickDevice(port) {
     if (!port || detecting.value) return false
     lastError.value = ''
@@ -238,16 +234,14 @@ export const useConnection = defineStore('connection', () => {
       settings.setPreferredPort(port)
     }
     if (!selectedPort.value) return false
-    const device = devices.value.find((d) => d.port === selectedPort.value)
-    if (device) device.open = true
-    else devices.value.push({ port: selectedPort.value, burner: true, open: true })
     lastError.value = ''
+    if (selectedDevice.value) selectedDevice.value.open = true
+    else devices.value.push({ port: selectedPort.value, burner: true, open: true })
     autoConnect.value = true
     connected.value = true
     return true
   }
 
-  /** 端口打开失败或命令失去响应：保留所选端口与原因，供连接弹窗重试。 */
   function markUnavailable(error) {
     lastError.value = String(error || '')
     connected.value = false
@@ -268,8 +262,6 @@ export const useConnection = defineStore('connection', () => {
       connected.value = false
       return false
     }
-    connected.value = ok
-    if (ok) autoConnect.value = true
     return ok
   }
 
@@ -313,7 +305,7 @@ export const useConnection = defineStore('connection', () => {
    */
   async function fixSerialPerms() {
     if (!inTauri || fixingPerms.value) return false
-    if (directPlay.value || useTaskProgress().runningCount > 0) {
+    if (repairBlocked.value) {
       lastError.value = i18n.global.t('settings.cfbRepairBusy')
       return false
     }
@@ -327,8 +319,11 @@ export const useConnection = defineStore('connection', () => {
       })
       const ok = res.code === 0
       if (!ok && !lastError.value) lastError.value = res.error || ''
-      if (ok) await detect() // 规则已 trigger / 设备已修复，立即重连
-      return ok
+      if (!ok) return false
+      clearDirectBinaryCache()
+      const ready = await detect()
+      if (!ready && !lastError.value) lastError.value = i18n.global.t('conn.reconnectHint')
+      return ready
     } catch (e) {
       lastError.value = String(e?.message || e)
       return false
@@ -352,6 +347,7 @@ export const useConnection = defineStore('connection', () => {
     permBlocked,
     fixingPerms,
     permFixPhase,
+    repairBlocked,
     detect,
     selectPort,
     pickDevice,

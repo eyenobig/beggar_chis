@@ -13,6 +13,11 @@
     "minimize": "Réduire"
   },
   "conn": {
+    "repair": "Réparer la connexion",
+    "repairing": "Réparation…",
+    "reconnectHint": "Connexion indisponible. Réparez ou reconnectez l’appareil.",
+    "engineMissing": "Composant manquant. Réparez ou réinstallez l’application.",
+    "details": "Détails",
     "online": "Connecté",
     "detecting": "Détection",
     "offline": "Hors ligne",

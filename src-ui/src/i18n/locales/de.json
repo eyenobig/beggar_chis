@@ -13,6 +13,11 @@
     "minimize": "Minimieren"
   },
   "conn": {
+    "repair": "Verbindung reparieren",
+    "repairing": "Reparatur…",
+    "reconnectHint": "Keine Verbindung. Reparieren oder Gerät erneut anschließen.",
+    "engineMissing": "Verbindungskomponente fehlt. App reparieren oder neu installieren.",
+    "details": "Details",
     "online": "Verbunden",
     "detecting": "Erkennung",
     "offline": "Getrennt",

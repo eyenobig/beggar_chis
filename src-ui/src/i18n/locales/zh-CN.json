@@ -13,6 +13,11 @@
     "minimize": "最小化"
   },
   "conn": {
+    "repair": "修复连接",
+    "repairing": "正在修复…",
+    "reconnectHint": "连接暂不可用，请修复或重新插拔设备。",
+    "engineMissing": "未找到连接组件，请修复或重新安装应用。",
+    "details": "查看详情",
     "online": "连接中",
     "detecting": "检测中",
     "offline": "未连接",

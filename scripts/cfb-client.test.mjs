@@ -215,11 +215,11 @@ async function connection() {
   setActivePinia(createPinia())
   const time = clock()
   const settings = reactive({ preferredPort: '', setPreferredPort(p) { this.preferredPort = p } })
-  const fixture = {
+  const fixture = reactive({
     ports: [{ type: 'port', port: 'COM3', burner: true, open: true }],
     detectError: '', selectError: '', detectCalls: 0,
     runningCount: 0,
-  }
+  })
   const client = {
     async detect(onEvent) {
       fixture.detectCalls++
@@ -236,6 +236,7 @@ async function connection() {
     ref, computed, defineStore, cfbClient: client, inTauri: true,
     useCfbSettings: () => settings, navigator: { userAgent: 'Windows' },
     useTaskProgress: () => fixture,
+    clearDirectBinaryCache() {},
     i18n: { global: { t: (key) => key } },
   }, ['useConnection'])
   return { conn: useConnection(), client, settings, fixture, time }
@@ -423,7 +424,7 @@ test('manual recovery can run when an unreleased process blocks ordinary command
   await api.time.advance(5000)
   assert.match((await first).error, /has not exited/)
   assert.equal((await api.executeCfb(['detect'])).code, -1)
-  assert.equal((await api.streamCfb(['udev'], null, null, { forceSidecar: true, recovery: true })).code, 0)
+  assert.equal((await api.streamCfb(['udev'], null, null, { recovery: true })).code, 0)
   assert.equal((await api.executeCfb(['detect'])).code, 0)
 })
 
@@ -451,5 +452,78 @@ test('repair failure preserves the reason and allows another manual attempt', as
   assert.equal(conn.fixingPerms, false)
   client.installUdev = async () => ({ code: 0 })
   assert.equal(await conn.fixSerialPerms(), true)
+  assert.equal(conn.isConnected, true)
+})
+
+test('repair resolves the installed bundled executable instead of assuming the app root', async () => {
+  const calls = []
+  const api = await transport([], {
+    Channel: class {},
+    invoke: async (name, args) => {
+      calls.push(name)
+      if (name === 'resolve_bundled_cfb') return 'C:/Chis/cmd/cfb.exe'
+      if (name === 'cfb_spawn') {
+        assert.equal(args.binPath, 'C:/Chis/cmd/cfb.exe')
+        args.onEvent.onmessage({ event: 'Stdout', payload: '{"type":"udev","phase":"fixed"}' })
+        args.onEvent.onmessage({ event: 'Terminated', payload: { code: 0 } })
+        return 456
+      }
+      assert.fail(`unexpected invocation: ${name}`)
+    },
+  })
+  api.settings.cfbBinPath = 'C:/old/cfb.exe'
+  const phases = []
+  const result = await api.streamCfb(['udev'], (ev) => phases.push(ev.phase), null, { forceSidecar: true })
+  assert.equal(result.code, 0)
+  assert.deepEqual(calls, ['resolve_bundled_cfb', 'cfb_spawn'])
+  assert.deepEqual(phases, ['fixed'])
+})
+
+test('repair does not report success when the port remains unavailable', async () => {
+  const { conn, client, fixture } = await connection()
+  fixture.ports[0].open = false
+  client.installUdev = async () => ({ code: 0 })
+  assert.equal(await conn.fixSerialPerms(), false)
+  assert.equal(conn.isConnected, false)
+  assert.equal(conn.lastError, 'conn.reconnectHint')
+})
+
+test('concurrent detection shares the actual result and only runs once', async () => {
+  const { conn, client } = await connection()
+  let complete
+  let calls = 0
+  client.detect = async (emit) => {
+    calls++
+    await new Promise(resolve => { complete = resolve })
+    emit({ type: 'port', port: 'COM3', burner: true, open: false })
+    return { code: 0 }
+  }
+  const first = conn.detect()
+  const second = conn.detect()
+  assert.equal(calls, 1)
+  complete()
+  assert.equal(await first, false)
+  assert.equal(await second, false)
+  assert.equal(conn.detecting, false)
+  assert.equal(conn.isConnected, false)
+})
+
+test('multiple burners require selection and preserve an explicit target', async () => {
+  const { conn, fixture } = await connection()
+  fixture.ports.push({ type: 'port', port: 'COM4', burner: true, open: true })
+  assert.equal(await conn.detect(), false)
+  assert.equal(conn.needsSelection, true)
+  assert.equal(await conn.pickDevice('COM4'), true)
+  assert.equal(conn.selectedPort, 'COM4')
+  assert.equal(conn.isConnected, true)
+})
+
+test('manual disconnect stays offline on refresh and explicit connect recovers', async () => {
+  const { conn } = await connection()
+  await conn.detect()
+  await conn.disconnect()
+  await conn.detect()
+  assert.equal(conn.isConnected, false)
+  assert.equal(await conn.connect(), true)
   assert.equal(conn.isConnected, true)
 })

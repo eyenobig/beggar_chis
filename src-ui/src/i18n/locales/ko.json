@@ -13,6 +13,11 @@
     "minimize": "최소화"
   },
   "conn": {
+    "repair": "연결 복구",
+    "repairing": "복구 중…",
+    "reconnectHint": "연결할 수 없습니다. 복구하거나 기기를 다시 연결하세요.",
+    "engineMissing": "연결 구성 요소가 없습니다. 복구하거나 앱을 다시 설치하세요.",
+    "details": "자세히",
     "online": "연결됨",
     "detecting": "감지 중",
     "offline": "오프라인",

@@ -167,16 +167,14 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Chis Flasher / 烧丐 ${{ github.ref_name }}
           releaseBody: |
-            升级 cfb 0.5.3：合入 PR #2，修复 GBA 擦后首包写入卡死。
-            修复识别超时后 cfb 未退出造成的串口占用，修正连接状态与占口重试。
-            新增设置 → 工具链 → cfb 手动修复，支持修复后重连和结果提示。
-            Compatibility: app/client 0.4.4, cfb 0.5.3, embedded rule 0.3.5 (unchanged-compatible).
+            修复 Windows 安装后“修复连接”找不到 cfb 的问题，支持安装目录 cmd 子目录。
+            简化设备弹窗：统一主要操作，简短错误提示，详细信息默认折叠。
+            统一连接状态与重连判断，并发检测共享结果，修复后确认端口实际可用。
+            Compatibility: app/client 0.4.5, cfb 0.5.3, embedded rule 0.3.5 (unchanged-compatible).
+            28 hardware-free client regression tests passed; installed-device recovery still needs real-hardware validation.
 
-            Windows x64 installer (NSIS) · macOS ARM64/Intel (DMG) · Linux x64 GUI (AppImage / deb).
-
-            Linux: prefer the `.deb` package on Ubuntu/Debian (`sudo apt install ./Chis.Flasher_*_amd64.deb`). The AppImage is portable, not an installer. WSL must have WSLg or another graphical desktop/display; a command-only WSL session cannot show desktop windows.
-
-            Updater signatures are collected in the `signatures-*.zip` archive. They are verification data, not installers.
+            Windows NSIS · macOS ARM64/Intel DMG · Linux AppImage/deb.
+            Updater signatures are included in latest.json and the signatures archive.
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true

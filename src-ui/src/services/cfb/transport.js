@@ -97,7 +97,11 @@ async function createCommand(args, { forceSidecar = false } = {}) {
   const settings = useCfbSettings()
   const finalArgs = [...settings.withGlobalArgs(args), '--json']
   const ruleDir = cfbRuleDirEnv()
-  if (!forceSidecar && settings.cfbBinPath) {
+  if (forceSidecar) {
+    const binPath = await invoke('resolve_bundled_cfb')
+    return new DirectCfbCommand(binPath, finalArgs, ruleDir)
+  }
+  if (settings.cfbBinPath) {
     const binPath = await resolveDirectBinary(settings.cfbBinPath)
     return new DirectCfbCommand(binPath, finalArgs, ruleDir)
   }

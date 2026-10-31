@@ -345,29 +345,38 @@ fn resolve_cfb_hint(hinted: Option<&str>) -> Option<String> {
 }
 
 /// 解析打包进安装包的 cfb sidecar（tauri.conf.json `externalBin: binaries/cfb`）。
-/// NSIS 把 sidecar 重命名为 `cfb.exe`（Windows）/ `cfb`（其它）放进 $INSTDIR，
+/// NSIS 把 sidecar 放进 $INSTDIR/cmd，其他打包器通常放在程序/资源根目录。
 /// 故优先找重命名后的短名，再找 `cfb-{triple}` 形式。
 fn bundled_sidecar(app: &AppHandle, triple: &str) -> Option<PathBuf> {
-    let mut names: Vec<String> = if cfg!(windows) {
+    let names = if cfg!(windows) {
         vec!["cfb.exe".into(), format!("cfb-{triple}.exe"), "cfb".into()]
     } else {
         vec!["cfb".into(), format!("cfb-{triple}"), "cfb.exe".into()]
     };
-    let _ = &mut names;
-    let mut candidates = Vec::new();
-    if let Ok(res) = app.path().resource_dir() {
-        for n in &names {
-            candidates.push(res.join(n));
-        }
-    }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            for n in &names {
-                candidates.push(dir.join(n));
-            }
-        }
-    }
-    candidates.into_iter().find(|p| p.is_file())
+    let resource_dir = app.path().resource_dir().ok();
+    let executable_dir = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf));
+
+    // 保持查找顺序：资源目录 → 程序目录，每个文件先检查 cmd 子目录。
+    [resource_dir, executable_dir]
+        .into_iter()
+        .flatten()
+        .flat_map(|dir| {
+            names.iter().flat_map(move |name| {
+                [dir.join("cmd").join(name), dir.join(name)]
+            })
+        })
+        .find(|path| path.is_file())
+}
+
+/// 修复命令始终使用应用附带的引擎，兼容 NSIS 的 cmd 子目录布局。
+#[tauri::command]
+pub fn resolve_bundled_cfb(app: AppHandle) -> Result<String, String> {
+    bundled_sidecar(&app, current_triple())
+        .map(|p| p.display().to_string())
+        .or_else(detect_dev_cfb_bin)
+        .ok_or_else(|| "Bundled cfb executable was not found. Reinstall the application.".to_string())
 }
 
 /// 安装目录（主 exe 的父目录 = NSIS $INSTDIR）。供前端判断路径是否安装器写入。
