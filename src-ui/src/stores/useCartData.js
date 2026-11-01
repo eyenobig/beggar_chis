@@ -524,7 +524,11 @@ export const useCartData = defineStore('cart', () => {
         info = null
         err = ''
         const { error, errorKind } = await cfbClient.readCartridge({ mbc }, (ev) => {
-          if (ev.type === 'info') info = ev
+          if (ev.type === 'diagnostic') {
+            // 自动识别也保留诊断；silent 仅关闭弹出提示，不隐藏故障证据。
+            logStore.addLog(`[cfb-diagnostic] ${JSON.stringify(ev)}`,
+              ev.status === 'failed' ? 'error' : ev.status === 'warning' ? 'warn' : 'info')
+          } else if (ev.type === 'info') info = ev
           else if (ev.type === 'error') err = ev.message || err
         })
         if (error && !err) err = error

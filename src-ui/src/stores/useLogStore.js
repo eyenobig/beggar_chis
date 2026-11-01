@@ -205,6 +205,7 @@ export const useLogStore = defineStore('log', () => {
     logs.value.push(entry)
     if (logs.value.length > MAX_LOGS) logs.value.splice(0, logs.value.length - MAX_LOGS)
     hasUnread.value = true
+    schedulePersist()
     return entry.id
   }
 

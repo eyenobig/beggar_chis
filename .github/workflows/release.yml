@@ -13,7 +13,7 @@ on:
 
 env:
   CFB_GITHUB_REPO: eyenobig/chis-burner-cmd
-  CFB_RELEASE_TAG: ${{ inputs.cfb_tag || vars.CFB_RELEASE_TAG || 'v0.5.3' }}
+  CFB_RELEASE_TAG: ${{ inputs.cfb_tag || vars.CFB_RELEASE_TAG || 'v0.5.4' }}
   VITE_API_BASE_URL: ${{ secrets.API_BASE_URL }}
 
 jobs:
@@ -167,11 +167,11 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Chis Flasher / 烧丐 ${{ github.ref_name }}
           releaseBody: |
-            修复 Windows 安装后“修复连接”找不到 cfb 的问题，支持安装目录 cmd 子目录。
-            简化设备弹窗：统一主要操作，简短错误提示，详细信息默认折叠。
-            统一连接状态与重连判断，并发检测共享结果，修复后确认端口实际可用。
-            Compatibility: app/client 0.4.5, cfb 0.5.3, embedded rule 0.3.5 (unchanged-compatible).
-            28 hardware-free client regression tests passed; installed-device recovery still needs real-hardware validation.
+            新增卡带识别诊断日志，覆盖进程启动、串口连接、芯片识别、游戏头、RTC 和超时清理。
+            即使识别超时，也保留最后收到的设备阶段；自动识别同样记录，普通日志支持跨重启恢复。
+            Logs 中的 [cfb-diagnostic] 包含关联标识、耗时、重试和通信错误，不记录 ROM 或存档内容。
+            Compatibility: app/client 0.4.6, cfb 0.5.4, embedded rule 0.3.5 (unchanged-compatible).
+            32 hardware-free client tests and 41 cfb tests passed; this release adds diagnostics and does not confirm a fix for device non-response.
 
             Windows NSIS · macOS ARM64/Intel DMG · Linux AppImage/deb.
             Updater signatures are included in latest.json and the signatures archive.

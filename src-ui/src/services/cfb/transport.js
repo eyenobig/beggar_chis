@@ -122,6 +122,7 @@ function emitLine(line, onEvent) {
 /** 全局串行化 cfb 调用，避免 UI 并发 info/detect/burn 抢同一 COM。 */
 let _cfbChain = Promise.resolve()
 let _cfbUnreleased = null
+let _cfbInvocationId = 0
 
 function withCfbLock(fn, recovery = false) {
   const guarded = () => _cfbUnreleased && !recovery
@@ -150,6 +151,19 @@ async function runCfb(args, onEvent, onChild, { timeoutMs = 0, buffered = false,
   return withCfbLock(async () => {
     const logs = []
     const output = []
+    const invocationId = ++_cfbInvocationId
+    const started = Date.now()
+    let lastDiagnostic = null
+    const diagnose = args[0] === 'info'
+    const report = (stage, status, message, extra = {}) => {
+      if (!diagnose) return
+      emitLine(JSON.stringify({
+        type: 'diagnostic', source: 'client', command: 'info', args: [...args], invocation_id: invocationId,
+        stage, status, elapsed_ms: Date.now() - started, message,
+        pid: child?.pid ?? null, last_device_stage: lastDiagnostic?.stage ?? null,
+        device_trace_id: lastDiagnostic?.trace_id ?? null, ...extra,
+      }), onEvent)
+    }
     const state = { closed: false, failed: false, error: '' }
     let child = null
     let timer = null
@@ -158,17 +172,31 @@ async function runCfb(args, onEvent, onChild, { timeoutMs = 0, buffered = false,
     const closed = new Promise((resolve) => { closeProcess = resolve })
 
     try {
+      report('client_resolve', 'start', 'Resolving cfb executable')
       const command = await createCommand(args, opts)
+      report('client_spawn', 'start', 'Starting cfb', { executable: command.binPath || command.program })
 
       // plugin-shell 默认按行发送（不含换行）；直连模式转发的是同一类事件。
       command.stdout.on('data', (data) => {
         if (state.closed || state.failed) return
         for (const line of String(data).split(/\r?\n/)) {
+          // 诊断必须增量转发；卡住或超时不能丢弃已到达的阶段信息。
+          let parsed
+          try { parsed = JSON.parse(line) } catch { /* 非 JSON 行保持原处理 */ }
+          if (parsed?.type === 'diagnostic') {
+            lastDiagnostic = parsed
+            emitLine(JSON.stringify({ ...parsed, invocation_id: invocationId }), onEvent)
+            continue
+          }
           if (buffered) output.push(line)
           else emitLine(line, onEvent)
         }
       })
-      command.stderr.on('data', (line) => logs.push(String(line).trimEnd()))
+      command.stderr.on('data', (line) => {
+        const message = String(line).trimEnd()
+        logs.push(message)
+        if (!state.failed && !state.closed && message) report('client_stderr', 'warning', message)
+      })
       command.on('close', (result) => {
         state.closed = true
         if (_cfbUnreleased === state) _cfbUnreleased = null
@@ -179,6 +207,7 @@ async function runCfb(args, onEvent, onChild, { timeoutMs = 0, buffered = false,
       })
 
       child = await command.spawn()
+      report('client_spawn', 'ok', 'cfb process created')
       onChild?.(child)
       const waits = [closed, failed]
       if (timeoutMs > 0 && !state.closed) {
@@ -191,6 +220,7 @@ async function runCfb(args, onEvent, onChild, { timeoutMs = 0, buffered = false,
       }
       const result = await Promise.race(waits)
       if (result.error) throw Object.assign(new Error(result.error), { errorKind: result.errorKind })
+      report('client_exit', result.code === 0 ? 'ok' : 'failed', 'cfb process exited', { exit_code: result.code })
       if (buffered) for (const line of output) emitLine(line, onEvent)
       const stderr = logs.filter(Boolean).join('\n').trim()
       const code = result.code ?? -1
@@ -205,9 +235,14 @@ async function runCfb(args, onEvent, onChild, { timeoutMs = 0, buffered = false,
       state.failed = true
       clearTimeout(timer)
       let message = String(error?.message || error)
+      report(error?.errorKind === 'timeout' ? 'client_timeout' : 'client_error', 'failed', message)
       if (child && !state.closed) {
         // kill 请求成功不代表进程已退出；只有 close 才能保证下一条命令不会抢口。
-        Promise.resolve().then(() => child.kill()).catch((err) => logs.push(String(err)))
+        report('client_cleanup', 'start', 'Stopping unresponsive cfb')
+        Promise.resolve().then(() => child.kill()).catch((err) => {
+          logs.push(String(err))
+          report('client_cleanup', 'failed', String(err))
+        })
         await Promise.race([
           closed,
           new Promise((resolve) => { cleanupTimer = setTimeout(resolve, 5000) }),
@@ -217,6 +252,7 @@ async function runCfb(args, onEvent, onChild, { timeoutMs = 0, buffered = false,
           _cfbUnreleased = state
           message += `; ${state.error}`
         }
+        report('client_cleanup', state.closed ? 'ok' : 'failed', state.closed ? 'cfb exited' : state.error)
       }
       return { logs, code: -1, error: message, errorKind: error?.errorKind || 'process' }
     } finally {

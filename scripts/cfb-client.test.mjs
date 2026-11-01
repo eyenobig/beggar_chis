@@ -80,7 +80,7 @@ test('timeout kills only its child and holds the queue until close', async () =>
   const next = success()
   const api = await transport([hung, next])
   const events = []
-  const first = api.executeCfb(['info'], (ev) => events.push(ev))
+  const first = api.executeCfb(['info'], (ev) => { if (ev.type !== 'diagnostic') events.push(ev) })
   const second = api.executeCfb(['detect'])
   await flush()
   hung.emit('stdout', '{"type":"info","present":true}')
@@ -98,7 +98,7 @@ test('buffered output handles complete lines without newline and clears its time
   const command = fakeCommand()
   const api = await transport([command])
   const events = []
-  const result = api.executeCfb(['info'], (ev) => events.push(ev.type))
+  const result = api.executeCfb(['info'], (ev) => { if (ev.type !== 'diagnostic') events.push(ev.type) })
   await flush()
   command.emit('stdout', '{"type":"log"}')
   command.emit('stdout', '{"type":"info"}')
@@ -132,7 +132,7 @@ test('process error cleans up before the next operation', async () => {
   const next = success()
   const api = await transport([command, next])
   const events = []
-  const first = api.streamCfb(['dump'], (ev) => events.push(ev))
+  const first = api.streamCfb(['dump'], (ev) => { if (ev.type !== 'diagnostic') events.push(ev) })
   const second = api.executeCfb(['info'])
   await flush()
   command.emit('error', 'pipe failed')
@@ -204,7 +204,7 @@ test('nonzero exit preserves cfb error events and stderr', async () => {
   } })
   const api = await transport([command])
   const events = []
-  const result = await api.executeCfb(['info'], (ev) => events.push(ev))
+  const result = await api.executeCfb(['info'], (ev) => { if (ev.type !== 'diagnostic') events.push(ev) })
   assert.equal(result.code, 3)
   assert.equal(result.error, 'diagnostic')
   assert.equal(events[0].message, 'port busy')
@@ -284,6 +284,7 @@ test('detect and select transport failures cannot retain a stale connected state
 
 async function cartridge(platform = 'gba') {
   const fixture = await connection()
+  const diagnosticLogs = []
   await fixture.conn.detect()
   const emulator = reactive({ currentPlatform: platform, setPlatform(p) { this.currentPlatform = p } })
   const { useCartData } = await loadModule('src-ui/src/stores/useCartData.js', {
@@ -292,7 +293,7 @@ async function cartridge(platform = 'gba') {
     useConnection: () => fixture.conn,
     useCfbSettings: () => fixture.settings,
     useEmulator: () => emulator,
-    useLogStore: () => ({ addLog() {} }),
+    useLogStore: () => ({ addLog: (message, type) => diagnosticLogs.push({ message, type }) }),
     useTaskProgress: () => ({}),
     useToast: () => ({ info() {}, error() {}, success() {} }),
     i18n: { global: { t: (key) => key } },
@@ -301,7 +302,7 @@ async function cartridge(platform = 'gba') {
     setTimeout: fixture.time.setTimeout,
     clearTimeout: fixture.time.clearTimeout,
   }, ['useCartData'])
-  return { ...fixture, cart: useCartData() }
+  return { ...fixture, diagnosticLogs, cart: useCartData() }
 }
 
 for (const platform of ['gba', 'gbc']) {
@@ -526,4 +527,79 @@ test('manual disconnect stays offline on refresh and explicit connect recovers',
   assert.equal(conn.isConnected, false)
   assert.equal(await conn.connect(), true)
   assert.equal(conn.isConnected, true)
+})
+
+test('diagnostics arrive before completion and survive timeout without partial cartridge results', async () => {
+  const hung = fakeCommand()
+  const api = await transport([hung])
+  const events = []
+  const result = api.executeCfb(['info', '--port', 'COM3'], ev => events.push(ev))
+  await flush()
+  hung.emit('stdout', '{"type":"diagnostic","trace_id":"test-trace","stage":"rtc","status":"start","elapsed_ms":800}')
+  hung.emit('stdout', '{"type":"info","present":true}')
+  hung.emit('stderr', 'Port COM3 yield requested')
+  assert.ok(events.some(ev => ev.stage === 'rtc'), 'stage must be visible while command is running')
+  assert.equal(events.filter(ev => ev.type === 'info').length, 0)
+  await api.time.advance(30000)
+  assert.equal((await result).errorKind, 'timeout')
+  const timeout = events.find(ev => ev.stage === 'client_timeout')
+  assert.equal(timeout.pid, 123)
+  assert.equal(timeout.last_device_stage, 'rtc')
+  assert.equal(timeout.device_trace_id, 'test-trace')
+  assert.ok(events.some(ev => ev.stage === 'client_stderr'))
+  assert.ok(events.some(ev => ev.stage === 'client_cleanup' && ev.status === 'ok'))
+  assert.equal(events.filter(ev => ev.type === 'info').length, 0)
+})
+
+test('startup failure is diagnosed separately from a running process timeout', async () => {
+  const fail = fakeCommand()
+  fail.spawn = async () => { throw new Error('executable missing') }
+  const api = await transport([fail])
+  const events = []
+  const result = await api.executeCfb(['info'], ev => events.push(ev))
+  assert.equal(result.errorKind, 'process')
+  assert.ok(events.some(ev => ev.stage === 'client_spawn' && ev.status === 'start'))
+  assert.ok(!events.some(ev => ev.stage === 'client_spawn' && ev.status === 'ok'))
+  assert.equal(events.find(ev => ev.stage === 'client_error').pid, null)
+})
+
+test('silent cartridge identification records diagnostics with their full context', async () => {
+  const { cart, client, diagnosticLogs } = await cartridge()
+  client.readCartridge = async (_, emit) => {
+    emit({ type: 'diagnostic', trace_id: 'trace-42', stage: 'gba_jedec', status: 'failed', message: 'expected=10 received=0', attempt: 2 })
+    return { code: -1, error: 'cfb timeout: info', errorKind: 'timeout' }
+  }
+  await cart.readCart({ silent: true })
+  const record = diagnosticLogs.find(log => log.message.startsWith('[cfb-diagnostic]'))
+  assert.equal(record.type, 'error')
+  const event = JSON.parse(record.message.slice('[cfb-diagnostic] '.length))
+  assert.equal(event.stage, 'gba_jedec')
+  assert.equal(event.attempt, 2)
+  assert.equal(event.trace_id, 'trace-42')
+})
+
+test('a newly added diagnostic is persisted and restored after reload', async () => {
+  const time = clock()
+  const saved = new Map()
+  const localStorage = {
+    getItem: key => saved.get(key) ?? null,
+    setItem: (key, value) => saved.set(key, value),
+    removeItem: key => saved.delete(key),
+  }
+  const { useLogStore } = await loadModule('src-ui/src/stores/useLogStore.js', {
+    ref, defineStore, localStorage,
+    setTimeout: time.setTimeout, clearTimeout: time.clearTimeout,
+    i18n: { global: { t: () => 'Total time 0.0s' } },
+  }, ['useLogStore'])
+  setActivePinia(createPinia())
+  const store = useLogStore()
+  store.addLog('[cfb-diagnostic] {"stage":"rtc","status":"failed"}', 'error')
+  await time.advance(500)
+  const records = JSON.parse(saved.get('cfbLogs'))
+  assert.equal(records.length, 1)
+  assert.match(records[0].message, /rtc/)
+  setActivePinia(createPinia())
+  const restored = useLogStore()
+  assert.equal(restored.logs[0].message, records[0].message)
+  assert.equal(restored.logs[0].type, 'error')
 })
